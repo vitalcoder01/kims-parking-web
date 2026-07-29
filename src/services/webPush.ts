@@ -43,3 +43,25 @@ export async function initWebPush(swRegistration: ServiceWorkerRegistration | nu
     return () => {};
   }
 }
+
+/**
+ * Called on logout, while the session token is still valid — drops this
+ * browser's registration so it stops receiving the signed-out account's
+ * pushes instead of staying bound to it until someone else logs in here.
+ * Mirrors the mobile app's unregisterCurrentDevice().
+ */
+export async function unregisterCurrentWebPush(): Promise<void> {
+  if (!FIREBASE_CONFIG.appId || !FCM_VAPID_KEY) return;
+  try {
+    const {getApps} = await import('firebase/app');
+    const {getMessaging, getToken, isSupported} = await import('firebase/messaging');
+    if (!(await isSupported())) return;
+    const app = getApps()[0];
+    if (!app) return; // never initialized this session — nothing to unregister
+    const messaging = getMessaging(app);
+    const token = await getToken(messaging, {vapidKey: FCM_VAPID_KEY});
+    if (token) await notificationsApi.unregisterDevice(token);
+  } catch {
+    // Best-effort — never block logout over this.
+  }
+}

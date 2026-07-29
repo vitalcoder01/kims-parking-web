@@ -13,7 +13,7 @@ import {useAuth} from './AuthContext';
 // fetched here, exactly like the mobile app skips it for these roles.
 
 export type TaskType = 'park' | 'retrieve';
-export type TaskStatus = 'requested' | 'assigned' | 'key_collected' | 'in_transit' | 'delivered' | 'completed';
+export type TaskStatus = 'requested' | 'assigned' | 'key_collected' | 'in_transit' | 'delivered' | 'completed' | 'cancelled';
 export type SlotStatus = 'free' | 'occupied' | 'reserved';
 
 export interface ParkingTask {
@@ -149,6 +149,11 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
   // ── True-WebSocket sync — full fetch on connect/reconnect, deltas after.
   useEffect(() => {
     if (!user) {
+      // A still-ringing alarm (siren + red banner) otherwise keeps going
+      // over the login screen after logout — nothing else dismisses it,
+      // since its state was independent of auth state.
+      stopAlarm();
+      setActiveAlert(null);
       setTasks([]); setSlots([]); setNotifs([]);
       disconnectSocket();
       return;

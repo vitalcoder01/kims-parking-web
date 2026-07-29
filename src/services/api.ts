@@ -114,6 +114,11 @@ export const notificationsApi = {
   // web app isn't open (same endpoint the mobile app uses).
   registerDevice: (token: string, platform = 'web') =>
     client.post('/notifications/register-device', {token, platform}).then(() => undefined),
+  // Called on logout so this browser stops receiving the signed-out
+  // account's pushes instead of staying bound to it until someone else
+  // logs in here (same endpoint/behavior as the mobile app).
+  unregisterDevice: (token: string) =>
+    client.post('/notifications/unregister-device', {token}).then(() => undefined),
 };
 
 // ── App version / releases ───────────────────────────────────────────────

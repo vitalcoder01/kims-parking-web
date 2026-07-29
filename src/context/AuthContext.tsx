@@ -1,5 +1,7 @@
 import React, {createContext, useCallback, useContext, useState, useEffect, useRef} from 'react';
 import {authApi, setAuthToken, setUnauthorizedHandler} from '../services/api';
+import {unregisterCurrentWebPush} from '../services/webPush';
+import {stopAlarm} from '../services/alarm';
 
 export type UserRole = 'doctor' | 'staff' | 'valet' | 'driver' | 'admin';
 
@@ -21,7 +23,7 @@ interface AuthContextValue {
   user: CurrentUser | null;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<CurrentUser>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateProfile: (patch: Partial<CurrentUser>) => void;
 }
 
@@ -36,7 +38,7 @@ const Ctx = createContext<AuthContextValue>({
   user: null,
   isLoading: true,
   login: async () => ({} as CurrentUser),
-  logout: () => {},
+  logout: async () => {},
   updateProfile: () => {},
 });
 
@@ -45,7 +47,21 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
   const [isLoading, setLoading] = useState(true);
   const tokenRef = useRef<string | null>(null);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // A still-ringing assignment alarm (siren + red banner) otherwise
+    // keeps going after logout — AppStateContext also clears it on `!user`,
+    // but stopping it here too means it's silenced immediately rather than
+    // waiting on that effect to run.
+    stopAlarm();
+    // Must run before the token is cleared below — it needs a valid
+    // Authorization header to tell the backend to drop this browser's
+    // registration, otherwise it keeps receiving the signed-out account's
+    // pushes until someone else logs in here. Capped so a slow/unreachable
+    // network never delays the logout button itself.
+    await Promise.race([
+      unregisterCurrentWebPush().catch(() => {}),
+      new Promise<void>(resolve => setTimeout(() => resolve(), 3000)),
+    ]);
     setUser(null);
     tokenRef.current = null;
     setAuthToken(null);
