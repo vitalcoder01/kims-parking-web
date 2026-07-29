@@ -5,18 +5,19 @@ import {ParkingTask} from '../context/AppStateContext';
 import {computeTrip} from '../utils/geo';
 import {Icon} from '../components/Icon';
 
-// Same Leaflet/OSM map HTML the mobile app renders in a WebView — here it
-// lives in an iframe (srcDoc) and receives real GPS fixes via postMessage.
+// Same Leaflet map the mobile app renders in a WebView — here it lives in
+// an iframe (srcDoc) and receives real GPS fixes via postMessage.
 //
-// `hasKnownLocation` distinguishes a REAL position (live GPS, or a real
-// destination) from the neutral India-center fallback (20.5937, 78.9629,
-// used only when neither exists). Previously the map always zoomed to
-// street-level (17) regardless — on the fallback, that zoomed tight into
-// whatever real place happens to sit at that generic coordinate (e.g. a
-// village called Wadgaon), making "no GPS yet" look like "the car is
-// somewhere specific" instead of "we don't know where the car is." Now the
-// fallback zooms out to a country-wide view and shows no marker/route at
-// all until a real fix (GPS or destination) actually exists.
+// Tiles come from CARTO's basemap CDN, not tile.openstreetmap.org directly.
+// OSM's own raw tile servers are explicitly NOT meant for real app traffic —
+// their usage policy (operations.osmfoundation.org/policies/tiles) rate-
+// limits/blocks anything beyond light personal/testing use, and verified
+// directly against their infra: a.tile.openstreetmap.org was already
+// returning an `x-blocked` header under test traffic. CARTO's CDN is built
+// for exactly this (embedding in real apps) and serves the same OSM data —
+// confirmed reachable with no blocking, both light_all and dark_all. Native
+// dark tiles also replace the old CSS filter hack that faked a dark map by
+// discoloring OSM's light-only tiles.
 function buildMapHTML(
   centerLat: number, centerLng: number,
   destLat: number | null, destLng: number | null,
@@ -25,6 +26,7 @@ function buildMapHTML(
 ) {
   const bgColor = isDark ? '#0F1829' : '#EEF2FF';
   const initialZoom = hasKnownLocation ? 17 : 5;
+  const tileStyle = isDark ? 'dark_all' : 'light_all';
 
   return `<!DOCTYPE html>
 <html>
@@ -34,7 +36,6 @@ function buildMapHTML(
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body, #map { width: 100%; height: 100%; background: ${bgColor}; }
-  .leaflet-tile-pane { ${isDark ? 'filter: brightness(0.7) saturate(0.8) hue-rotate(190deg);' : ''} }
   .car-icon { font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4)); }
   .searching-badge {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -44,6 +45,9 @@ function buildMapHTML(
     padding: 10px 16px; border-radius: 12px; white-space: nowrap;
     box-shadow: 0 4px 14px rgba(0,0,0,0.18); pointer-events: none; z-index: 500;
   }
+  .leaflet-control-attribution {
+    font-size: 9px !important; opacity: 0.6; background: transparent !important;
+  }
 </style>
 </head>
 <body>
@@ -51,8 +55,11 @@ function buildMapHTML(
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
   var hasLocation = ${hasKnownLocation ? 'true' : 'false'};
-  var map = L.map('map', {zoomControl: false, attributionControl: false}).setView([${centerLat}, ${centerLng}], ${initialZoom});
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(map);
+  var map = L.map('map', {zoomControl: false, attributionControl: true}).setView([${centerLat}, ${centerLng}], ${initialZoom});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/${tileStyle}/{z}/{x}/{y}{r}.png', {
+    maxZoom: 20, subdomains: 'abcd',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  }).addTo(map);
 
   var destination = ${destLat != null && destLng != null ? `[${destLat}, ${destLng}]` : 'null'};
   var routeLine = null;
