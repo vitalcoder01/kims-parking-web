@@ -7,12 +7,24 @@ import {Icon} from '../components/Icon';
 
 // Same Leaflet/OSM map HTML the mobile app renders in a WebView — here it
 // lives in an iframe (srcDoc) and receives real GPS fixes via postMessage.
+//
+// `hasKnownLocation` distinguishes a REAL position (live GPS, or a real
+// destination) from the neutral India-center fallback (20.5937, 78.9629,
+// used only when neither exists). Previously the map always zoomed to
+// street-level (17) regardless — on the fallback, that zoomed tight into
+// whatever real place happens to sit at that generic coordinate (e.g. a
+// village called Wadgaon), making "no GPS yet" look like "the car is
+// somewhere specific" instead of "we don't know where the car is." Now the
+// fallback zooms out to a country-wide view and shows no marker/route at
+// all until a real fix (GPS or destination) actually exists.
 function buildMapHTML(
   centerLat: number, centerLng: number,
   destLat: number | null, destLng: number | null,
   isDark: boolean,
+  hasKnownLocation: boolean,
 ) {
   const bgColor = isDark ? '#0F1829' : '#EEF2FF';
+  const initialZoom = hasKnownLocation ? 17 : 5;
 
   return `<!DOCTYPE html>
 <html>
@@ -24,17 +36,35 @@ function buildMapHTML(
   html, body, #map { width: 100%; height: 100%; background: ${bgColor}; }
   .leaflet-tile-pane { ${isDark ? 'filter: brightness(0.7) saturate(0.8) hue-rotate(190deg);' : ''} }
   .car-icon { font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.4)); }
+  .searching-badge {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: ${isDark ? 'rgba(28,29,33,0.92)' : 'rgba(255,255,255,0.94)'};
+    color: ${isDark ? '#A2A3A8' : '#6E7076'};
+    font: 700 12px -apple-system, Roboto, sans-serif;
+    padding: 10px 16px; border-radius: 12px; white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.18); pointer-events: none; z-index: 500;
+  }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-  var map = L.map('map', {zoomControl: false, attributionControl: false}).setView([${centerLat}, ${centerLng}], 17);
+  var hasLocation = ${hasKnownLocation ? 'true' : 'false'};
+  var map = L.map('map', {zoomControl: false, attributionControl: false}).setView([${centerLat}, ${centerLng}], ${initialZoom});
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(map);
 
   var destination = ${destLat != null && destLng != null ? `[${destLat}, ${destLng}]` : 'null'};
   var routeLine = null;
+  var carMarker = null;
+  var searchingEl = null;
+
+  if (!hasLocation) {
+    searchingEl = document.createElement('div');
+    searchingEl.className = 'searching-badge';
+    searchingEl.textContent = 'Waiting for driver\\'s location…';
+    document.body.appendChild(searchingEl);
+  }
 
   if (destination) {
     L.circleMarker(destination, {
@@ -44,7 +74,6 @@ function buildMapHTML(
   }
 
   var carIcon = L.divIcon({className: '', html: '<div class="car-icon">🚗</div>', iconSize: [32, 32], iconAnchor: [16, 16]});
-  var carMarker = L.marker([${centerLat}, ${centerLng}], {icon: carIcon}).addTo(map);
 
   function refreshRoute(pos) {
     if (!destination) return;
@@ -53,15 +82,27 @@ function buildMapHTML(
       color: '${isDark ? '#818CF8' : '#4F46E5'}', weight: 4, opacity: 0.75, dashArray: '8, 6', lineCap: 'round',
     }).addTo(map);
   }
-  refreshRoute([${centerLat}, ${centerLng}]);
+
+  // Only place the car where we actually have a known position — never on
+  // the meaningless fallback coordinate.
+  if (hasLocation) {
+    carMarker = L.marker([${centerLat}, ${centerLng}], {icon: carIcon}).addTo(map);
+    refreshRoute([${centerLat}, ${centerLng}]);
+  }
 
   window.addEventListener('message', function(e) {
     try {
       var data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
       if (data.type === 'realGPS') {
         var pos = [data.lat, data.lng];
-        carMarker.setLatLng(pos);
-        map.panTo(pos, {animate: true, duration: 1.0});
+        if (searchingEl) { searchingEl.remove(); searchingEl = null; }
+        if (!carMarker) {
+          carMarker = L.marker(pos, {icon: carIcon}).addTo(map);
+          map.setView(pos, 17, {animate: true});
+        } else {
+          carMarker.setLatLng(pos);
+          map.panTo(pos, {animate: true, duration: 1.0});
+        }
         refreshRoute(pos);
       }
     } catch(err) {}
@@ -86,6 +127,24 @@ export function LiveTrackingScreen({task, onBack}: Props) {
   const arrived = task?.status === 'completed' || task?.status === 'delivered';
   const realLat = task?.driverLat ?? null;
   const realLng = task?.driverLng ?? null;
+
+  // Built once per task being tracked, never recomputed from live GPS
+  // fields — the map HTML embeds its initial center directly as a string,
+  // so if this were rebuilt on every render (it previously was, as a plain
+  // const), changing driverLat/driverLng would change the iframe's srcDoc
+  // and reload the ENTIRE map on every single GPS ping instead of smoothly
+  // moving the marker via postMessage the way the effect below intends.
+  const [mapHTML, setMapHTML] = useState('');
+  useEffect(() => {
+    if (!task) return;
+    const hasKnownLocation = task.driverLat != null || task.destinationLat != null;
+    const centerLat = task.driverLat ?? task.destinationLat ?? 20.5937;
+    const centerLng = task.driverLng ?? task.destinationLng ?? 78.9629;
+    setMapHTML(buildMapHTML(centerLat, centerLng, task.destinationLat ?? null, task.destinationLng ?? null, isDark, hasKnownLocation));
+    // Deliberately excludes task.driverLat/driverLng/destinationLat/Lng —
+    // only a genuinely different task (or a theme switch) should rebuild
+    // the map; GPS movement within the same task flows through postMessage.
+  }, [task?.id, isDark]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (realLat == null || realLng == null) return;
@@ -117,12 +176,6 @@ export function LiveTrackingScreen({task, onBack}: Props) {
       </div>
     );
   }
-
-  // Center on whatever real position is actually known — never a fixed demo
-  // coordinate.
-  const centerLat = realLat ?? task.destinationLat ?? 20.5937;
-  const centerLng = realLng ?? task.destinationLng ?? 78.9629;
-  const mapHTML = buildMapHTML(centerLat, centerLng, task.destinationLat ?? null, task.destinationLng ?? null, isDark);
 
   return (
     <div style={{flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', backgroundColor: colors.background, minHeight: 0}}>
