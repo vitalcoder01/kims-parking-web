@@ -176,21 +176,35 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
       const task = mapTask(raw);
       const me = userRef.current;
       setTasks(p => {
-        // Alarm when a task for ME is initiated (a fresh record appearing) —
-        // the valet just took my keys / started a trip with my car.
         const existing = p.find(t => t.id === task.id);
-        if (me && task.doctorId === me.id) {
-          if (!existing) {
+        // The loud alarm (siren + red banner) is reserved for exactly two
+        // moments, nothing else — not task creation, not driver assigned,
+        // not key collected, not in transit:
+        //   1. The car got parked (driver marks it parked → status
+        //      'completed' on a 'park' task).
+        //   2. After a retrieval, the car is at the gate (status
+        //      'delivered' on a 'retrieve' task — the driver's brought it
+        //      to the entrance; not yet valet-confirmed, but that's exactly
+        //      "come get it now").
+        // Requires an actual STATUS TRANSITION (existing status differed),
+        // not just this task appearing/being upserted, so a page reload or
+        // reconnect fetch replaying an already-settled task never re-rings.
+        if (me && task.doctorId === me.id && existing && existing.status !== task.status) {
+          const justParked = task.type === 'park' && task.status === 'completed';
+          const justAtGate = task.type === 'retrieve' && task.status === 'delivered';
+          if (justParked || justAtGate) {
             ringAlarm();
             setActiveAlert({
-              title: task.type === 'park' ? 'Parking Task Started' : 'Retrieval Started',
-              body: `${task.carNumber} — ${task.type === 'park' ? 'your car is being parked' : 'your car is being retrieved'}`,
+              title: justParked ? 'Car Parked' : 'Car Ready at Gate',
+              body: justParked
+                ? `${task.carNumber} has been safely parked${task.slotId ? ` at slot ${task.slotId}` : ''}.`
+                : `${task.carNumber} has arrived — please collect it at the entrance.`,
               type: 'alarm',
               at: Date.now(),
             });
-          } else if (existing.status !== task.status) {
-            // Status moved (driver assigned / in transit / delivered) — a
-            // gentle chime, the alarm is reserved for task initiation.
+          } else {
+            // Any other status movement (assigned / key collected / in
+            // transit) — a gentle chime only, never the siren.
             playChime();
           }
         }

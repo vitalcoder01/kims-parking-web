@@ -128,27 +128,42 @@ export function LiveTrackingScreen({task, onBack}: Props) {
   const realLat = task?.driverLat ?? null;
   const realLng = task?.driverLng ?? null;
 
-  // Built once per task being tracked, never recomputed from live GPS
-  // fields — the map HTML embeds its initial center directly as a string,
-  // so if this were rebuilt on every render (it previously was, as a plain
-  // const), changing driverLat/driverLng would change the iframe's srcDoc
-  // and reload the ENTIRE map on every single GPS ping instead of smoothly
-  // moving the marker via postMessage the way the effect below intends.
-  const [mapHTML, setMapHTML] = useState('');
+  // Built synchronously for the FIRST paint (lazy initializer, not an
+  // effect) so the very first render already has real map content — if
+  // this instead started as '' and got filled in by an effect one tick
+  // later, a postMessage sent before that tick would land in a still-blank
+  // iframe with no listener registered yet and be silently dropped (the
+  // actual root cause behind "GPS looks stuck"). Never recomputed from
+  // live GPS fields after that — the map HTML embeds its initial center
+  // directly as a string, so rebuilding it on every GPS ping would change
+  // the iframe's srcDoc and reload the ENTIRE map instead of smoothly
+  // moving the marker via postMessage.
+  const buildForTask = (t: ParkingTask | undefined, dark: boolean) => {
+    if (!t) return '';
+    const hasKnownLocation = t.driverLat != null || t.destinationLat != null;
+    const centerLat = t.driverLat ?? t.destinationLat ?? 20.5937;
+    const centerLng = t.driverLng ?? t.destinationLng ?? 78.9629;
+    return buildMapHTML(centerLat, centerLng, t.destinationLat ?? null, t.destinationLng ?? null, dark, hasKnownLocation);
+  };
+  const [mapHTML, setMapHTML] = useState(() => buildForTask(task, isDark));
+  const builtForTaskId = useRef(task?.id);
   useEffect(() => {
-    if (!task) return;
-    const hasKnownLocation = task.driverLat != null || task.destinationLat != null;
-    const centerLat = task.driverLat ?? task.destinationLat ?? 20.5937;
-    const centerLng = task.driverLng ?? task.destinationLng ?? 78.9629;
-    setMapHTML(buildMapHTML(centerLat, centerLng, task.destinationLat ?? null, task.destinationLng ?? null, isDark, hasKnownLocation));
-    // Deliberately excludes task.driverLat/driverLng/destinationLat/Lng —
-    // only a genuinely different task (or a theme switch) should rebuild
-    // the map; GPS movement within the same task flows through postMessage.
+    // Only a genuinely different task (or a theme switch) should rebuild
+    // the map; GPS movement within the same task flows through postMessage
+    // (both the effect below AND the iframe's onLoad re-sync it).
+    if (builtForTaskId.current === task?.id && mapHTML) return;
+    builtForTaskId.current = task?.id;
+    setMapHTML(buildForTask(task, isDark));
   }, [task?.id, isDark]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sendRealGPS = () => {
+    if (realLat == null || realLng == null) return;
+    frameRef.current?.contentWindow?.postMessage(JSON.stringify({type: 'realGPS', lat: realLat, lng: realLng}), '*');
+  };
 
   useEffect(() => {
     if (realLat == null || realLng == null) return;
-    frameRef.current?.contentWindow?.postMessage(JSON.stringify({type: 'realGPS', lat: realLat, lng: realLng}), '*');
+    sendRealGPS();
 
     const result = computeTrip({
       startLat: task?.driverStartLat, startLng: task?.driverStartLng,
@@ -217,6 +232,14 @@ export function LiveTrackingScreen({task, onBack}: Props) {
         ref={frameRef}
         title="Live tracking map"
         srcDoc={mapHTML}
+        // Self-healing resync: whenever the document (re)loads — including
+        // the very first load — re-send whatever GPS position is already
+        // known. This is what actually closes the race the comment above
+        // describes: a postMessage sent before the iframe's own script has
+        // run is lost with no retry, so relying on it alone left "GPS looks
+        // stuck" as a real possibility. onLoad fires after the iframe's
+        // inline <script> has executed and its listener is registered.
+        onLoad={sendRealGPS}
         style={{flex: 1, border: 'none', width: '100%', minHeight: 0}}
       />
 
