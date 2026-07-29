@@ -30,14 +30,18 @@ input:focus {
   outline: none;
 }
 
-/* PressableScale — spring scale-down + fade, matching the app's press feedback */
+/* PressableScale — spring scale-down + fade, matching the app's press feedback.
+   text-align: center (not inherit) so a single-line label centers by
+   default like a native <button> — screens that need left-aligned content
+   (e.g. a row with an icon + text) already set textAlign explicitly inline,
+   which wins over this class rule. */
 .pressable {
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
   color: inherit;
-  text-align: inherit;
+  text-align: center;
   transition: transform 0.12s ease, opacity 0.12s ease;
 }
 .pressable:active:not(:disabled) {

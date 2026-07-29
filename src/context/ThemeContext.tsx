@@ -12,7 +12,7 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  mode: 'system',
+  mode: 'light',
   isDark: false,
   colors: lightColors,
   setMode: () => {},
@@ -26,9 +26,12 @@ function systemPrefersDark() {
 }
 
 export function ThemeProvider({children}: {children: React.ReactNode}) {
+  // Default is Light (white) regardless of the device's OS dark-mode setting
+  // — a saved preference (once the user actually picks a mode in Settings)
+  // still always wins over this default.
   const [mode, setModeState] = useState<ThemeMode>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system';
+    return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'light';
   });
   const [systemDark, setSystemDark] = useState(systemPrefersDark);
 

@@ -195,6 +195,7 @@ export function SettingsScreen() {
             if (window.confirm('Are you sure you want to logout?')) logout();
           }}
           style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             borderRadius: radius.lg, border: `1px solid ${colors.error}44`,
             padding: `${spacing.base}px 0`, width: '100%', marginTop: spacing.sm,
             backgroundColor: colors.errorLight,

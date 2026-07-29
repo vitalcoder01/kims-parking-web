@@ -69,6 +69,7 @@ export function InstallHelpModal({onClose}: {onClose: () => void}) {
         <PressableScale
           onClick={onClose}
           style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             borderRadius: 14, padding: '15px 0', width: '100%',
             backgroundColor: colors.primary,
           }}>

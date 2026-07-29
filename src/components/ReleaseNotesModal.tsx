@@ -64,6 +64,7 @@ export function ReleaseNotesModal() {
         <PressableScale
           onClick={dismiss}
           style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             marginTop: 20, borderRadius: 14, padding: '15px 0', alignSelf: 'stretch',
             backgroundColor: colors.primary, boxShadow: `0 6px 12px ${colors.shadow}`,
           }}>
