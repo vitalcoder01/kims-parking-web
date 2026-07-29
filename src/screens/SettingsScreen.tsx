@@ -189,19 +189,32 @@ export function SettingsScreen() {
           ))}
         </Card>
 
-        {/* Logout */}
-        <PressableScale
-          onClick={() => {
-            if (window.confirm('Are you sure you want to logout?')) logout();
-          }}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            borderRadius: radius.lg, border: `1px solid ${colors.error}44`,
-            padding: `${spacing.base}px 0`, width: '100%', marginTop: spacing.sm,
-            backgroundColor: colors.errorLight,
-          }}>
-          <span style={{fontSize: typography.sizes.base, fontWeight: typography.weights.black, color: colors.error}}>Logout</span>
-        </PressableScale>
+        {/* Account — same white-card row pattern as APP/ABOUT above, instead
+            of a standalone red pill that broke from the rest of the screen. */}
+        <div style={sectionTitle}>ACCOUNT</div>
+        <Card>
+          <PressableScale
+            onClick={() => {
+              if (window.confirm('Are you sure you want to logout?')) logout();
+            }}
+            style={{display: 'flex', alignItems: 'center', gap: spacing.md, width: '100%'}}>
+            <span style={{
+              width: 36, height: 36, borderRadius: 12, backgroundColor: colors.errorLight,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <Icon name="logout" size={18} color={colors.error} />
+            </span>
+            <span style={{textAlign: 'left', flex: 1}}>
+              <span style={{display: 'block', fontSize: typography.sizes.base, fontWeight: typography.weights.bold, color: colors.error}}>
+                Logout
+              </span>
+              <span style={{display: 'block', fontSize: typography.sizes.sm, marginTop: 2, color: colors.textSecondary}}>
+                Sign out of your account on this device
+              </span>
+            </span>
+            <Icon name="chevronRight" size={18} color={colors.textMuted} />
+          </PressableScale>
+        </Card>
 
       </div>
       {showInstallHelp && <InstallHelpModal onClose={() => setShowInstallHelp(false)} />}
