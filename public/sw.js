@@ -64,11 +64,27 @@ self.addEventListener('notificationclick', event => {
 });
 
 /* ── PWA app-shell caching ────────────────────────────────────────────── */
-const CACHE = 'kims-parking-web-v1';
+// Bump this string on every deploy that should force an update check. Since
+// hashed JS/CSS filenames change per build but this FILE didn't always
+// change too, the browser's normal "new service worker available" detection
+// never fired — installed/already-open tabs kept running old code
+// indefinitely with no way to know a fix had shipped. Changing this value
+// makes sw.js itself byte-different each time, which the browser DOES
+// detect, triggering the update flow that UpdateBanner listens for.
+const CACHE = 'kims-parking-web-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)));
+  // Deliberately no skipWaiting() here — a freshly installed worker waits
+  // until the page asks it to take over (see the message listener below),
+  // so an update never yanks the UI out from under someone mid-action. The
+  // waiting state is exactly what registration.onupdatefound/.waiting
+  // detects to show the "Update available" banner.
+});
+
+self.addEventListener('message', event => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {

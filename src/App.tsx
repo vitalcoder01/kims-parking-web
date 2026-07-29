@@ -5,6 +5,7 @@ import {AppStateProvider} from './context/AppStateContext';
 import {Icon, IconName} from './components/Icon';
 import {AlarmBanner} from './components/AlarmBanner';
 import {InstallBanner} from './components/InstallBanner';
+import {UpdateBanner} from './components/UpdateBanner';
 import {LoginScreen} from './screens/LoginScreen';
 import {DoctorHomeScreen} from './screens/DoctorHomeScreen';
 import {VirtualCardScreen} from './screens/VirtualCardScreen';
@@ -57,6 +58,7 @@ function RoleRouter() {
   return (
     <div className="phone-frame" style={{backgroundColor: colors.background}}>
       <AlarmBanner />
+      <UpdateBanner />
       <InstallBanner />
 
       {/* Header — matches the app's native-stack header styling */}

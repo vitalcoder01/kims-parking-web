@@ -189,32 +189,21 @@ export function SettingsScreen() {
           ))}
         </Card>
 
-        {/* Account — same white-card row pattern as APP/ABOUT above, instead
-            of a standalone red pill that broke from the rest of the screen. */}
-        <div style={sectionTitle}>ACCOUNT</div>
-        <Card>
-          <PressableScale
-            onClick={() => {
-              if (window.confirm('Are you sure you want to logout?')) logout();
-            }}
-            style={{display: 'flex', alignItems: 'center', gap: spacing.md, width: '100%'}}>
-            <span style={{
-              width: 36, height: 36, borderRadius: 12, backgroundColor: colors.errorLight,
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
-              <Icon name="logout" size={18} color={colors.error} />
-            </span>
-            <span style={{textAlign: 'left', flex: 1}}>
-              <span style={{display: 'block', fontSize: typography.sizes.base, fontWeight: typography.weights.bold, color: colors.error}}>
-                Logout
-              </span>
-              <span style={{display: 'block', fontSize: typography.sizes.sm, marginTop: 2, color: colors.textSecondary}}>
-                Sign out of your account on this device
-              </span>
-            </span>
-            <Icon name="chevronRight" size={18} color={colors.textMuted} />
-          </PressableScale>
-        </Card>
+        {/* Logout — solid primary-style CTA button, matching Sign In /
+            Save Vehicle / Edit Vehicle Details elsewhere in the app
+            (black background, white text) instead of a red accent. */}
+        <PressableScale
+          onClick={() => {
+            if (window.confirm('Are you sure you want to logout?')) logout();
+          }}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            borderRadius: radius.lg, height: 54, width: '100%', marginTop: spacing.md,
+            backgroundColor: colors.primary,
+          }}>
+          <Icon name="logout" size={17} color={colors.textOnPrimary} />
+          <span style={{fontSize: typography.sizes.base, fontWeight: typography.weights.black, color: colors.textOnPrimary}}>Logout</span>
+        </PressableScale>
 
       </div>
       {showInstallHelp && <InstallHelpModal onClose={() => setShowInstallHelp(false)} />}

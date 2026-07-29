@@ -6,6 +6,7 @@ import {BRAND_GRADIENT, gradientCss} from '../theme/colors';
 import {Icon} from '../components/Icon';
 import {ReleaseNotesModal} from '../components/ReleaseNotesModal';
 import {InstallBanner} from '../components/InstallBanner';
+import {UpdateBanner} from '../components/UpdateBanner';
 import {APP_VERSION_NAME} from '../config/version';
 
 // Quick-login: remembers accounts you've actually signed into on THIS
@@ -111,6 +112,7 @@ export function LoginScreen() {
 
   return (
     <div className="phone-frame" style={{backgroundColor: colors.background}}>
+      <UpdateBanner />
       <InstallBanner />
       <div className="screen-scroll" style={{paddingBottom: 32}}>
 
