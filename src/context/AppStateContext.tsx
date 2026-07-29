@@ -76,6 +76,7 @@ interface AppState {
   notifications: Notification[];
   activeAlert: ActiveAlert | null;
   dismissAlert: () => void;
+  fetchTaskHistory: (params?: {doctorId?: number}) => Promise<ParkingTask[]>;
   requestRetrieval: (eta: number) => Promise<number>;
   pushNotification: (n: Omit<Notification, 'id' | 'createdAt' | 'read'>) => Promise<void>;
   markNotificationRead: (id: number) => Promise<void>;
@@ -234,6 +235,11 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     };
   }, [user?.id, fetchAll]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const fetchTaskHistory = useCallback(async (params?: {doctorId?: number}) => {
+    const rows = await tasksApi.history(params);
+    return rows.map(mapTask);
+  }, []);
+
   const pushNotification = useCallback(async (n: Omit<Notification, 'id' | 'createdAt' | 'read'>) => {
     const created = mapNotification(
       await notificationsApi.push({targetRole: n.targetRole, targetId: n.targetId, title: n.title, body: n.body, type: n.type}),
@@ -262,7 +268,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
   }, []);
 
   return (
-    <Ctx.Provider value={{tasks, slots, notifications, activeAlert, dismissAlert, requestRetrieval, pushNotification, markNotificationRead}}>
+    <Ctx.Provider value={{tasks, slots, notifications, activeAlert, dismissAlert, fetchTaskHistory, requestRetrieval, pushNotification, markNotificationRead}}>
       {children}
     </Ctx.Provider>
   );

@@ -91,6 +91,11 @@ export const usersApi = {
 export const tasksApi = {
   list: (params?: {doctorId?: number; driverId?: number; status?: string; type?: string}) =>
     client.get('/tasks', {params}).then(r => r.data.tasks),
+  // Full past-sessions log — bypasses the isCurrent filter the live-board
+  // `list()` call uses, so this returns everything ever, not just whatever's
+  // currently active.
+  history: (params?: {doctorId?: number; driverId?: number}) =>
+    client.get('/tasks', {params: {...params, history: true}}).then(r => r.data.tasks),
   get: (id: number) => client.get(`/tasks/${id}`).then(r => r.data.task),
   requestRetrieval: (data: {eta?: number; destinationLat?: number; destinationLng?: number}) =>
     client.post('/tasks/request-retrieval', data).then(r => r.data.task),

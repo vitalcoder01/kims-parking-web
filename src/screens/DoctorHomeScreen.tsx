@@ -10,7 +10,7 @@ import {Icon} from '../components/Icon';
 
 const ETA_OPTIONS = [10, 20, 30, 40];
 
-export function DoctorHomeScreen({onOpenCard}: {onOpenCard: () => void}) {
+export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () => void; onOpenHistory: () => void}) {
   const {user} = useAuth();
   const {tasks} = useAppState();
   const {colors, isDark} = useTheme();
@@ -19,16 +19,23 @@ export function DoctorHomeScreen({onOpenCard}: {onOpenCard: () => void}) {
   const [requesting, setRequesting]     = useState(false);
   const [showTracking, setShowTracking] = useState(false);
 
-  // `tasks` comes back from the backend newest-first (createdAt desc) — the
-  // most recent task for this doctor is index 0.
-  const myTasks   = tasks.filter(t => t.doctorId === user?.id);
-  const activeTask = myTasks.find(t => t.status !== 'completed');
-  const latestTask = myTasks[0];
-  const displayTask = activeTask ?? latestTask;
+  // `tasks` only ever contains this doctor's single current session (the
+  // backend enforces at most one isCurrent row per doctor) — no more
+  // "most recent non-completed" search needed, and no more risk of an old
+  // stuck task outranking a real, later one.
+  const displayTask = tasks.find(t => t.doctorId === user?.id);
+  const activeTask = displayTask && displayTask.status !== 'completed' && displayTask.status !== 'cancelled' ? displayTask : undefined;
   const carIsParked = displayTask?.type === 'park' && displayTask.status === 'completed';
   // 'delivered' — driver's brought the car back to the valet counter, but
   // the valet hasn't confirmed handover yet.
   const carJustRetrieved = displayTask?.type === 'retrieve' && displayTask.status === 'delivered';
+  // A cancelled session (e.g. staff retired a stuck "no driver ever showed
+  // up" job) is over, same as completed — nothing to show for it.
+  const showEmptyState = !displayTask || displayTask.status === 'cancelled';
+  // Nothing to actually track without a driver on the move yet — showing
+  // this button for e.g. "Awaiting Driver" just opens a map with nothing on it.
+  const canTrack = !!displayTask?.driverId && !carJustRetrieved
+    && displayTask.status !== 'completed' && displayTask.status !== 'cancelled';
 
   const handleDeparture = async () => {
     if (!selectedEta) return;
@@ -111,7 +118,7 @@ export function DoctorHomeScreen({onOpenCard}: {onOpenCard: () => void}) {
             )}
           </div>
 
-          {displayTask ? (
+          {!showEmptyState && displayTask ? (
             <>
               {carIsParked && displayTask.slotId && (
                 <div style={{
@@ -147,7 +154,7 @@ export function DoctorHomeScreen({onOpenCard}: {onOpenCard: () => void}) {
                   </div>
                 ))}
               </div>
-              {!carJustRetrieved && (
+              {canTrack && (
                 <PressableScale
                   onClick={() => setShowTracking(true)}
                   style={{
@@ -175,6 +182,19 @@ export function DoctorHomeScreen({onOpenCard}: {onOpenCard: () => void}) {
             </div>
           )}
         </div>
+
+        {/* Past sessions */}
+        <PressableScale
+          onClick={onOpenHistory}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            borderRadius: 16, border: `1px solid ${colors.border}`, padding: 14,
+            backgroundColor: colors.surface, width: '100%',
+          }}>
+          <Icon name="history" size={18} color={colors.textPrimary} />
+          <span style={{flex: 1, fontSize: 13, fontWeight: 700, textAlign: 'left', color: colors.textPrimary}}>View Parking History</span>
+          <Icon name="arrowRight" size={16} color={colors.textMuted} />
+        </PressableScale>
 
         {/* Departure — only offered while the car is actually parked and
             waiting; once a retrieval is requested there's nothing more to ask. */}

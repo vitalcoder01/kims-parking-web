@@ -12,13 +12,14 @@ import {VirtualCardScreen} from './screens/VirtualCardScreen';
 import {VehicleSetupScreen} from './screens/VehicleSetupScreen';
 import {ParkingScreen} from './screens/ParkingScreen';
 import {SettingsScreen} from './screens/SettingsScreen';
+import {HistoryScreen} from './screens/HistoryScreen';
 
 // Web port of the app's AppNavigator: bottom tabs per role. Doctors get
 // Home / Parking / Setup / Settings; staff get Home / Setup / Settings —
-// the same split as the mobile DoctorNavigator/StaffNavigator. "Card" is
-// reachable only from the valet-code chip on Home, not a bottom tab.
+// the same split as the mobile DoctorNavigator/StaffNavigator. "Card" and
+// "History" are reachable only from links on Home, not bottom tabs.
 
-type TabKey = 'Home' | 'Card' | 'Parking' | 'Setup' | 'Settings';
+type TabKey = 'Home' | 'Card' | 'History' | 'Parking' | 'Setup' | 'Settings';
 
 interface TabDef {
   key: TabKey;
@@ -45,14 +46,17 @@ function RoleRouter() {
 
   const tabs = tabsForRole(user?.role);
   const activeTab = tabs.find(t => t.key === tab);
-  // Card is a hidden route (no tab bar entry) with its own full-bleed layout.
+  // Card/History are hidden routes (no tab bar entry) with their own
+  // full-bleed layout.
   const isCard = tab === 'Card';
+  const isHistory = tab === 'History';
 
   const screen =
-    isCard            ? <VirtualCardScreen onBack={() => setTab('Home')} />
-    : tab === 'Home'    ? <DoctorHomeScreen onOpenCard={() => setTab('Card')} />
-    : tab === 'Parking' ? <ParkingScreen />
-    : tab === 'Setup'   ? <VehicleSetupScreen onBack={() => setTab('Home')} />
+    isCard              ? <VirtualCardScreen onBack={() => setTab('Home')} />
+    : isHistory           ? <HistoryScreen onBack={() => setTab('Home')} />
+    : tab === 'Home'      ? <DoctorHomeScreen onOpenCard={() => setTab('Card')} onOpenHistory={() => setTab('History')} />
+    : tab === 'Parking'   ? <ParkingScreen />
+    : tab === 'Setup'     ? <VehicleSetupScreen onBack={() => setTab('Home')} />
     : <SettingsScreen />;
 
   return (
@@ -87,7 +91,7 @@ function RoleRouter() {
         paddingBottom: 8, paddingTop: 6,
       }}>
         {tabs.map(t => {
-          const active = t.key === tab || (isCard && t.key === 'Home');
+          const active = t.key === tab || ((isCard || isHistory) && t.key === 'Home');
           const color = active ? colors.tabIconActive : colors.tabIconInactive;
           return (
             <button
