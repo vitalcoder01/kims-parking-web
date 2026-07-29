@@ -1,0 +1,164 @@
+/* KIMS Parking web — global reset + the shared behaviours that RN gave the
+   mobile app for free (press feedback, system font stack, no scrollbars in
+   the phone column). */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+  font-family: inherit;
+}
+
+input {
+  font-family: inherit;
+}
+
+input:focus {
+  outline: none;
+}
+
+/* PressableScale — spring scale-down + fade, matching the app's press feedback */
+.pressable {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  text-align: inherit;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+.pressable:active:not(:disabled) {
+  transform: scale(var(--press-scale, 0.96));
+  opacity: 0.85;
+}
+.pressable:disabled {
+  cursor: default;
+}
+
+/* Login error shake — port of the Animated shake sequence */
+@keyframes kims-shake {
+  0%   { transform: translateX(0); }
+  15%  { transform: translateX(10px); }
+  35%  { transform: translateX(-10px); }
+  55%  { transform: translateX(6px); }
+  75%  { transform: translateX(-6px); }
+  100% { transform: translateX(0); }
+}
+.shake {
+  animation: kims-shake 0.3s ease;
+}
+
+/* Countdown card pulse — port of the Animated.loop scale pulse */
+@keyframes kims-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.04); }
+}
+.pulse {
+  animation: kims-pulse 2s ease-in-out infinite;
+}
+
+/* Virtual card glow — port of the Animated glow loop */
+@keyframes kims-glow {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.9; }
+}
+.glow {
+  animation: kims-glow 3.6s ease-in-out infinite;
+}
+
+/* Spinner (ActivityIndicator stand-in) */
+@keyframes kims-spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  animation: kims-spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+/* Horizontal quick-login strip — scrolls without a visible scrollbar */
+.hscroll {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.hscroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Phone-style column: the app is a mobile design; on wide screens it renders
+   as a centered phone-width column, edge-to-edge on small screens.
+   Fixed viewport height + inner scrolling — the tab bar stays pinned and the
+   page itself never scrolls (the earlier min-height version let content push
+   the tab bar off-screen and produce a second scrollbar). */
+.phone-frame {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.18);
+}
+
+@media (min-width: 481px) {
+  body {
+    background: #E5E3DD;
+  }
+  .phone-frame {
+    border-left: 1px solid rgba(0, 0, 0, 0.08);
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
+  }
+}
+
+.screen-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.screen-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Desktop niceties — subtle hover feedback so buttons feel alive with a
+   mouse, and a visible focus ring for keyboard users. */
+@media (hover: hover) {
+  .pressable:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+}
+.pressable:focus-visible {
+  outline: 2px solid rgba(21, 22, 26, 0.55);
+  outline-offset: 2px;
+}
+
+/* Fade-in for screen changes — a light, professional transition. */
+@keyframes kims-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.screen-enter {
+  animation: kims-fade-in 0.18s ease-out;
+}

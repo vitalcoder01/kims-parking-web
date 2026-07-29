@@ -1,0 +1,125 @@
+import axios, {AxiosError, AxiosInstance} from 'axios';
+import {API_BASE_URL} from '../config/api';
+
+// Direct port of the mobile app's services/api.ts — same endpoints, same
+// backend, same conditional-GET ETag cache.
+const client: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 12000,
+  headers: {'Content-Type': 'application/json'},
+  validateStatus: status => (status >= 200 && status < 300) || status === 304,
+});
+
+const etagCache = new Map<string, {etag: string; data: unknown}>();
+
+function conditionalGetKey(config: {method?: string; url?: string; params?: unknown}): string | null {
+  if ((config.method ?? 'get').toLowerCase() !== 'get') return null;
+  return `${config.url ?? ''}?${JSON.stringify(config.params ?? {})}`;
+}
+
+let authToken: string | null = null;
+let onUnauthorized: (() => void) | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
+export function getAuthToken(): string | null {
+  return authToken;
+}
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  onUnauthorized = handler;
+}
+
+client.interceptors.request.use(config => {
+  if (authToken) {
+    config.headers = config.headers ?? ({} as any);
+    config.headers.Authorization = `Bearer ${authToken}`;
+  }
+  const key = conditionalGetKey(config);
+  const cached = key ? etagCache.get(key) : undefined;
+  if (cached) {
+    config.headers = config.headers ?? ({} as any);
+    config.headers['If-None-Match'] = cached.etag;
+  }
+  return config;
+});
+
+client.interceptors.response.use(
+  res => {
+    const key = conditionalGetKey(res.config);
+    if (!key) return res;
+
+    if (res.status === 304) {
+      const cached = etagCache.get(key);
+      if (cached) res.data = cached.data;
+      return res;
+    }
+
+    const etag = res.headers?.etag ?? (res.headers as any)?.ETag;
+    if (etag) etagCache.set(key, {etag, data: res.data});
+    return res;
+  },
+  (error: AxiosError<{error?: {message?: string}}>) => {
+    const status = error.response?.status;
+    const isLoginCall = error.config?.url?.includes('/auth/login');
+    if (status === 401 && !isLoginCall) {
+      onUnauthorized?.();
+    }
+    const message = error.response?.data?.error?.message ?? error.message ?? 'Network error';
+    return Promise.reject(new Error(message));
+  },
+);
+
+// ── Auth ─────────────────────────────────────────────────────────────────
+export const authApi = {
+  login: (username: string, password: string) =>
+    client.post('/auth/login', {username, password}).then(r => r.data as {token: string; user: any}),
+  me: () => client.get('/auth/me').then(r => r.data.user),
+};
+
+// ── Users ────────────────────────────────────────────────────────────────
+export const usersApi = {
+  lookupByCardCode: (code: string) =>
+    client.get(`/users/by-card/${code}`).then(r => r.data.user),
+  updateMe: (patch: {carNumber?: string; phone?: string}) =>
+    client.patch('/users/me', patch).then(r => r.data.user),
+};
+
+// ── Tasks ────────────────────────────────────────────────────────────────
+export const tasksApi = {
+  list: (params?: {doctorId?: number; driverId?: number; status?: string; type?: string}) =>
+    client.get('/tasks', {params}).then(r => r.data.tasks),
+  get: (id: number) => client.get(`/tasks/${id}`).then(r => r.data.task),
+  requestRetrieval: (data: {eta?: number; destinationLat?: number; destinationLng?: number}) =>
+    client.post('/tasks/request-retrieval', data).then(r => r.data.task),
+};
+
+// ── Slots ────────────────────────────────────────────────────────────────
+export const slotsApi = {
+  list: (params?: {status?: string; block?: string}) =>
+    client.get('/slots', {params}).then(r => r.data.slots),
+  occupancy: () => client.get('/slots/occupancy').then(r => r.data),
+};
+
+// ── Notifications ────────────────────────────────────────────────────────
+export const notificationsApi = {
+  list: () => client.get('/notifications').then(r => r.data.notifications),
+  push: (data: {targetRole: string; targetId?: number; title: string; body: string; type?: string}) =>
+    client.post('/notifications', data).then(r => r.data.notification),
+  markRead: (id: number) =>
+    client.patch(`/notifications/${id}/read`).then(r => r.data.notification),
+  // FCM token registration — lets pushes reach this browser even when the
+  // web app isn't open (same endpoint the mobile app uses).
+  registerDevice: (token: string, platform = 'web') =>
+    client.post('/notifications/register-device', {token, platform}).then(() => undefined),
+};
+
+// ── App version / releases ───────────────────────────────────────────────
+export const appApi = {
+  checkVersion: (): Promise<{latestVersionCode: number; latestVersionName: string; apkUrl: string; notes?: string}> =>
+    client.get('/app/version').then(r => r.data),
+};
+
+export default client;
