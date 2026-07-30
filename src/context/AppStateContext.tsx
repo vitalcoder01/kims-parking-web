@@ -177,28 +177,25 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
       const me = userRef.current;
       setTasks(p => {
         const existing = p.find(t => t.id === task.id);
-        // The loud alarm (siren + red banner) is reserved for exactly two
-        // moments, nothing else — not task creation, not driver assigned,
-        // not key collected, not in transit:
-        //   1. The car got parked (driver marks it parked → status
-        //      'completed' on a 'park' task).
-        //   2. After a retrieval, the car is at the gate (status
-        //      'delivered' on a 'retrieve' task — the driver's brought it
-        //      to the entrance; not yet valet-confirmed, but that's exactly
-        //      "come get it now").
+        // The loud alarm (siren + red banner) is reserved for exactly one
+        // moment, nothing else — not task creation, not driver assigned,
+        // not key collected, not in transit, and NOT the car getting
+        // parked (the doctor is already on-site when that happens, so
+        // there's nothing for them to act on): only when a retrieval
+        // arrives at the gate (status 'delivered' on a 'retrieve' task —
+        // the driver's brought it to the entrance; not yet valet-confirmed,
+        // but that's exactly "come get it now", the one moment the doctor
+        // actually needs to go outside and act).
         // Requires an actual STATUS TRANSITION (existing status differed),
         // not just this task appearing/being upserted, so a page reload or
         // reconnect fetch replaying an already-settled task never re-rings.
         if (me && task.doctorId === me.id && existing && existing.status !== task.status) {
-          const justParked = task.type === 'park' && task.status === 'completed';
           const justAtGate = task.type === 'retrieve' && task.status === 'delivered';
-          if (justParked || justAtGate) {
+          if (justAtGate) {
             ringAlarm();
             setActiveAlert({
-              title: justParked ? 'Car Parked' : 'Car Ready at Gate',
-              body: justParked
-                ? `${task.carNumber} has been safely parked${task.slotId ? ` at slot ${task.slotId}` : ''}.`
-                : `${task.carNumber} has arrived — please collect it at the entrance.`,
+              title: 'Car Ready at Gate',
+              body: `${task.carNumber} has arrived — please collect it at the entrance.`,
               type: 'alarm',
               at: Date.now(),
             });
