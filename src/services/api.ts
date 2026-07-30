@@ -126,10 +126,4 @@ export const notificationsApi = {
     client.post('/notifications/unregister-device', {token}).then(() => undefined),
 };
 
-// ── App version / releases ───────────────────────────────────────────────
-export const appApi = {
-  checkVersion: (): Promise<{latestVersionCode: number; latestVersionName: string; apkUrl: string; notes?: string}> =>
-    client.get('/app/version').then(r => r.data),
-};
-
 export default client;

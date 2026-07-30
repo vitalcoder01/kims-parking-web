@@ -1,35 +1,31 @@
 import React, {useEffect, useState} from 'react';
 import {PressableScale} from './PressableScale';
 import {useTheme} from '../context/ThemeContext';
-import {appApi} from '../services/api';
+import {APP_VERSION_CODE, APP_VERSION_NAME, RELEASE_NOTES} from '../config/version';
 import {Icon} from './Icon';
 
-// "What's New" popup on the login screen — reads the same /app/version
-// endpoint the mobile app's UpdateModal uses. Whenever a release is
-// published there (latestVersionCode bumped), every user sees the notes
-// once, before they log in; dismissing remembers that version.
+// "What's New" popup on the login screen. Entirely local/static — NOT the
+// mobile app's /api/app/version endpoint (that serves the mobile APK's
+// update-check info and previously leaked mobile's version/notes into this
+// web-only popup, which is the exact bug this was rewritten to fix). Web
+// ships continuously via Vercel, so this just needs to compare its own
+// bundled version against what this browser last saw.
 const SEEN_KEY = '@kims_seen_release_code';
 
 export function ReleaseNotesModal() {
   const {colors} = useTheme();
-  const [info, setInfo] = useState<{latestVersionCode: number; latestVersionName: string; notes?: string} | null>(null);
+  const [show, setShow] = useState(false);
 
   useEffect(() => {
-    appApi.checkVersion()
-      .then(data => {
-        const seen = Number(localStorage.getItem(SEEN_KEY) ?? 0);
-        if (data.latestVersionCode > seen) setInfo(data);
-      })
-      .catch(() => {
-        // Background check — backend briefly down isn't worth surfacing.
-      });
+    const seen = Number(localStorage.getItem(SEEN_KEY) ?? 0);
+    if (APP_VERSION_CODE > seen) setShow(true);
   }, []);
 
-  if (!info) return null;
+  if (!show) return null;
 
   const dismiss = () => {
-    localStorage.setItem(SEEN_KEY, String(info.latestVersionCode));
-    setInfo(null);
+    localStorage.setItem(SEEN_KEY, String(APP_VERSION_CODE));
+    setShow(false);
   };
 
   return (
@@ -53,13 +49,13 @@ export function ReleaseNotesModal() {
         </div>
         <div style={{fontSize: 19, fontWeight: 900, color: colors.textPrimary}}>What's New</div>
         <div style={{fontSize: 13, textAlign: 'center', marginTop: 6, lineHeight: '19px', color: colors.textSecondary}}>
-          KIMS Parking v{info.latestVersionName} has been released.
+          KIMS Parking Web v{APP_VERSION_NAME} has been released.
         </div>
-        {info.notes ? (
+        {RELEASE_NOTES ? (
           <div style={{
             fontSize: 12, borderRadius: 12, padding: 12, marginTop: 14, lineHeight: '17px',
             alignSelf: 'stretch', color: colors.textMuted, backgroundColor: colors.cardAlt,
-          }}>{info.notes}</div>
+          }}>{RELEASE_NOTES}</div>
         ) : null}
         <PressableScale
           onClick={dismiss}
