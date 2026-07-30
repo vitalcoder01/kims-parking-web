@@ -2,7 +2,23 @@
 // worker) and hands the registration to whoever needs it (webPush.ts) — plus
 // update detection, so an already-open tab can tell the user a new deploy
 // has shipped instead of silently running stale JS forever.
+import {FIREBASE_CONFIG} from '../config/firebase';
+
 let regPromise: Promise<ServiceWorkerRegistration | null> | null = null;
+
+// sw.js is a static file Vite doesn't bundle, so it can't read import.meta.env
+// — hand it the same Firebase config via the registration URL instead of
+// hardcoding real values in a committed file.
+function swUrl(): string {
+  const params = new URLSearchParams();
+  if (FIREBASE_CONFIG.apiKey) params.set('apiKey', FIREBASE_CONFIG.apiKey);
+  if (FIREBASE_CONFIG.projectId) params.set('projectId', FIREBASE_CONFIG.projectId);
+  if (FIREBASE_CONFIG.messagingSenderId) params.set('messagingSenderId', FIREBASE_CONFIG.messagingSenderId);
+  if (FIREBASE_CONFIG.storageBucket) params.set('storageBucket', FIREBASE_CONFIG.storageBucket);
+  if (FIREBASE_CONFIG.appId) params.set('appId', FIREBASE_CONFIG.appId);
+  const qs = params.toString();
+  return qs ? `/sw.js?${qs}` : '/sw.js';
+}
 
 type UpdateListener = () => void;
 const updateListeners = new Set<UpdateListener>();
@@ -24,7 +40,7 @@ export function registerServiceWorker(): Promise<ServiceWorkerRegistration | nul
   }
 
   regPromise = navigator.serviceWorker
-    .register('/sw.js')
+    .register(swUrl())
     .then(reg => {
       // A worker already sitting in 'waiting' when we register (e.g. a
       // background tab that missed the install event) is itself an

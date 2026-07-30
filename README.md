@@ -58,7 +58,12 @@ npm run build    # production bundle in dist/
   1. Project settings → General → **Add app → Web**, copy the `appId`.
   2. Project settings → Cloud Messaging → **Web Push certificates →
      Generate key pair**, copy the public key (VAPID).
-  3. Paste both into `src/config/firebase.ts` **and** `public/sw.js`.
+  3. Copy `.env.example` to `.env` and fill in `VITE_FIREBASE_APP_ID` +
+     `VITE_FCM_VAPID_KEY` (plus the other `VITE_FIREBASE_*` values from the
+     Firebase console). `.env` is gitignored — never commit real values or
+     hardcode them in source. `public/sw.js` can't read Vite env vars (it's a
+     static file), so `swRegistration.ts` passes the same config to it via
+     the service-worker registration URL's query string.
   Until then push init silently no-ops (exactly like the mobile app before
   google-services.json existed) — sockets still cover every open-tab case.
   The backend needs `FIREBASE_SERVICE_ACCOUNT` set (already how mobile push

@@ -11,13 +11,17 @@
  */
 
 /* ── FCM background messaging ─────────────────────────────────────────── */
-// Keep in sync with src/config/firebase.ts.
+// This file is served as a static asset (Vite doesn't bundle public/), so it
+// can't read import.meta.env — the actual values live in .env and get
+// appended to the registration URL by swRegistration.ts (e.g.
+// /sw.js?apiKey=...&projectId=...). Never hardcode real values here.
+const swParams = new URLSearchParams(self.location.search);
 const FIREBASE_CONFIG = {
-  apiKey: '***REMOVED-FIREBASE-API-KEY***',
-  projectId: 'cloud-messaging-a085d',
-  messagingSenderId: '453815875444',
-  storageBucket: 'cloud-messaging-a085d.firebasestorage.app',
-  appId: '', // ← paste the web appId from the Firebase console
+  apiKey: swParams.get('apiKey') || '',
+  projectId: swParams.get('projectId') || '',
+  messagingSenderId: swParams.get('messagingSenderId') || '',
+  storageBucket: swParams.get('storageBucket') || '',
+  appId: swParams.get('appId') || '',
 };
 
 if (FIREBASE_CONFIG.appId) {

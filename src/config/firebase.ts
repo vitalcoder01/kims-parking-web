@@ -9,16 +9,19 @@
 //      Copy the appId (looks like 1:453815875444:web:xxxxxxxx).
 //   2. Project settings → Cloud Messaging → Web Push certificates →
 //      "Generate key pair". Copy the public key into vapidKey.
-//   3. Paste BOTH here and in public/sw.js (FIREBASE_CONFIG + VAPID there).
-// Until they're filled in, web push silently no-ops — sockets still deliver
-// everything while a tab is open (exactly like the mobile app before
-// google-services.json existed).
+//   3. Put all values in .env (see .env.example) — never hardcode them here.
+//      public/sw.js can't read Vite env vars (it's a static file, not
+//      bundled), so swRegistration.ts passes this same config to it via the
+//      registration URL's query string instead.
+// Until appId/vapidKey are filled in, web push silently no-ops — sockets
+// still deliver everything while a tab is open (exactly like the mobile app
+// before google-services.json existed).
 export const FIREBASE_CONFIG = {
-  apiKey: '***REMOVED-FIREBASE-API-KEY***',
-  projectId: 'cloud-messaging-a085d',
-  messagingSenderId: '453815875444',
-  storageBucket: 'cloud-messaging-a085d.firebasestorage.app',
-  appId: '', // ← paste the web appId from the Firebase console
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-export const FCM_VAPID_KEY = ''; // ← paste the Web Push certificate public key
+export const FCM_VAPID_KEY = import.meta.env.VITE_FCM_VAPID_KEY;
