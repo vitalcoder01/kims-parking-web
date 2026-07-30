@@ -1,7 +1,7 @@
 import React, {createContext, useContext, useState, useCallback, useEffect, useRef} from 'react';
 import {tasksApi, slotsApi, notificationsApi, getAuthToken} from '../services/api';
 import {connectSocket, disconnectSocket} from '../services/socket';
-import {getCurrentPositionSafe} from '../utils/location';
+import {getFreshOrCachedPosition} from '../utils/location';
 import {ringAlarm, stopAlarm, playChime} from '../services/alarm';
 import {initWebPush} from '../services/webPush';
 import {getSwRegistration} from '../services/swRegistration';
@@ -77,7 +77,7 @@ interface AppState {
   activeAlert: ActiveAlert | null;
   dismissAlert: () => void;
   fetchTaskHistory: (params?: {doctorId?: number}) => Promise<ParkingTask[]>;
-  requestRetrieval: (eta: number) => Promise<number>;
+  requestRetrieval: (eta: number) => Promise<{id: number; hasLocation: boolean}>;
   pushNotification: (n: Omit<Notification, 'id' | 'createdAt' | 'read'>) => Promise<void>;
   markNotificationRead: (id: number) => Promise<void>;
 }
@@ -260,8 +260,12 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
 
   // Doctor/staff only — the real destination is wherever THIS device is
   // right now, since that's who the driver is bringing the car back to.
+  // Uses whatever position warmLocation() already cached (see
+  // DoctorHomeScreen — it warms this the moment the car shows as parked, not
+  // at click time), so this resolves instantly instead of blocking the
+  // Confirm button on a fresh GPS fix + permission prompt.
   const requestRetrieval = useCallback(async (eta: number) => {
-    const here = await getCurrentPositionSafe();
+    const here = await getFreshOrCachedPosition();
     const created = mapTask(await tasksApi.requestRetrieval({eta, destinationLat: here?.lat, destinationLng: here?.lng}));
     setTasks(p => [created, ...p]);
     await pushNotification({
@@ -270,7 +274,10 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
       body: `Leaving in ${eta} min. Please assign a driver to bring ${created.carNumber} from ${created.slotId ?? 'its slot'}.`,
       type: 'info',
     }).catch(() => {});
-    return created.id;
+    // Exposed so the caller can warn the doctor if their location genuinely
+    // couldn't be captured — previously this failed completely silently,
+    // leaving the trip with no destination and no explanation why.
+    return {id: created.id, hasLocation: here != null};
   }, [pushNotification]);
 
   const markNotificationRead = useCallback(async (id: number) => {

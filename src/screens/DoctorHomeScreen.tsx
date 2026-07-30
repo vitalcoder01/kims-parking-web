@@ -1,10 +1,11 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {PressableScale} from '../components/PressableScale';
 import {useAuth} from '../context/AuthContext';
 import {useAppState} from '../context/AppStateContext';
 import {useTheme} from '../context/ThemeContext';
 import {LiveTrackingScreen} from './LiveTrackingScreen';
 import {useRetrievalRequest} from '../hooks/useRetrievalRequest';
+import {warmLocation} from '../utils/location';
 import {BRAND_GRADIENT, BRAND_GRADIENT_DARK, gradientCss} from '../theme/colors';
 import {Icon} from '../components/Icon';
 
@@ -37,11 +38,30 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
   const canTrack = !!displayTask?.driverId && !carJustRetrieved
     && displayTask.status !== 'completed' && displayTask.status !== 'cancelled';
 
+  // Warm up (and cache) the browser's geolocation fix as soon as it's
+  // clear the doctor will likely request a retrieval soon — the moment
+  // their car shows as parked — instead of only asking for it, permission
+  // prompt and all, at the exact instant they tap Confirm below. Once per
+  // parked session (guarded by task id), not on every re-render.
+  const warmedForTaskId = useRef<number | null>(null);
+  useEffect(() => {
+    if (!carIsParked || !displayTask) return;
+    if (warmedForTaskId.current === displayTask.id) return;
+    warmedForTaskId.current = displayTask.id;
+    warmLocation();
+  }, [carIsParked, displayTask?.id]);
+
   const handleDeparture = async () => {
     if (!selectedEta) return;
     setRequesting(true);
     try {
-      await requestRetrieval(selectedEta);
+      const {hasLocation} = await requestRetrieval(selectedEta);
+      if (!hasLocation) {
+        window.alert(
+          "Couldn't get your location — the driver will bring your car to the entrance instead of straight to you. " +
+          'You can allow location access in your browser settings for door-to-door tracking next time.',
+        );
+      }
     } catch (err: any) {
       window.alert(err.message || 'Could not request retrieval');
     } finally {
