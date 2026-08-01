@@ -41,7 +41,7 @@ function forgetAccount(username: string) {
   localStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(existing.filter(a => a.username !== username)));
 }
 
-export function LoginScreen() {
+export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
   const {login} = useAuth();
   const {colors, isDark} = useTheme();
   const [username, setUsername] = useState('');
@@ -260,6 +260,12 @@ export function LoginScreen() {
                     <Icon name="arrowRight" size={20} color="#fff" style={{marginLeft: 8}} />
                   </>
               }
+            </span>
+          </PressableScale>
+
+          <PressableScale onClick={onSignUp} style={{display: 'flex', justifyContent: 'center', marginTop: 18, width: '100%'}}>
+            <span style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>
+              New here? <span style={{color: colors.primary, fontWeight: 800}}>Create an account</span>
             </span>
           </PressableScale>
         </div>

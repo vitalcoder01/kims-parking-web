@@ -7,6 +7,8 @@ import {AlarmBanner} from './components/AlarmBanner';
 import {InstallBanner} from './components/InstallBanner';
 import {UpdateBanner} from './components/UpdateBanner';
 import {LoginScreen} from './screens/LoginScreen';
+import {SignUpScreen} from './screens/SignUpScreen';
+import {DesignationScreen} from './screens/DesignationScreen';
 import {DoctorHomeScreen} from './screens/DoctorHomeScreen';
 import {VirtualCardScreen} from './screens/VirtualCardScreen';
 import {VehicleSetupScreen} from './screens/VehicleSetupScreen';
@@ -131,7 +133,8 @@ function RoleRouter() {
 
 function AppInner() {
   const {colors} = useTheme();
-  const {user, isLoading} = useAuth();
+  const {user, isLoading, needsDesignation} = useAuth();
+  const [showSignUp, setShowSignUp] = useState(false);
 
   if (isLoading) {
     return (
@@ -144,7 +147,10 @@ function AppInner() {
     );
   }
 
-  return user ? <RoleRouter /> : <LoginScreen />;
+  if (user) return needsDesignation ? <DesignationScreen /> : <RoleRouter />;
+  return showSignUp
+    ? <SignUpScreen onBackToLogin={() => setShowSignUp(false)} />
+    : <LoginScreen onSignUp={() => setShowSignUp(true)} />;
 }
 
 export default function App() {

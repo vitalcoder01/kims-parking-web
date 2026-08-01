@@ -76,6 +76,8 @@ client.interceptors.response.use(
 export const authApi = {
   login: (username: string, password: string) =>
     client.post('/auth/login', {username, password}).then(r => r.data as {token: string; user: any}),
+  register: (name: string, phone: string, password: string) =>
+    client.post('/auth/register', {name, phone, password}).then(r => r.data as {token: string; user: any}),
   me: () => client.get('/auth/me').then(r => r.data.user),
 };
 
@@ -85,6 +87,8 @@ export const usersApi = {
     client.get(`/users/by-card/${code}`).then(r => r.data.user),
   updateMe: (patch: {carNumber?: string; phone?: string}) =>
     client.patch('/users/me', patch).then(r => r.data.user),
+  updateMyDesignation: (role: 'doctor' | 'staff') =>
+    client.patch('/users/me/designation', {role}).then(r => r.data.user),
 };
 
 // ── Tasks ────────────────────────────────────────────────────────────────
