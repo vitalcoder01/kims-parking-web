@@ -97,8 +97,22 @@ export const tasksApi = {
   history: (params?: {doctorId?: number; driverId?: number}) =>
     client.get('/tasks', {params: {...params, history: true}}).then(r => r.data.tasks),
   get: (id: number) => client.get(`/tasks/${id}`).then(r => r.data.task),
-  requestRetrieval: (data: {eta?: number; destinationLat?: number; destinationLng?: number}) =>
+  // plannedDepartureMinutes: 0 | 15 | 30 | custom — when the doctor intends
+  // to leave. Planning info for the valet team, never rendered back as an
+  // arrival ETA. The retrieval's actual destination now comes from the
+  // assigning valet's own live GPS (captured at assign time), so no
+  // doctor-side location is sent here any more.
+  requestRetrieval: (data: {plannedDepartureMinutes: number}) =>
     client.post('/tasks/request-retrieval', data).then(r => r.data.task),
+  cancelMyRetrieval: (id: number) =>
+    client.patch(`/tasks/${id}/cancel-my-retrieval`).then(r => r.data.task),
+};
+
+// ── Arrival notices ─────────────────────────────────────────────────────
+// Doctor/staff "I'm on my way" notice — valet-facing only, not a
+// ParkingTask. Only `create` is needed here; list/dismiss are valet-only.
+export const arrivalsApi = {
+  create: (eta: number) => client.post('/arrivals', {eta}).then(r => r.data.arrival),
 };
 
 // ── Slots ────────────────────────────────────────────────────────────────

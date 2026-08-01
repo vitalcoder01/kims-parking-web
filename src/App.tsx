@@ -10,16 +10,16 @@ import {LoginScreen} from './screens/LoginScreen';
 import {DoctorHomeScreen} from './screens/DoctorHomeScreen';
 import {VirtualCardScreen} from './screens/VirtualCardScreen';
 import {VehicleSetupScreen} from './screens/VehicleSetupScreen';
-import {ParkingScreen} from './screens/ParkingScreen';
 import {SettingsScreen} from './screens/SettingsScreen';
 import {HistoryScreen} from './screens/HistoryScreen';
 
-// Web port of the app's AppNavigator: bottom tabs per role. Doctors get
-// Home / Parking / Setup / Settings; staff get Home / Setup / Settings —
-// the same split as the mobile DoctorNavigator/StaffNavigator. "Card" and
+// Web port of the app's AppNavigator: bottom tabs per role. Home / Setup /
+// Settings for both doctors and staff — matching the mobile app's current
+// DoctorNavigator/StaffNavigator, which folded the old standalone "Parking"
+// tab into Home once a doctor only ever has one current session. "Card" and
 // "History" are reachable only from links on Home, not bottom tabs.
 
-type TabKey = 'Home' | 'Card' | 'History' | 'Parking' | 'Setup' | 'Settings';
+type TabKey = 'Home' | 'Card' | 'History' | 'Setup' | 'Settings';
 
 interface TabDef {
   key: TabKey;
@@ -33,10 +33,9 @@ function tabsForRole(role: string | undefined): TabDef[] {
     key: 'Home', label: 'Home', icon: 'home',
     headerTitle: role === 'staff' ? 'KIMS Staff' : 'KIMS Doctor',
   };
-  const parking: TabDef = {key: 'Parking', label: 'Parking', icon: 'parking', headerTitle: 'My Parking'};
   const setup: TabDef   = {key: 'Setup', label: 'Setup', icon: 'car', headerTitle: null};
   const settings: TabDef = {key: 'Settings', label: 'Settings', icon: 'settings', headerTitle: 'Settings'};
-  return role === 'staff' ? [home, setup, settings] : [home, parking, setup, settings];
+  return [home, setup, settings];
 }
 
 function RoleRouter() {
@@ -55,7 +54,6 @@ function RoleRouter() {
     isCard              ? <VirtualCardScreen onBack={() => setTab('Home')} />
     : isHistory           ? <HistoryScreen onBack={() => setTab('Home')} />
     : tab === 'Home'      ? <DoctorHomeScreen onOpenCard={() => setTab('Card')} onOpenHistory={() => setTab('History')} />
-    : tab === 'Parking'   ? <ParkingScreen />
     : tab === 'Setup'     ? <VehicleSetupScreen onBack={() => setTab('Home')} />
     : <SettingsScreen />;
 

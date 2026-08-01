@@ -1,7 +1,6 @@
 import React, {createContext, useContext, useState, useCallback, useEffect, useRef} from 'react';
-import {tasksApi, slotsApi, notificationsApi, getAuthToken} from '../services/api';
+import {tasksApi, slotsApi, notificationsApi, arrivalsApi, getAuthToken} from '../services/api';
 import {connectSocket, disconnectSocket} from '../services/socket';
-import {getFreshOrCachedPosition} from '../utils/location';
 import {ringAlarm, stopAlarm, playChime} from '../services/alarm';
 import {initWebPush} from '../services/webPush';
 import {getSwRegistration} from '../services/swRegistration';
@@ -29,9 +28,20 @@ export interface ParkingTask {
   requestedAt?: number;
   assignedAt?: number;
   acceptedAt?: number;
+  // When the driver actually set off — the trip clock anchors here; the
+  // doctor's planned departure anchors to requestedAt (see retrievalClocks).
+  startedAt?: number;
   keyCollectedAt?: number;
   completedAt?: number;
-  eta?: number; // minutes
+  eta?: number; // minutes (legacy; superseded by plannedDepartureMinutes)
+  // The doctor's planned departure in minutes (0 = now). Valet-side planning
+  // information only — never rendered to the doctor as an ETA.
+  plannedDepartureMinutes?: number;
+  // Absolute departure time, and when the request becomes actionable
+  // (departure minus the configured lead time). Before readyAt the request
+  // is SCHEDULED: informational only, no actions.
+  plannedDepartureAt?: number;
+  retrievalReadyAt?: number;
   trackingProgress?: number; // 0-1
   driverLat?: number;
   driverLng?: number;
@@ -75,9 +85,12 @@ interface AppState {
   slots: ParkingSlot[];
   notifications: Notification[];
   activeAlert: ActiveAlert | null;
+  hydrated: boolean;
   dismissAlert: () => void;
   fetchTaskHistory: (params?: {doctorId?: number}) => Promise<ParkingTask[]>;
-  requestRetrieval: (eta: number) => Promise<{id: number; hasLocation: boolean}>;
+  requestRetrieval: (plannedDepartureMinutes: number) => Promise<number>;
+  cancelMyRetrieval: (taskId: number) => Promise<void>;
+  sendArrivalNotice: (eta: number) => Promise<void>;
   pushNotification: (n: Omit<Notification, 'id' | 'createdAt' | 'read'>) => Promise<void>;
   markNotificationRead: (id: number) => Promise<void>;
 }
@@ -97,8 +110,11 @@ function mapTask(t: any): ParkingTask {
     requestedAt: toEpoch(t.requestedAt),
     assignedAt: toEpoch(t.assignedAt),
     acceptedAt: toEpoch(t.acceptedAt),
+    startedAt: toEpoch(t.startedAt),
     keyCollectedAt: toEpoch(t.keyCollectedAt),
     completedAt: toEpoch(t.completedAt),
+    plannedDepartureAt: toEpoch(t.plannedDepartureAt),
+    retrievalReadyAt: toEpoch(t.retrievalReadyAt),
     locationUpdatedAt: toEpoch(t.locationUpdatedAt),
   };
 }
@@ -127,6 +143,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
   const [slots, setSlots]          = useState<ParkingSlot[]>([]);
   const [notifications, setNotifs] = useState<Notification[]>([]);
   const [activeAlert, setActiveAlert] = useState<ActiveAlert | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
   const dismissAlert = useCallback(() => {
     stopAlarm();
@@ -142,6 +159,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     setTasks(t.map(mapTask));
     setSlots(s);
     setNotifs(n.map(mapNotification));
+    setHydrated(true);
   }, []);
 
   const userRef = useRef(user);
@@ -156,6 +174,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
       stopAlarm();
       setActiveAlert(null);
       setTasks([]); setSlots([]); setNotifs([]);
+      setHydrated(false);
       disconnectSocket();
       return;
     }
@@ -258,27 +277,37 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     setNotifs(p => (p.some(x => x.id === created.id) ? p : [created, ...p]));
   }, []);
 
-  // Doctor/staff only — the real destination is wherever THIS device is
-  // right now, since that's who the driver is bringing the car back to.
-  // Uses whatever position warmLocation() already cached (see
-  // DoctorHomeScreen — it warms this the moment the car shows as parked, not
-  // at click time), so this resolves instantly instead of blocking the
-  // Confirm button on a fresh GPS fix + permission prompt.
-  const requestRetrieval = useCallback(async (eta: number) => {
-    const here = await getFreshOrCachedPosition();
-    const created = mapTask(await tasksApi.requestRetrieval({eta, destinationLat: here?.lat, destinationLng: here?.lng}));
+  // Doctor/staff only. The retrieval's destination is no longer captured
+  // from the doctor's own device — it now comes from the assigning valet's
+  // live GPS at the moment they pick a driver (matching the backend and the
+  // mobile app), so this just sends the planned-departure minutes and lets
+  // the server create the task.
+  const requestRetrieval = useCallback(async (plannedDepartureMinutes: number) => {
+    const created = mapTask(await tasksApi.requestRetrieval({plannedDepartureMinutes}));
     setTasks(p => [created, ...p]);
     await pushNotification({
       targetRole: 'valet',
       title: `🚗 Retrieval Requested — ${created.doctorName ?? ''}`,
-      body: `Leaving in ${eta} min. Please assign a driver to bring ${created.carNumber} from ${created.slotId ?? 'its slot'}.`,
+      body: `Leaving ${plannedDepartureMinutes <= 0 ? 'now' : `in ${plannedDepartureMinutes} min`}. Please plan to bring ${created.carNumber} from ${created.slotId ?? 'its slot'}.`,
       type: 'info',
     }).catch(() => {});
-    // Exposed so the caller can warn the doctor if their location genuinely
-    // couldn't be captured — previously this failed completely silently,
-    // leaving the trip with no destination and no explanation why.
-    return {id: created.id, hasLocation: here != null};
+    return created.id;
   }, [pushNotification]);
+
+  // Calling off a departure. The backend refuses once the driver has
+  // actually set off — at that point the car is out of its slot and
+  // "cancel" would describe nothing real.
+  const cancelMyRetrieval = useCallback(async (taskId: number) => {
+    const updated = mapTask(await tasksApi.cancelMyRetrieval(taskId));
+    setTasks(p => upsertById(p, updated));
+  }, []);
+
+  // Doctor/staff "I'm on my way" notice — valet-facing only, no ParkingTask
+  // created yet. No notification pushed from here: an arrival is not work,
+  // it's a heads-up, and the valet queue picks it up over the socket delta.
+  const sendArrivalNotice = useCallback(async (eta: number) => {
+    await arrivalsApi.create(eta);
+  }, []);
 
   const markNotificationRead = useCallback(async (id: number) => {
     const updated = mapNotification(await notificationsApi.markRead(id));
@@ -286,7 +315,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
   }, []);
 
   return (
-    <Ctx.Provider value={{tasks, slots, notifications, activeAlert, dismissAlert, fetchTaskHistory, requestRetrieval, pushNotification, markNotificationRead}}>
+    <Ctx.Provider value={{tasks, slots, notifications, activeAlert, hydrated, dismissAlert, fetchTaskHistory, requestRetrieval, cancelMyRetrieval, sendArrivalNotice, pushNotification, markNotificationRead}}>
       {children}
     </Ctx.Provider>
   );

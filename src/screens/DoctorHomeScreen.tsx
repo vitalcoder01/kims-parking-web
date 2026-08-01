@@ -5,63 +5,138 @@ import {useAppState} from '../context/AppStateContext';
 import {useTheme} from '../context/ThemeContext';
 import {LiveTrackingScreen} from './LiveTrackingScreen';
 import {useRetrievalRequest} from '../hooks/useRetrievalRequest';
-import {warmLocation} from '../utils/location';
+import {computeTrip} from '../utils/geo';
 import {BRAND_GRADIENT, BRAND_GRADIENT_DARK, gradientCss} from '../theme/colors';
 import {Icon} from '../components/Icon';
+import {
+  PLANNED_DEPARTURE_OPTIONS, ARRIVAL_ETA_OPTIONS, clockToMinutes, fmtClock12, to12, to24,
+  enRouteSeconds,
+} from '../utils/retrievalClocks';
 
-const ETA_OPTIONS = [10, 20, 30, 40];
+// Direct port of the mobile app's DoctorHomeScreen — Arrival/Departure
+// launcher cards, popup pickers, a live GPS-derived "time away" countdown
+// (not a static timer), and a cancel-departure flow, all sharing the exact
+// same backend-tracked state via useAppState/useRetrievalRequest.
+
+const DEPARTURE_OPTIONS = PLANNED_DEPARTURE_OPTIONS;
+const HOURS_12 = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+const MINUTES = Array.from({length: 12}, (_, i) => i * 5);
+const ETA_OPTIONS_ARRIVAL = ARRIVAL_ETA_OPTIONS;
+
+function nextFiveMinuteMark(): Date {
+  const d = new Date();
+  d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5, 0, 0);
+  return d;
+}
+
+// Slide-up popup over Home — Home itself never unmounts underneath it.
+function BottomSheetModal({visible, onClose, children}: {visible: boolean; onClose: () => void; children: React.ReactNode}) {
+  const {colors} = useTheme();
+  const [rendered, setRendered] = useState(visible);
+  const [entered, setEntered] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setRendered(true);
+      const raf = requestAnimationFrame(() => setEntered(true));
+      return () => cancelAnimationFrame(raf);
+    } else {
+      setEntered(false);
+      const t = setTimeout(() => setRendered(false), 220);
+      return () => clearTimeout(t);
+    }
+  }, [visible]);
+
+  if (!rendered) return null;
+
+  return (
+    <div style={{position: 'absolute', inset: 0, zIndex: 100}}>
+      <div
+        onClick={onClose}
+        style={{
+          position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
+          opacity: entered ? 1 : 0, transition: 'opacity 220ms ease',
+        }}
+      />
+      <div style={{position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex', justifyContent: 'center'}}>
+        <div style={{
+          width: '100%',
+          transform: `translateY(${entered ? 0 : 100}%)`,
+          transition: 'transform 280ms cubic-bezier(0.2,0.8,0.2,1)',
+        }}>
+          <div style={{
+            borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, borderStyle: 'solid',
+            borderColor: colors.border, borderBottom: 'none', overflow: 'hidden',
+            backgroundColor: colors.surface,
+          }}>
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SkeletonBlock({height, width = '100%', radius = 10, style}: {height: number; width?: number | string; radius?: number; style?: React.CSSProperties}) {
+  const {colors} = useTheme();
+  return <div className="pulse" style={{height, width, borderRadius: radius, backgroundColor: colors.cardAlt, ...style}} />;
+}
 
 export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () => void; onOpenHistory: () => void}) {
   const {user} = useAuth();
-  const {tasks} = useAppState();
+  const {tasks, sendArrivalNotice, cancelMyRetrieval, hydrated} = useAppState();
   const {colors, isDark} = useTheme();
-  const {activeRetrieve, remainingSeconds, requestRetrieval} = useRetrievalRequest();
-  const [selectedEta, setSelectedEta]   = useState<number | null>(null);
-  const [requesting, setRequesting]     = useState(false);
-  const [showTracking, setShowTracking] = useState(false);
+  const {activeRetrieve, now, requestRetrieval} = useRetrievalRequest();
 
-  // `tasks` only ever contains this doctor's single current session (the
-  // backend enforces at most one isCurrent row per doctor) — no more
-  // "most recent non-completed" search needed, and no more risk of an old
-  // stuck task outranking a real, later one.
+  const [showArrivalModal, setShowArrivalModal] = useState(false);
+  const [showDepartureModal, setShowDepartureModal] = useState(false);
+  const [selectedEta, setSelectedEta]     = useState<number | null>(null);
+  const [customOn, setCustomOn]           = useState(false);
+  const [customH, setCustomH]             = useState(() => nextFiveMinuteMark().getHours());
+  const [customM, setCustomM]             = useState(() => nextFiveMinuteMark().getMinutes());
+  const [cancelling, setCancelling]       = useState(false);
+  const [requesting, setRequesting]       = useState(false);
+  const [showTracking, setShowTracking]   = useState(false);
+  const [arrivalEta, setArrivalEta]       = useState<number | null>(null);
+  const [sendingArrival, setSendingArrival] = useState(false);
+  const [arrivalSent, setArrivalSent]     = useState<number | null>(null);
+
   const displayTask = tasks.find(t => t.doctorId === user?.id);
   const activeTask = displayTask && displayTask.status !== 'completed' && displayTask.status !== 'cancelled' ? displayTask : undefined;
   const carIsParked = displayTask?.type === 'park' && displayTask.status === 'completed';
-  // 'delivered' — driver's brought the car back to the valet counter, but
-  // the valet hasn't confirmed handover yet.
   const carJustRetrieved = displayTask?.type === 'retrieve' && displayTask.status === 'delivered';
-  // A cancelled session (e.g. staff retired a stuck "no driver ever showed
-  // up" job) is over, same as completed — nothing to show for it.
-  const showEmptyState = !displayTask || displayTask.status === 'cancelled';
-  // Nothing to actually track without a driver on the move yet — showing
-  // this button for e.g. "Awaiting Driver" just opens a map with nothing on it.
-  const canTrack = !!displayTask?.driverId && !carJustRetrieved
-    && displayTask.status !== 'completed' && displayTask.status !== 'cancelled';
+  const showEmptyState = !displayTask || displayTask.status === 'cancelled'
+    || (displayTask.status === 'completed' && displayTask.type === 'retrieve');
+  const parkInMotion = displayTask?.type === 'park'
+    && (displayTask.status === 'key_collected' || displayTask.status === 'in_transit');
 
-  // Warm up (and cache) the browser's geolocation fix as soon as it's
-  // clear the doctor will likely request a retrieval soon — the moment
-  // their car shows as parked — instead of only asking for it, permission
-  // prompt and all, at the exact instant they tap Confirm below. Once per
-  // parked session (guarded by task id), not on every re-render.
-  const warmedForTaskId = useRef<number | null>(null);
   useEffect(() => {
-    if (!carIsParked || !displayTask) return;
-    if (warmedForTaskId.current === displayTask.id) return;
-    warmedForTaskId.current = displayTask.id;
-    warmLocation();
-  }, [carIsParked, displayTask?.id]);
+    if (!showEmptyState) { setArrivalSent(null); setArrivalEta(null); }
+  }, [showEmptyState]);
+
+  const handleArrival = async () => {
+    if (!arrivalEta) return;
+    setSendingArrival(true);
+    try {
+      await sendArrivalNotice(arrivalEta);
+      setArrivalSent(arrivalEta);
+      setShowArrivalModal(false);
+    } catch (err: any) {
+      window.alert(err.message || 'Could not notify the valet');
+    } finally {
+      setSendingArrival(false);
+    }
+  };
+
+  const departureMinutes = customOn ? clockToMinutes(customH, customM, Date.now()) : selectedEta;
 
   const handleDeparture = async () => {
-    if (!selectedEta) return;
+    if (departureMinutes == null) return;
     setRequesting(true);
     try {
-      const {hasLocation} = await requestRetrieval(selectedEta);
-      if (!hasLocation) {
-        window.alert(
-          "Couldn't get your location — the driver will bring your car to the entrance instead of straight to you. " +
-          'You can allow location access in your browser settings for door-to-door tracking next time.',
-        );
-      }
+      await requestRetrieval(departureMinutes);
+      setShowDepartureModal(false);
+      setCustomOn(false); setSelectedEta(null);
     } catch (err: any) {
       window.alert(err.message || 'Could not request retrieval');
     } finally {
@@ -69,16 +144,27 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
     }
   };
 
-  const fmt = (s: number) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
-  const fmtClock = (ms: number) => new Date(ms).toLocaleTimeString(undefined, {hour: 'numeric', minute: '2-digit'});
+  const handleCancelRetrieval = async () => {
+    if (!activeRetrieve) return;
+    const ok = window.confirm(`The valet will be told you no longer need ${activeRetrieve.carNumber}. Your car stays parked.\n\nCancel your request?`);
+    if (!ok) return;
+    setCancelling(true);
+    try {
+      await cancelMyRetrieval(activeRetrieve.id);
+    } catch (err: any) {
+      window.alert(err.message || 'Could not cancel');
+    } finally {
+      setCancelling(false);
+    }
+  };
 
-  // 'assigned' is the task's status from the moment it's *created* — whether
-  // a driver has been picked is driverId being set, not the status string.
   const statusMap: Record<string,{label:string;color:string}> = {
     assigned:      {label: 'Driver Assigned',      color: colors.warning},
     key_collected: {label: 'Key Collected',         color: colors.info},
-    in_transit:    {label: activeTask?.type === 'retrieve' ? 'En Route to You' : 'En Route to Parking', color: colors.primary},
-    delivered:     {label: 'Car Arrived — Confirm at Counter', color: colors.success},
+    // A retrieval's destination is the valet counter, NOT the doctor — the
+    // driver brings the car back there and the doctor collects it.
+    in_transit:    {label: activeTask?.type === 'retrieve' ? 'Coming to Valet Counter' : 'En Route to Parking', color: colors.primary},
+    delivered:     {label: 'Ready at the counter', color: colors.success},
     completed:     {label: 'Safely Parked',         color: colors.success},
   };
   const statusInfo = activeTask
@@ -92,7 +178,7 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
   }
 
   return (
-    <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 40}}>
+    <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 40, position: 'relative'}}>
 
       {/* Gradient header */}
       <div style={{
@@ -122,82 +208,222 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
       </div>
 
       <div style={{padding: '20px 16px 16px', display: 'flex', flexDirection: 'column', gap: 12}}>
-        {/* Car Status Card */}
-        <div style={{borderRadius: 20, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.surface}}>
-          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 16px 12px'}}>
-            <span style={{fontSize: 15, fontWeight: 800, color: colors.textPrimary}}>Vehicle Status</span>
-            {statusInfo && (
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 20,
-                border: `1px solid ${statusInfo.color}40`, padding: '4px 10px',
-                backgroundColor: statusInfo.color + '18',
+
+        {/* Countdown — hidden once 'delivered', the CAR READY banner below
+            already covers that. */}
+        {activeRetrieve && activeRetrieve.status !== 'delivered' && (() => {
+          const enRoute = enRouteSeconds(activeRetrieve, now);
+          const onTheWay = activeRetrieve.status === 'in_transit' && enRoute != null;
+          const trip = onTheWay
+            ? computeTrip({
+                startLat: activeRetrieve.driverStartLat, startLng: activeRetrieve.driverStartLng,
+                lat: activeRetrieve.driverLat, lng: activeRetrieve.driverLng,
+                destinationLat: activeRetrieve.destinationLat, destinationLng: activeRetrieve.destinationLng,
+                mode: 'drive',
+              })
+            : null;
+          return (
+            <div className={onTheWay ? 'pulse' : undefined}>
+              <div style={{
+                background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT),
+                borderRadius: 20, padding: 28, display: 'flex', flexDirection: 'column', alignItems: 'center',
               }}>
-                <span style={{width: 7, height: 7, borderRadius: 4, backgroundColor: statusInfo.color}} />
-                <span style={{fontSize: 11, fontWeight: 700, color: statusInfo.color}}>{statusInfo.label}</span>
+                {onTheWay ? (
+                  <>
+                    <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                      <Icon name="car" size={13} color="rgba(255,255,255,0.8)" />
+                      <span style={{color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: 700}}>Vehicle on the way</span>
+                    </div>
+                    {trip ? (
+                      <>
+                        <div style={{color: '#fff', fontSize: 56, fontWeight: 900, fontVariantNumeric: 'tabular-nums', margin: '6px 0'}}>
+                          {trip.etaMinutes <= 0 ? 'Now' : `~${trip.etaMinutes}`}
+                        </div>
+                        {trip.etaMinutes > 0 && <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 800, marginTop: -6, marginBottom: 6}}>min away</div>}
+                      </>
+                    ) : (
+                      <div style={{color: '#fff', fontSize: 22, fontWeight: 900, margin: '14px 0'}}>Locating your car…</div>
+                    )}
+                    <div style={{color: 'rgba(255,255,255,0.7)', fontSize: 12, textAlign: 'center'}}>
+                      {activeRetrieve.driverName ?? 'Your driver'} is bringing it to the valet counter
+                    </div>
+                    <PressableScale
+                      onClick={() => setShowTracking(true)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, marginTop: 16,
+                        backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12,
+                        padding: '12px 20px', border: '1px solid rgba(255,255,255,0.3)',
+                      }}>
+                      <Icon name="map" size={15} color="#fff" />
+                      <span style={{color: '#fff', fontSize: 13, fontWeight: 800}}>Track live</span>
+                    </PressableScale>
+                  </>
+                ) : (
+                  <>
+                    <div style={{
+                      width: 52, height: 52, borderRadius: 26, marginBottom: 14,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: 'rgba(255,255,255,0.18)',
+                    }}>
+                      <Icon name="checkBold" size={26} color="#fff" />
+                    </div>
+                    <div style={{color: '#fff', fontSize: 18, fontWeight: 900, marginBottom: 8, textAlign: 'center'}}>Departure request sent</div>
+                    <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 13, textAlign: 'center', lineHeight: '19px'}}>The valet team has been notified.</div>
+                    <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 13, textAlign: 'center', lineHeight: '19px'}}>We'll notify you when your vehicle is on the way.</div>
+                    <PressableScale
+                      onClick={handleCancelRetrieval}
+                      disabled={cancelling}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 14,
+                        padding: '10px 18px', borderRadius: 11, border: '1px solid rgba(255,255,255,0.35)',
+                        backgroundColor: 'rgba(0,0,0,0.14)', opacity: cancelling ? 0.6 : 1,
+                      }}>
+                      <Icon name="close" size={13} color="#fff" />
+                      <span style={{color: '#fff', fontSize: 13, fontWeight: 800}}>
+                        {cancelling ? 'Cancelling…' : 'Cancel request'}
+                      </span>
+                    </PressableScale>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Park job in motion — no ETA to count down to, just a live-track link. */}
+        {parkInMotion && (
+          <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), borderRadius: 20, padding: 18, display: 'flex', flexDirection: 'column', gap: 14}}>
+            <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+              <Icon name="carKey" size={15} color="rgba(255,255,255,0.85)" />
+              <span style={{flex: 1, color: '#fff', fontSize: 14, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                {displayTask?.status === 'key_collected'
+                  ? `${displayTask?.driverName ?? 'Driver'} has your key`
+                  : `${displayTask?.driverName ?? 'Driver'} is parking your car`}
               </span>
+            </div>
+            <PressableScale
+              onClick={() => setShowTracking(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12,
+                padding: '12px 20px', border: '1px solid rgba(255,255,255,0.3)',
+              }}>
+              <Icon name="map" size={15} color="#fff" />
+              <span style={{color: '#fff', fontSize: 13, fontWeight: 800}}>Track live</span>
+            </PressableScale>
+          </div>
+        )}
+
+        {/* Arrival / Departure launcher cards — mutually exclusive states,
+            so at most one card ever renders. */}
+        {!hydrated && (
+          <div style={{display: 'flex', gap: 12}}>
+            <SkeletonBlock height={116} radius={18} style={{flex: 1}} />
+            <SkeletonBlock height={116} radius={18} style={{flex: 1}} />
+          </div>
+        )}
+        {hydrated && (showEmptyState || (carIsParked && !activeRetrieve)) && (
+          <div style={{display: 'flex', gap: 12}}>
+            {showEmptyState && (
+              <PressableScale
+                onClick={() => setShowArrivalModal(true)}
+                style={{
+                  flex: 1, borderRadius: 18, padding: 20, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  backgroundColor: colors.primary,
+                }}>
+                <div style={{
+                  width: 52, height: 52, borderRadius: 16, marginBottom: 8,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: 'rgba(255,255,255,0.18)',
+                }}>
+                  <Icon name="bellAlert" size={26} color="#fff" />
+                </div>
+                <span style={{color: '#fff', fontSize: 15, fontWeight: 800}}>Arrival</span>
+                <span style={{color: 'rgba(255,255,255,0.7)', fontSize: 11, lineHeight: '14px', marginTop: 4, height: 28, textAlign: 'center'}}>Let valet know you're coming</span>
+              </PressableScale>
+            )}
+            {carIsParked && !activeRetrieve && (
+              <PressableScale
+                onClick={() => setShowDepartureModal(true)}
+                style={{
+                  flex: 1, borderRadius: 18, padding: 20, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  backgroundColor: colors.accent,
+                }}>
+                <div style={{
+                  width: 52, height: 52, borderRadius: 16, marginBottom: 8,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: 'rgba(255,255,255,0.18)',
+                }}>
+                  <Icon name="car" size={26} color="#fff" />
+                </div>
+                <span style={{color: '#fff', fontSize: 15, fontWeight: 800}}>Departure</span>
+                <span style={{color: 'rgba(255,255,255,0.7)', fontSize: 11, lineHeight: '14px', marginTop: 4, height: 28, textAlign: 'center'}}>Request your car back</span>
+              </PressableScale>
             )}
           </div>
+        )}
 
-          {!showEmptyState && displayTask ? (
-            <>
-              {carIsParked && displayTask.slotId && (
-                <div style={{
-                  background: isDark ? 'linear-gradient(90deg,#162040,#1C2A50)' : 'linear-gradient(90deg,#EEF2FF,#DBEAFE)',
-                  padding: 16, margin: '0 16px 12px', borderRadius: 14,
-                  display: 'flex', flexDirection: 'column', alignItems: 'center',
-                }}>
-                  <span style={{fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: colors.textMuted}}>PARKED AT SLOT</span>
-                  <span style={{fontSize: 36, fontWeight: 900, marginTop: 2, color: colors.primary}}>{displayTask.slotId}</span>
-                </div>
-              )}
-              {carJustRetrieved && (
-                <div style={{
-                  background: isDark ? 'linear-gradient(90deg,#0D2A1C,#0F3323)' : 'linear-gradient(90deg,#ECFDF5,#D1FAE5)',
-                  padding: 16, margin: '0 16px 12px', borderRadius: 14,
-                  display: 'flex', flexDirection: 'column', alignItems: 'center',
-                }}>
-                  <span style={{display: 'flex', alignItems: 'center', gap: 6}}>
-                    <Icon name="car" size={13} color={colors.success} />
-                    <span style={{fontSize: 9, fontWeight: 700, letterSpacing: 1.5, color: colors.success}}>CAR READY AT ENTRANCE</span>
-                  </span>
-                  <span style={{fontSize: 22, fontWeight: 900, marginTop: 2, color: colors.success}}>Please collect at the gate</span>
-                </div>
-              )}
-              <div style={{display: 'flex', borderTop: '1px solid rgba(0,0,0,0.05)'}}>
-                {[
-                  {label: 'Vehicle', value: displayTask.carNumber ?? '—'},
-                  {label: 'Driver', value: displayTask.driverName ?? 'Unassigned'},
-                ].map(m => (
-                  <div key={m.label} style={{flex: 1, padding: 14, border: `0px solid ${colors.border}`}}>
-                    <div style={{fontSize: 9, fontWeight: 700, letterSpacing: 1, marginBottom: 4, color: colors.textMuted}}>{m.label.toUpperCase()}</div>
-                    <div style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>{m.value}</div>
-                  </div>
-                ))}
+        {arrivalSent && showEmptyState && (
+          <div style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: 14, border: `1px solid ${colors.success}30`, padding: 12, backgroundColor: colors.success + '10'}}>
+            <Icon name="bellAlert" size={16} color={colors.success} />
+            <span style={{flex: 1, fontSize: 12, fontWeight: 700, color: colors.success}}>
+              Valet notified — arriving in ~{arrivalSent >= 60 ? `${arrivalSent / 60} hr` : `${arrivalSent} min`}
+            </span>
+          </div>
+        )}
+
+        {/* Vehicle status card — the slot number IS the answer when parked. */}
+        <div style={{borderRadius: 20, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.surface}}>
+          {!hydrated ? (
+            <div style={{padding: 20}}>
+              <SkeletonBlock height={12} width="35%" />
+              <SkeletonBlock height={34} width="55%" style={{marginTop: 12}} />
+              <SkeletonBlock height={12} width="70%" style={{marginTop: 14}} />
+            </div>
+          ) : showEmptyState || !displayTask ? (
+            <div style={{padding: 20}}>
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10}}>
+                <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: colors.textMuted}}>VEHICLE STATUS</span>
+                <span style={{fontSize: 12, fontWeight: 800, color: colors.textMuted}}>No active session</span>
               </div>
-              {canTrack && (
-                <PressableScale
-                  onClick={() => setShowTracking(true)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    margin: '4px 12px 12px', borderRadius: 12,
-                    border: `1px solid ${colors.primary}30`, padding: 12,
-                    backgroundColor: colors.primary + '10',
-                    width: 'calc(100% - 24px)',
-                  }}>
-                  <Icon name="map" size={18} color={colors.primary} />
-                  <span style={{flex: 1, fontSize: 13, fontWeight: 700, textAlign: 'left', color: colors.primary}}>View Live Tracking Map</span>
-                  <Icon name="arrowRight" size={18} color={colors.primary} />
-                </PressableScale>
-              )}
-            </>
+              <div style={{fontSize: 18, fontWeight: 800, marginTop: 6, color: colors.textMuted}}>No car parked</div>
+              <div style={{fontSize: 13, fontWeight: 600, marginTop: 8, color: colors.textMuted}}>Hand your keys to the valet at the entrance.</div>
+            </div>
+          ) : carIsParked ? (
+            <div style={{padding: 20}}>
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10}}>
+                <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: colors.textMuted}}>PARKED AT</span>
+                <span style={{fontSize: 12, fontWeight: 800, color: colors.success}}>Safely parked</span>
+              </div>
+              <div style={{fontSize: 40, fontWeight: 900, letterSpacing: -0.5, marginTop: 6, fontVariantNumeric: 'tabular-nums', color: colors.textPrimary}}>{displayTask.slotId ?? '—'}</div>
+              <div style={{fontSize: 13, fontWeight: 600, marginTop: 8, color: colors.textSecondary}}>
+                {displayTask.carNumber}
+                {displayTask.driverName ? `  ·  Parked by ${displayTask.driverName}` : ''}
+              </div>
+            </div>
+          ) : carJustRetrieved ? (
+            <div style={{padding: 20}}>
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10}}>
+                <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: colors.textMuted}}>RETRIEVING</span>
+                <span style={{fontSize: 12, fontWeight: 800, color: colors.success}}>Ready for pickup</span>
+              </div>
+              <div style={{fontSize: 18, fontWeight: 800, marginTop: 6, color: colors.textPrimary}}>Collect at the valet counter</div>
+              <div style={{fontSize: 13, fontWeight: 600, marginTop: 8, color: colors.textSecondary}}>{displayTask.carNumber}</div>
+            </div>
           ) : (
-            <div style={{
-              margin: 16, borderRadius: 14, border: `1px dashed ${colors.border}`, padding: 28,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-            }}>
-              <Icon name="carSide" size={40} color={colors.textMuted} />
-              <div style={{fontSize: 13, textAlign: 'center', lineHeight: '19px', color: colors.textMuted, whiteSpace: 'pre-line'}}>
-                {'No active parking session.\nHand your keys to the valet at the entrance.'}
+            <div style={{padding: 20}}>
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10}}>
+                <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: colors.textMuted}}>
+                  {displayTask.type === 'park' ? 'PARKING' : 'RETRIEVING'}
+                </span>
+                {!!statusInfo && <span style={{fontSize: 12, fontWeight: 800, color: statusInfo.color}}>{statusInfo.label}</span>}
+              </div>
+              <div style={{fontSize: 18, fontWeight: 800, marginTop: 6, color: colors.textPrimary}}>
+                {displayTask.driverName ? `${displayTask.driverName} has your car` : 'Waiting for a driver'}
+              </div>
+              <div style={{fontSize: 13, fontWeight: 600, marginTop: 8, color: colors.textSecondary}}>
+                {displayTask.carNumber}
+                {displayTask.driverName ? `  ·  ${displayTask.driverName}` : ''}
               </div>
             </div>
           )}
@@ -215,111 +441,177 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
           <span style={{flex: 1, fontSize: 13, fontWeight: 700, textAlign: 'left', color: colors.textPrimary}}>View Parking History</span>
           <Icon name="arrowRight" size={16} color={colors.textMuted} />
         </PressableScale>
-
-        {/* Departure — only offered while the car is actually parked and
-            waiting; once a retrieval is requested there's nothing more to ask. */}
-        {carIsParked && !activeRetrieve && (
-          <div style={{borderRadius: 20, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.surface}}>
-            <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT, '90deg'), padding: 18}}>
-              <div style={{color: '#fff', fontSize: 17, fontWeight: 900}}>Ready to Leave?</div>
-              <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 3}}>Valet will assign a driver to bring your car to you</div>
-            </div>
-            <div style={{padding: 16}}>
-              <div style={{fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 12, color: colors.textMuted}}>WHEN DO YOU NEED YOUR CAR?</div>
-              <div style={{display: 'flex', gap: 10}}>
-                {ETA_OPTIONS.map(opt => {
-                  const on = selectedEta === opt;
-                  return (
-                    <PressableScale
-                      key={opt}
-                      onClick={() => setSelectedEta(opt)}
-                      disabled={requesting}
-                      style={{
-                        flex: 1, borderRadius: 14, padding: '16px 0',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center',
-                        border: `1.5px solid ${on ? colors.textPrimary : colors.border}`,
-                        backgroundColor: on ? colors.textPrimary : colors.cardAlt,
-                      }}>
-                      <span style={{fontSize: 22, fontWeight: 900, lineHeight: '26px', color: on ? colors.background : colors.textPrimary}}>{opt}</span>
-                      <span style={{fontSize: 9, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', marginTop: 3, color: on ? colors.background + 'AA' : colors.textMuted}}>min</span>
-                    </PressableScale>
-                  );
-                })}
-              </div>
-
-              {selectedEta != null && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  borderRadius: 14, border: `1px solid ${colors.success}30`, padding: 14, marginTop: 14,
-                  backgroundColor: colors.success + '10',
-                }}>
-                  <div>
-                    <div style={{fontSize: 10, fontWeight: 600, color: colors.textMuted}}>Car ready by</div>
-                    <div style={{fontSize: 22, fontWeight: 900, marginTop: 2, color: colors.success}}>{fmtClock(Date.now() + selectedEta * 60000)}</div>
-                  </div>
-                  <Icon name="car" size={24} color={colors.success} />
-                </div>
-              )}
-
-              <PressableScale
-                onClick={handleDeparture}
-                disabled={!selectedEta || requesting}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  borderRadius: 14, padding: '15px 0', marginTop: 14, width: '100%',
-                  backgroundColor: selectedEta ? colors.primary : colors.border,
-                  opacity: requesting ? 0.6 : 1,
-                }}>
-                <span style={{fontSize: 14, fontWeight: 900, color: selectedEta ? colors.textOnPrimary : colors.textMuted}}>
-                  {requesting ? 'Requesting…' : selectedEta ? `Confirm — Leaving in ${selectedEta} min` : 'Select a time above'}
-                </span>
-                {selectedEta && !requesting && <Icon name="arrowRight" size={15} color={colors.textOnPrimary} />}
-              </PressableScale>
-            </div>
-          </div>
-        )}
-
-        {/* Countdown — real backend-tracked retrieval state, shared with the
-            "My Parking" tab via useRetrievalRequest. Hidden once 'delivered'. */}
-        {activeRetrieve && activeRetrieve.status !== 'delivered' && (
-          <div className="pulse">
-            <div style={{
-              background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT),
-              borderRadius: 20, padding: 28, display: 'flex', flexDirection: 'column', alignItems: 'center',
-            }}>
-              <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
-                <Icon
-                  name={activeRetrieve.status === 'requested' ? 'timer' : activeRetrieve.status === 'assigned' ? 'bell' : 'car'}
-                  size={13} color="rgba(255,255,255,0.8)"
-                />
-                <span style={{color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: 700}}>
-                  {activeRetrieve.status === 'requested' && 'Waiting for Valet'}
-                  {activeRetrieve.status === 'assigned' && `${activeRetrieve.driverName ?? 'Driver'} Assigned`}
-                  {activeRetrieve.status === 'in_transit' && `${activeRetrieve.driverName ?? 'Driver'} On The Way`}
-                </span>
-              </div>
-              {remainingSeconds != null && (
-                <div style={{color: '#fff', fontSize: 56, fontWeight: 900, fontVariantNumeric: 'tabular-nums', margin: '6px 0'}}>
-                  {fmt(remainingSeconds)}
-                </div>
-              )}
-              <div style={{color: 'rgba(255,255,255,0.7)', fontSize: 12}}>Your car is being retrieved</div>
-              {activeRetrieve.status === 'in_transit' && (
-                <PressableScale
-                  onClick={() => setShowTracking(true)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, marginTop: 16,
-                    backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 12,
-                    padding: '12px 20px', border: '1px solid rgba(255,255,255,0.3)',
-                  }}>
-                  <Icon name="map" size={15} color="#fff" />
-                  <span style={{color: '#fff', fontSize: 13, fontWeight: 800}}>View Live Tracking Map</span>
-                </PressableScale>
-              )}
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Arrival popup */}
+      <BottomSheetModal visible={showArrivalModal} onClose={() => setShowArrivalModal(false)}>
+        <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), padding: 18, position: 'relative'}}>
+          <PressableScale
+            onClick={() => setShowArrivalModal(false)}
+            style={{position: 'absolute', top: 14, right: 14, width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+            <Icon name="close" size={16} color="#fff" />
+          </PressableScale>
+          <div style={{color: '#fff', fontSize: 17, fontWeight: 900}}>{arrivalSent ? 'Valet Notified' : 'On Your Way?'}</div>
+          <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 3}}>
+            {arrivalSent
+              ? `We told the valet you'll arrive in ~${arrivalSent >= 60 ? `${arrivalSent / 60} hr` : `${arrivalSent} min`}`
+              : 'Let the valet know before you get here so a driver is ready'}
+          </div>
+        </div>
+        {!arrivalSent && (
+          <div style={{padding: 16}}>
+            <div style={{fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 12, color: colors.textMuted}}>WHEN WILL YOU ARRIVE?</div>
+            <div style={{display: 'flex', gap: 10}}>
+              {ETA_OPTIONS_ARRIVAL.map(opt => {
+                const on = arrivalEta === opt;
+                return (
+                  <PressableScale
+                    key={opt}
+                    onClick={() => setArrivalEta(opt)}
+                    disabled={sendingArrival}
+                    style={{
+                      flex: 1, borderRadius: 14, padding: '16px 0', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      border: `1.5px solid ${on ? colors.textPrimary : colors.border}`,
+                      backgroundColor: on ? colors.textPrimary : colors.cardAlt,
+                    }}>
+                    <span style={{fontSize: 22, fontWeight: 900, lineHeight: '26px', color: on ? colors.background : colors.textPrimary}}>
+                      {opt >= 60 ? opt / 60 : opt}
+                    </span>
+                    <span style={{fontSize: 9, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', marginTop: 3, color: on ? colors.background + 'AA' : colors.textMuted}}>
+                      {opt >= 60 ? 'hr' : 'min'}
+                    </span>
+                  </PressableScale>
+                );
+              })}
+            </div>
+            <PressableScale
+              onClick={handleArrival}
+              disabled={!arrivalEta || sendingArrival}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                borderRadius: 14, padding: '15px 0', marginTop: 14, width: '100%',
+                backgroundColor: arrivalEta ? colors.primary : colors.border, opacity: sendingArrival ? 0.6 : 1,
+              }}>
+              <span style={{fontSize: 14, fontWeight: 900, color: arrivalEta ? colors.textOnPrimary : colors.textMuted}}>
+                {sendingArrival ? 'Notifying…' : arrivalEta ? 'Notify the valet' : 'Select a time above'}
+              </span>
+              {arrivalEta && !sendingArrival && <Icon name="arrowRight" size={15} color={colors.textOnPrimary} />}
+            </PressableScale>
+          </div>
+        )}
+      </BottomSheetModal>
+
+      {/* Departure popup */}
+      <BottomSheetModal visible={showDepartureModal} onClose={() => setShowDepartureModal(false)}>
+        <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), padding: 18, position: 'relative'}}>
+          <PressableScale
+            onClick={() => setShowDepartureModal(false)}
+            style={{position: 'absolute', top: 14, right: 14, width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+            <Icon name="close" size={16} color="#fff" />
+          </PressableScale>
+          <div style={{color: '#fff', fontSize: 17, fontWeight: 900}}>Ready to Leave?</div>
+          <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 3}}>We'll notify the valet team so they can plan your retrieval</div>
+        </div>
+        <div style={{padding: 16}}>
+          <div style={{fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 12, color: colors.textMuted}}>WHEN ARE YOU LEAVING?</div>
+          <div style={{display: 'flex', gap: 10}}>
+            {DEPARTURE_OPTIONS.map(opt => {
+              const on = !customOn && selectedEta === opt;
+              return (
+                <PressableScale
+                  key={opt}
+                  onClick={() => { setCustomOn(false); setSelectedEta(opt); }}
+                  disabled={requesting}
+                  style={{
+                    flex: 1, borderRadius: 14, padding: '16px 0', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    border: `1.5px solid ${on ? colors.textPrimary : colors.border}`,
+                    backgroundColor: on ? colors.textPrimary : colors.cardAlt,
+                  }}>
+                  <span style={{fontSize: 22, fontWeight: 900, lineHeight: '26px', color: on ? colors.background : colors.textPrimary}}>
+                    {opt === 0 ? 'Now' : opt}
+                  </span>
+                  {opt !== 0 && (
+                    <span style={{fontSize: 9, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', marginTop: 3, color: on ? colors.background + 'AA' : colors.textMuted}}>min</span>
+                  )}
+                </PressableScale>
+              );
+            })}
+            <PressableScale
+              onClick={() => { setCustomOn(true); setSelectedEta(null); }}
+              disabled={requesting}
+              style={{
+                flex: 1, borderRadius: 14, padding: '16px 0', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                border: `1.5px solid ${customOn ? colors.textPrimary : colors.border}`,
+                backgroundColor: customOn ? colors.textPrimary : colors.cardAlt,
+              }}>
+              <Icon name="timer" size={19} color={customOn ? colors.background : colors.textPrimary} />
+              <span style={{fontSize: 9, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase', marginTop: 3, color: customOn ? colors.background + 'AA' : colors.textMuted}}>custom</span>
+            </PressableScale>
+          </div>
+
+          {customOn && (() => {
+            const {h12, pm} = to12(customH);
+            return (
+              <div style={{marginTop: 14, border: `1px solid ${colors.border}`, borderRadius: 14, padding: 12, backgroundColor: colors.cardAlt}}>
+                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 150}}>
+                  <div style={{width: 66, height: '100%', overflowY: 'auto'}}>
+                    {HOURS_12.map(h => {
+                      const on = h12 === h;
+                      return (
+                        <PressableScale key={h} onClick={() => setCustomH(to24(h, pm))}
+                          style={{width: '100%', padding: '9px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 9, margin: '2px 0', backgroundColor: on ? colors.primary : 'transparent'}}>
+                          <span style={{fontSize: 17, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: on ? colors.textOnPrimary : colors.textPrimary}}>{h}</span>
+                        </PressableScale>
+                      );
+                    })}
+                  </div>
+                  <span style={{fontSize: 20, fontWeight: 800, color: colors.textPrimary}}>:</span>
+                  <div style={{width: 66, height: '100%', overflowY: 'auto'}}>
+                    {MINUTES.map(m => (
+                      <PressableScale key={m} onClick={() => setCustomM(m)}
+                        style={{width: '100%', padding: '9px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 9, margin: '2px 0', backgroundColor: customM === m ? colors.primary : 'transparent'}}>
+                        <span style={{fontSize: 17, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: customM === m ? colors.textOnPrimary : colors.textPrimary}}>
+                          {String(m).padStart(2, '0')}
+                        </span>
+                      </PressableScale>
+                    ))}
+                  </div>
+                  <div style={{display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8, marginLeft: 4}}>
+                    {[false, true].map(isPm => {
+                      const on = pm === isPm;
+                      return (
+                        <PressableScale key={String(isPm)} onClick={() => setCustomH(to24(h12, isPm))}
+                          style={{padding: '10px 14px', borderRadius: 10, border: `1px solid ${on ? colors.primary : colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: on ? colors.primary : 'transparent'}}>
+                          <span style={{fontSize: 17, fontWeight: 800, color: on ? colors.textOnPrimary : colors.textPrimary}}>{isPm ? 'PM' : 'AM'}</span>
+                        </PressableScale>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={{marginTop: 10, textAlign: 'center', fontSize: 12, fontWeight: 700, color: colors.textSecondary}}>
+                  Leaving at {fmtClock12(customH, customM)}
+                  {departureMinutes != null && departureMinutes >= 720 ? ' tomorrow' : ''}
+                  {departureMinutes != null && `  ·  in ${Math.floor(departureMinutes / 60)}h ${departureMinutes % 60}m`}
+                </div>
+              </div>
+            );
+          })()}
+
+          <PressableScale
+            onClick={handleDeparture}
+            disabled={departureMinutes == null || requesting}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              borderRadius: 14, padding: '15px 0', marginTop: 14, width: '100%',
+              backgroundColor: departureMinutes != null ? colors.primary : colors.border, opacity: requesting ? 0.6 : 1,
+            }}>
+            <span style={{fontSize: 14, fontWeight: 900, color: departureMinutes != null ? colors.textOnPrimary : colors.textMuted}}>
+              {requesting ? 'Sending…' : departureMinutes != null ? 'Send departure request' : 'Select a time above'}
+            </span>
+            {departureMinutes != null && !requesting && <Icon name="arrowRight" size={15} color={colors.textOnPrimary} />}
+          </PressableScale>
+        </div>
+      </BottomSheetModal>
     </div>
   );
 }

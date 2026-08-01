@@ -6,9 +6,11 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 2;
-export const APP_VERSION_NAME = '1.1.0';
+export const APP_VERSION_CODE = 3;
+export const APP_VERSION_NAME = '1.2.0';
 export const RELEASE_NOTES =
-  'Live tracking map fixes — real driver GPS now syncs reliably and tiles load faster. ' +
-  'The alarm now rings only when your car is ready at the gate. Added Parking History, ' +
-  'and retrieval requests no longer wait on a location permission prompt mid-action.';
+  'New: let the valet know you\'re on your way with the Arrival card, and cancel a ' +
+  'departure request straight from Home. Departure timing now supports Now/15/30 or a ' +
+  'custom clock pick, and the live countdown while your car is en route now shows real ' +
+  'GPS-based time away instead of a fixed timer. Home and My Parking are combined into a ' +
+  'single screen, matching the mobile app.';
