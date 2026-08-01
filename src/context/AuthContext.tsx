@@ -30,9 +30,10 @@ interface AuthContextValue {
 const SESSION_KEY = '@kims_session';
 const SESSION_HOURS = 12;
 
-// This web portal serves doctors and staff only — every other role keeps
-// using the mobile app. Enforced at login AND on session restore.
-const WEB_ROLES: UserRole[] = ['doctor', 'staff'];
+// This web portal serves doctors, staff, and admins — valet/driver keep
+// using the mobile app (their flows are inherently on-the-move/dispatch,
+// not desk work). Enforced at login AND on session restore.
+const WEB_ROLES: UserRole[] = ['doctor', 'staff', 'admin'];
 
 const Ctx = createContext<AuthContextValue>({
   user: null,
@@ -115,7 +116,7 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
   const login = useCallback(async (username: string, password: string) => {
     const {token, user: loggedInUser} = await authApi.login(username, password);
     if (!WEB_ROLES.includes(loggedInUser.role)) {
-      throw new Error('This web portal is for doctors and staff only. Please use the KIMS Parking mobile app.');
+      throw new Error('This web portal is for doctors, staff, and admins only. Please use the KIMS Parking mobile app.');
     }
     const withTime: CurrentUser = {...loggedInUser, loginTime: Date.now()};
     tokenRef.current = token;

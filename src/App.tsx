@@ -12,14 +12,20 @@ import {VirtualCardScreen} from './screens/VirtualCardScreen';
 import {VehicleSetupScreen} from './screens/VehicleSetupScreen';
 import {SettingsScreen} from './screens/SettingsScreen';
 import {HistoryScreen} from './screens/HistoryScreen';
+import {AdminDashboardScreen} from './screens/admin/AdminDashboardScreen';
+import {AdminStaffScreen} from './screens/admin/AdminStaffScreen';
+import {AdminAttendanceScreen} from './screens/admin/AdminAttendanceScreen';
+import {AdminMapScreen} from './screens/admin/AdminMapScreen';
 
-// Web port of the app's AppNavigator: bottom tabs per role. Home / Setup /
-// Settings for both doctors and staff — matching the mobile app's current
+// Web port of the app's AppNavigator: bottom tabs per role.
+// Doctor/staff: Home / Setup / Settings — matching the mobile app's current
 // DoctorNavigator/StaffNavigator, which folded the old standalone "Parking"
 // tab into Home once a doctor only ever has one current session. "Card" and
 // "History" are reachable only from links on Home, not bottom tabs.
+// Admin: Dashboard / Staff / Attendance / Map / Settings — matching the
+// mobile app's AdminNavigator.
 
-type TabKey = 'Home' | 'Card' | 'History' | 'Setup' | 'Settings';
+type TabKey = 'Home' | 'Card' | 'History' | 'Setup' | 'Settings' | 'Dashboard' | 'Staff' | 'Attendance' | 'Map';
 
 interface TabDef {
   key: TabKey;
@@ -29,6 +35,15 @@ interface TabDef {
 }
 
 function tabsForRole(role: string | undefined): TabDef[] {
+  if (role === 'admin') {
+    return [
+      {key: 'Dashboard', label: 'Dashboard', icon: 'dashboard', headerTitle: 'Operations'},
+      {key: 'Staff', label: 'Staff', icon: 'staff', headerTitle: 'Staff'},
+      {key: 'Attendance', label: 'Attendance', icon: 'calendar', headerTitle: 'Attendance'},
+      {key: 'Map', label: 'Map', icon: 'map', headerTitle: 'Live Map'},
+      {key: 'Settings', label: 'Settings', icon: 'settings', headerTitle: 'Settings'},
+    ];
+  }
   const home: TabDef = {
     key: 'Home', label: 'Home', icon: 'home',
     headerTitle: role === 'staff' ? 'KIMS Staff' : 'KIMS Doctor',
@@ -41,7 +56,7 @@ function tabsForRole(role: string | undefined): TabDef[] {
 function RoleRouter() {
   const {colors} = useTheme();
   const {user} = useAuth();
-  const [tab, setTab] = useState<TabKey>('Home');
+  const [tab, setTab] = useState<TabKey>(() => (user?.role === 'admin' ? 'Dashboard' : 'Home'));
 
   const tabs = tabsForRole(user?.role);
   const activeTab = tabs.find(t => t.key === tab);
@@ -51,10 +66,14 @@ function RoleRouter() {
   const isHistory = tab === 'History';
 
   const screen =
-    isCard              ? <VirtualCardScreen onBack={() => setTab('Home')} />
-    : isHistory           ? <HistoryScreen onBack={() => setTab('Home')} />
-    : tab === 'Home'      ? <DoctorHomeScreen onOpenCard={() => setTab('Card')} onOpenHistory={() => setTab('History')} />
-    : tab === 'Setup'     ? <VehicleSetupScreen onBack={() => setTab('Home')} />
+    isCard                ? <VirtualCardScreen onBack={() => setTab('Home')} />
+    : isHistory            ? <HistoryScreen onBack={() => setTab('Home')} />
+    : tab === 'Home'        ? <DoctorHomeScreen onOpenCard={() => setTab('Card')} onOpenHistory={() => setTab('History')} />
+    : tab === 'Setup'       ? <VehicleSetupScreen onBack={() => setTab('Home')} />
+    : tab === 'Dashboard'   ? <AdminDashboardScreen />
+    : tab === 'Staff'       ? <AdminStaffScreen />
+    : tab === 'Attendance'  ? <AdminAttendanceScreen />
+    : tab === 'Map'         ? <AdminMapScreen />
     : <SettingsScreen />;
 
   return (

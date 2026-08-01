@@ -140,4 +140,46 @@ export const notificationsApi = {
     client.post('/notifications/unregister-device', {token}).then(() => undefined),
 };
 
+// ── Drivers ──────────────────────────────────────────────────────────────
+export const driversApi = {
+  list: (params?: {status?: string}) =>
+    client.get('/drivers', {params}).then(r => r.data.drivers),
+};
+
+// ── Admin ────────────────────────────────────────────────────────────────
+/** The admin-tunable operational knobs. Mirrors DEFAULTS in setting.service.js. */
+export interface OpsSettings {
+  /** Seconds a driver has to accept before the valet is asked to reassign. */
+  driverAcceptTimeoutSeconds: string;
+  /** Seconds the owning valet has to respond before recovery releases it. */
+  ownerResponseTimeoutSeconds: string;
+  /** How far ahead of a planned departure the retrieval becomes actionable. */
+  retrievalLeadTimeMinutes: string;
+}
+
+export const adminApi = {
+  dashboard: () => client.get('/admin/dashboard').then(r => r.data),
+  listUsers: () => client.get('/admin/users').then(r => r.data.users),
+  createUser: (data: {
+    employeeId: string; name: string; role: 'doctor' | 'staff' | 'valet' | 'driver' | 'admin';
+    password: string; department?: string; cardCode?: string; phone?: string; carNumber?: string;
+  }) => client.post('/admin/users', data).then(r => r.data.user),
+  updateUser: (id: number, patch: {
+    name?: string; role?: 'doctor' | 'staff' | 'valet' | 'driver' | 'admin';
+    department?: string; cardCode?: string; phone?: string; carNumber?: string;
+  }) => client.patch(`/admin/users/${id}`, patch).then(r => r.data.user),
+  resetPassword: (id: number, password: string) =>
+    client.patch(`/admin/users/${id}/password`, {password}).then(r => r.data),
+  deleteUser: (id: number) => client.delete(`/admin/users/${id}`).then(() => undefined),
+  getSettings: () => client.get('/admin/settings').then(r => r.data.settings as OpsSettings),
+  updateSettings: (patch: Partial<Record<keyof OpsSettings, number | string>>) =>
+    client.patch('/admin/settings', patch).then(r => r.data.settings as OpsSettings),
+  attendanceToday: () => client.get('/admin/attendance/today').then(r => r.data.attendance),
+  attendanceMonthly: (month: string) =>
+    client.get('/admin/attendance/monthly', {params: {month}}).then(r => r.data as {
+      month: string;
+      users: {userId: number; name: string; role: string; employeeId: string; days: {date: string; checkIn: string | null; checkOut: string | null; vehiclesHandled: number}[]}[];
+    }),
+};
+
 export default client;

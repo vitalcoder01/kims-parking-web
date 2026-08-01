@@ -1,15 +1,16 @@
 import React, {createContext, useContext, useState, useCallback, useEffect, useRef} from 'react';
-import {tasksApi, slotsApi, notificationsApi, arrivalsApi, getAuthToken} from '../services/api';
+import {tasksApi, slotsApi, notificationsApi, arrivalsApi, driversApi, getAuthToken} from '../services/api';
 import {connectSocket, disconnectSocket} from '../services/socket';
 import {ringAlarm, stopAlarm, playChime} from '../services/alarm';
 import {initWebPush} from '../services/webPush';
 import {getSwRegistration} from '../services/swRegistration';
 import {useAuth} from './AuthContext';
 
-// Doctor/staff slice of the mobile app's AppStateContext — same wire-format
-// mappers, same socket delta events, same "fetch on connect, patch on
-// event" sync model. Ops-only data (drivers roster, visitors) is never
-// fetched here, exactly like the mobile app skips it for these roles.
+// Doctor/staff/admin slice of the mobile app's AppStateContext — same
+// wire-format mappers, same socket delta events, same "fetch on connect,
+// patch on event" sync model. Visitor data is still never fetched here
+// (admin's screens don't need it); the driver roster IS fetched, but only
+// for admin — doctors/staff have no use for it either.
 
 export type TaskType = 'park' | 'retrieve';
 export type TaskStatus = 'requested' | 'assigned' | 'key_collected' | 'in_transit' | 'delivered' | 'completed' | 'cancelled';
@@ -52,6 +53,17 @@ export interface ParkingTask {
   destinationLng?: number;
 }
 
+export type DriverStatus = 'available' | 'busy' | 'off';
+
+export interface Driver {
+  id: number;
+  name: string;
+  phone: string;
+  status: DriverStatus;
+  currentTaskId?: number;
+  completedToday?: number;
+}
+
 export interface ParkingSlot {
   id: string;
   block: string;
@@ -83,6 +95,7 @@ export interface ActiveAlert {
 interface AppState {
   tasks: ParkingTask[];
   slots: ParkingSlot[];
+  drivers: Driver[];
   notifications: Notification[];
   activeAlert: ActiveAlert | null;
   hydrated: boolean;
@@ -141,6 +154,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
   const {user} = useAuth();
   const [tasks, setTasks]          = useState<ParkingTask[]>([]);
   const [slots, setSlots]          = useState<ParkingSlot[]>([]);
+  const [drivers, setDrivers]      = useState<Driver[]>([]);
   const [notifications, setNotifs] = useState<Notification[]>([]);
   const [activeAlert, setActiveAlert] = useState<ActiveAlert | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -150,17 +164,21 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     setActiveAlert(null);
   }, []);
 
+  const needsOpsData = user?.role === 'admin';
+
   const fetchAll = useCallback(async () => {
-    const [t, s, n] = await Promise.all([
+    const [t, s, n, d] = await Promise.all([
       tasksApi.list(),
       slotsApi.list(),
       notificationsApi.list(),
+      needsOpsData ? driversApi.list() : Promise.resolve(null),
     ]);
     setTasks(t.map(mapTask));
     setSlots(s);
     setNotifs(n.map(mapNotification));
+    if (d) setDrivers(d);
     setHydrated(true);
-  }, []);
+  }, [needsOpsData]);
 
   const userRef = useRef(user);
   userRef.current = user;
@@ -173,7 +191,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
       // since its state was independent of auth state.
       stopAlarm();
       setActiveAlert(null);
-      setTasks([]); setSlots([]); setNotifs([]);
+      setTasks([]); setSlots([]); setNotifs([]); setDrivers([]);
       setHydrated(false);
       disconnectSocket();
       return;
@@ -230,6 +248,10 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
 
     socket.on('slot:patch', (slot: ParkingSlot) => {
       setSlots(p => upsertById(p, slot));
+    });
+
+    socket.on('driver:patch', (patch: Partial<Driver> & {id: number}) => {
+      setDrivers(p => p.map(d => (d.id === patch.id ? {...d, ...patch} : d)));
     });
 
     socket.on('notification:new', (raw: any) => {
@@ -315,7 +337,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
   }, []);
 
   return (
-    <Ctx.Provider value={{tasks, slots, notifications, activeAlert, hydrated, dismissAlert, fetchTaskHistory, requestRetrieval, cancelMyRetrieval, sendArrivalNotice, pushNotification, markNotificationRead}}>
+    <Ctx.Provider value={{tasks, slots, drivers, notifications, activeAlert, hydrated, dismissAlert, fetchTaskHistory, requestRetrieval, cancelMyRetrieval, sendArrivalNotice, pushNotification, markNotificationRead}}>
       {children}
     </Ctx.Provider>
   );
