@@ -9,6 +9,7 @@ import {typography, spacing, radius} from '../theme';
 import {useInstallPrompt} from '../hooks/useInstallPrompt';
 import {InstallHelpModal} from '../components/InstallHelpModal';
 import {APP_VERSION_NAME, APP_VERSION_CODE} from '../config/version';
+import {EditProfileModal, EditProfileMode} from '../components/EditProfileModal';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -24,6 +25,15 @@ export function SettingsScreen() {
   const {canInstall, installed, promptInstall} = useInstallPrompt();
   const [showInstallHelp, setShowInstallHelp] = React.useState(false);
   const [notifTasks,   setNotifTasks]   = React.useState(true);
+  // Which edit-profile modal is open — null means none. One state var so
+  // opening a second field cleanly replaces the first instead of stacking.
+  const [editMode, setEditMode] = React.useState<EditProfileMode | null>(null);
+  const [flashMessage, setFlashMessage] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!flashMessage) return;
+    const t = window.setTimeout(() => setFlashMessage(null), 3000);
+    return () => window.clearTimeout(t);
+  }, [flashMessage]);
 
   const handleInstall = async () => {
     const shown = await promptInstall();
@@ -75,6 +85,49 @@ export function SettingsScreen() {
             </div>
             <div style={{fontSize: typography.sizes.xs, fontWeight: typography.weights.bold, marginTop: 3, color: colors.primary}}>{user?.employeeId ?? '—'}</div>
           </div>
+        </Card>
+
+        {/* Account — self-service edits for name, login username, and
+            password. Each row opens its own modal so a mistap on one field
+            cannot accidentally rewrite another. */}
+        <div style={sectionTitle}>ACCOUNT</div>
+        <Card style={{padding: 0, overflow: 'hidden'}}>
+          {([
+            {mode: 'name' as const,     label: 'Display name',   value: user?.name ?? '—',     icon: 'user' as IconName},
+            {mode: 'username' as const, label: 'Login username', value: user?.username ?? '—', icon: 'userCard' as IconName},
+            {mode: 'password' as const, label: 'Password',       value: '••••••••',            icon: 'lock' as IconName},
+          ]).map((row, i, arr) => (
+            <PressableScale
+              key={row.mode}
+              onClick={() => setEditMode(row.mode)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: spacing.md,
+                padding: `14px ${spacing.base}px`, width: '100%',
+                borderBottom: i < arr.length - 1 ? `1px solid ${colors.divider}` : 'none',
+                backgroundColor: 'transparent', border: 'none',
+                cursor: 'pointer', textAlign: 'left',
+              }}>
+              <span style={{
+                width: 34, height: 34, borderRadius: radius.md, backgroundColor: colors.cardAlt,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                <Icon name={row.icon} size={16} color={colors.textPrimary} />
+              </span>
+              <span style={{flex: 1, minWidth: 0}}>
+                <span style={{display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: colors.textMuted}}>
+                  {row.label}
+                </span>
+                <span style={{
+                  display: 'block', fontSize: typography.sizes.sm, fontWeight: typography.weights.bold,
+                  marginTop: 2, color: colors.textPrimary,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {row.value}
+                </span>
+              </span>
+              <Icon name="chevronRight" size={16} color={colors.textMuted} />
+            </PressableScale>
+          ))}
         </Card>
 
         {/* Appearance */}
@@ -207,6 +260,21 @@ export function SettingsScreen() {
 
       </div>
       {showInstallHelp && <InstallHelpModal onClose={() => setShowInstallHelp(false)} />}
+      <EditProfileModal
+        mode={editMode}
+        onClose={() => setEditMode(null)}
+        onSuccess={(m) => setFlashMessage(m)}
+      />
+      {flashMessage && (
+        <div style={{
+          position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)',
+          backgroundColor: colors.success, color: '#fff',
+          padding: '12px 20px', borderRadius: 12, fontSize: 13, fontWeight: 700,
+          boxShadow: '0 8px 20px rgba(0,0,0,0.25)', zIndex: 10000,
+        }}>
+          {flashMessage}
+        </div>
+      )}
     </div>
   );
 }

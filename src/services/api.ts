@@ -85,10 +85,17 @@ export const authApi = {
 export const usersApi = {
   lookupByCardCode: (code: string) =>
     client.get(`/users/by-card/${code}`).then(r => r.data.user),
-  updateMe: (patch: {carNumber?: string; phone?: string; carModel?: string; carColor?: string; vehicleType?: 'car' | 'bike'}) =>
+  // Every field optional — server only updates what's present, so an
+  // "edit name" flow sends just {name}. Server does the real validation.
+  updateMe: (patch: {carNumber?: string; phone?: string; carModel?: string; carColor?: string; vehicleType?: 'car' | 'bike'; name?: string; username?: string}) =>
     client.patch('/users/me', patch).then(r => r.data.user),
   updateMyDesignation: (role: 'doctor' | 'staff') =>
     client.patch('/users/me/designation', {role}).then(r => r.data.user),
+  // Password change: always requires the current password, always its own
+  // call (never bundled with updateMe) so the security guarantee cannot
+  // be skipped by accident. Nothing returned on success.
+  changeMyPassword: (currentPassword: string, newPassword: string) =>
+    client.post('/users/me/password', {currentPassword, newPassword}).then(() => undefined),
 };
 
 // ── Tasks ────────────────────────────────────────────────────────────────
