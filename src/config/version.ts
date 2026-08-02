@@ -6,8 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 9;
-export const APP_VERSION_NAME = '1.6.1';
+export const APP_VERSION_CODE = 10;
+export const APP_VERSION_NAME = '1.6.2';
 export const RELEASE_NOTES =
-  'Fixed the "new version available" banner not appearing after recent ' +
-  'updates — it should now show up reliably going forward.';
+  'You can now edit your display name, login username, and password from Settings → Account. Password changes always require your current password.';
