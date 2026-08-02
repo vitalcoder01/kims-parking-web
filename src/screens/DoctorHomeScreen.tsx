@@ -314,53 +314,56 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
           </div>
         )}
 
-        {/* Arrival / Departure launcher cards — mutually exclusive states,
-            so at most one card ever renders. */}
+        {/* Arrival / Departure launcher card — mutually exclusive states, so
+            at most one ever renders. Same visual DNA as the valet's action
+            grid (rounded 22px, soft shadow, icon in a rounded square), but a
+            horizontal solo-card layout rather than a centered vertical
+            stack — a square grid tile sitting alone in a wide row would
+            leave visible empty space next to it. */}
         {!hydrated && (
-          <div style={{display: 'flex', gap: 12}}>
-            <SkeletonBlock height={116} radius={18} style={{flex: 1}} />
-            <SkeletonBlock height={116} radius={18} style={{flex: 1}} />
-          </div>
+          <SkeletonBlock height={82} radius={22} />
         )}
-        {hydrated && (showEmptyState || (carIsParked && !activeRetrieve)) && (
-          <div style={{display: 'flex', gap: 12}}>
-            {showEmptyState && (
-              <PressableScale
-                onClick={() => setShowArrivalModal(true)}
-                style={{
-                  flex: 1, borderRadius: 18, padding: 20, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  backgroundColor: colors.primary,
-                }}>
-                <div style={{
-                  width: 52, height: 52, borderRadius: 16, marginBottom: 8,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  backgroundColor: 'rgba(255,255,255,0.18)',
-                }}>
-                  <Icon name="bellAlert" size={26} color="#fff" />
-                </div>
-                <span style={{color: '#fff', fontSize: 15, fontWeight: 800}}>Arrival</span>
-                <span style={{color: 'rgba(255,255,255,0.7)', fontSize: 11, lineHeight: '14px', marginTop: 4, height: 28, textAlign: 'center'}}>Let valet know you're coming</span>
-              </PressableScale>
-            )}
-            {carIsParked && !activeRetrieve && (
-              <PressableScale
-                onClick={() => setShowDepartureModal(true)}
-                style={{
-                  flex: 1, borderRadius: 18, padding: 20, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  backgroundColor: colors.accent,
-                }}>
-                <div style={{
-                  width: 52, height: 52, borderRadius: 16, marginBottom: 8,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  backgroundColor: 'rgba(255,255,255,0.18)',
-                }}>
-                  <Icon name="car" size={26} color="#fff" />
-                </div>
-                <span style={{color: '#fff', fontSize: 15, fontWeight: 800}}>Departure</span>
-                <span style={{color: 'rgba(255,255,255,0.7)', fontSize: 11, lineHeight: '14px', marginTop: 4, height: 28, textAlign: 'center'}}>Request your car back</span>
-              </PressableScale>
-            )}
-          </div>
+        {hydrated && showEmptyState && (
+          <PressableScale
+            onClick={() => setShowArrivalModal(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 14, borderRadius: 22, padding: 18,
+              backgroundColor: colors.primary, boxShadow: '0 6px 10px rgba(0,0,0,0.16)',
+            }}>
+            <div style={{
+              width: 46, height: 46, borderRadius: 14, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backgroundColor: 'rgba(255,255,255,0.18)',
+            }}>
+              <Icon name="bellAlert" size={24} color="#fff" />
+            </div>
+            <div style={{flex: 1, textAlign: 'left'}}>
+              <div style={{color: '#fff', fontSize: 15, fontWeight: 800}}>Arrival</div>
+              <div style={{color: 'rgba(255,255,255,0.65)', fontSize: 11.5, marginTop: 2}}>Let the valet know you're coming</div>
+            </div>
+            <Icon name="arrowRight" size={18} color="rgba(255,255,255,0.6)" />
+          </PressableScale>
+        )}
+        {hydrated && carIsParked && !activeRetrieve && (
+          <PressableScale
+            onClick={() => setShowDepartureModal(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 14, borderRadius: 22, padding: 18,
+              backgroundColor: colors.primary, boxShadow: '0 6px 10px rgba(0,0,0,0.16)',
+            }}>
+            <div style={{
+              width: 46, height: 46, borderRadius: 14, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backgroundColor: 'rgba(255,255,255,0.18)',
+            }}>
+              <Icon name="car" size={24} color="#fff" />
+            </div>
+            <div style={{flex: 1, textAlign: 'left'}}>
+              <div style={{color: '#fff', fontSize: 15, fontWeight: 800}}>Departure</div>
+              <div style={{color: 'rgba(255,255,255,0.65)', fontSize: 11.5, marginTop: 2}}>Request your car back</div>
+            </div>
+            <Icon name="arrowRight" size={18} color="rgba(255,255,255,0.6)" />
+          </PressableScale>
         )}
 
         {arrivalSent && showEmptyState && (
