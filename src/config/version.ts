@@ -6,8 +6,8 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 7;
-export const APP_VERSION_NAME = '1.5.1';
+export const APP_VERSION_CODE = 8;
+export const APP_VERSION_NAME = '1.6.0';
 export const RELEASE_NOTES =
-  'Refreshed the Arrival/Departure cards on the doctor home screen with a ' +
-  'cleaner, more polished look.';
+  'Vehicle Setup now has a model field and a car/bike type, and your body ' +
+  'colour choice is saved to your account instead of just this device.';

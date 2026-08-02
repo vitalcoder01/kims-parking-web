@@ -14,6 +14,9 @@ export interface CurrentUser {
   department?: string;
   cardCode?: string;       // 3-digit virtual card code
   carNumber?: string;
+  carModel?: string;
+  carColor?: string;
+  vehicleType?: 'car' | 'bike';
   phone?: string;
   profileComplete?: boolean;
   loginTime?: number;

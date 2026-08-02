@@ -272,22 +272,16 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
   const {user, updateProfile} = useAuth();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const phoneInputRef = useRef<HTMLInputElement>(null);
+  const modelInputRef = useRef<HTMLInputElement>(null);
   const [vehicleNumber, setVehicleNumber] = useState(user?.carNumber ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
-  const [selectedColor, setSelectedColor] = useState(COLORS[1].hex);
+  const [vehicleModel, setVehicleModel] = useState(user?.carModel ?? '');
+  const [vehicleType, setVehicleType] = useState<'car' | 'bike'>(user?.vehicleType ?? 'car');
+  const [selectedColor, setSelectedColor] = useState(user?.carColor || COLORS[1].hex);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   // Already saved a vehicle number before -> land on the summary view.
   const [mode, setMode] = useState<'view' | 'edit'>(user?.carNumber ? 'view' : 'edit');
-
-  const colorStorageKey = `@vehicle_color_${user?.id ?? 'anon'}`;
-
-  // The backend has no body-colour column — purely cosmetic for the 3D
-  // preview, kept locally per account (same as the mobile app).
-  useEffect(() => {
-    const saved = localStorage.getItem(colorStorageKey);
-    if (saved) setSelectedColor(saved);
-  }, [colorStorageKey]);
 
   const post = (msg: object) => frameRef.current?.contentWindow?.postMessage(JSON.stringify(msg), '*');
 
@@ -301,9 +295,17 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
     }
     setSaving(true);
     try {
-      const updated = await usersApi.updateMe({carNumber: vehicleNumber.trim(), phone: phone.trim() || undefined});
-      updateProfile({carNumber: updated.carNumber, phone: updated.phone});
-      localStorage.setItem(colorStorageKey, selectedColor);
+      const updated = await usersApi.updateMe({
+        carNumber: vehicleNumber.trim(),
+        phone: phone.trim() || undefined,
+        carModel: vehicleModel.trim() || undefined,
+        carColor: selectedColor,
+        vehicleType,
+      });
+      updateProfile({
+        carNumber: updated.carNumber, phone: updated.phone,
+        carModel: updated.carModel, carColor: updated.carColor, vehicleType: updated.vehicleType,
+      });
       setMode('view');
     } catch (err: any) {
       window.alert(err.message || 'Could not save vehicle details');
@@ -406,6 +408,8 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
             <div style={{borderRadius: 18, border: `1px solid ${colors.border}`, overflow: 'hidden', marginBottom: 20, backgroundColor: colors.surface}}>
               {[
                 {icon: 'car' as const, label: 'Vehicle Number', value: vehicleNumber || '—'},
+                {icon: 'car' as const, label: 'Vehicle Model', value: vehicleModel || '—'},
+                {icon: vehicleType === 'bike' ? 'bike' as const : 'car' as const, label: 'Vehicle Type', value: vehicleType === 'bike' ? 'Bike' : 'Car'},
                 {icon: 'phone' as const, label: 'Phone Number', value: phone || '—'},
                 {icon: 'car' as const, label: 'Body Colour', value: colorName},
               ].map((row, i, arr) => (
@@ -444,8 +448,41 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
                 value={vehicleNumber}
                 onChange={e => setVehicleNumber(e.target.value.toUpperCase())}
                 placeholder="e.g. TN09 AB 1234"
+                onKeyDown={e => { if (e.key === 'Enter') modelInputRef.current?.focus(); }}
+              />
+            </div>
+
+            <label style={fieldLabel}>VEHICLE MODEL (OPTIONAL)</label>
+            <div style={inputRow}>
+              <span style={iconWrap}><Icon name="car" size={16} color={colors.textPrimary} /></span>
+              <input
+                ref={modelInputRef}
+                style={inputStyle}
+                value={vehicleModel}
+                onChange={e => setVehicleModel(e.target.value)}
+                placeholder="e.g. Maruti Swift"
                 onKeyDown={e => { if (e.key === 'Enter') phoneInputRef.current?.focus(); }}
               />
+            </div>
+
+            <label style={fieldLabel}>VEHICLE TYPE</label>
+            <div style={{display: 'flex', gap: 10, marginBottom: 16}}>
+              {(['car', 'bike'] as const).map(t => {
+                const on = vehicleType === t;
+                return (
+                  <PressableScale
+                    key={t}
+                    onClick={() => setVehicleType(t)}
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      border: `1.5px solid ${on ? colors.primary : colors.border}`, borderRadius: 14, height: 50,
+                      backgroundColor: on ? colors.primary : colors.surface,
+                    }}>
+                    <Icon name={t === 'car' ? 'car' : 'bike'} size={16} color={on ? colors.textOnPrimary : colors.textSecondary} />
+                    <span style={{fontSize: 14, fontWeight: 700, color: on ? colors.textOnPrimary : colors.textSecondary}}>{t === 'car' ? 'Car' : 'Bike'}</span>
+                  </PressableScale>
+                );
+              })}
             </div>
 
             <label style={fieldLabel}>PHONE NUMBER</label>
