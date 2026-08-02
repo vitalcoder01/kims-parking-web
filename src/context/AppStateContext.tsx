@@ -21,6 +21,11 @@ export interface ParkingTask {
   type: TaskType;
   doctorId: number;
   doctorName: string;
+  doctorDepartment?: string;
+  // Set instead of doctorId when this task belongs to a visitor/patient
+  // check-in rather than a staff/doctor session — see serializeTask.
+  visitorId?: number;
+  isVisitor?: boolean;
   carNumber: string;
   slotId?: string; // human-readable code, e.g. "A-001"
   driverId?: number;

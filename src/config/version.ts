@@ -6,8 +6,8 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 5;
-export const APP_VERSION_NAME = '1.4.0';
+export const APP_VERSION_CODE = 6;
+export const APP_VERSION_NAME = '1.5.0';
 export const RELEASE_NOTES =
-  'Doctors and staff can now create their own login right from this page — ' +
-  'no more waiting on an admin to set up your account.';
+  'Admin Live Map: tap an occupied slot to see who it belongs to — car, ' +
+  'department, driver, and how long it\'s been parked.';

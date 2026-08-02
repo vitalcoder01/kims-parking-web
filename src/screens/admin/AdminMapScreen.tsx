@@ -4,13 +4,33 @@ import {useTheme} from '../../context/ThemeContext';
 import {useAppState} from '../../context/AppStateContext';
 import {Icon} from '../../components/Icon';
 
+// How long a car's been sitting in its slot, since the owner popup shows it
+// alongside who it belongs to — "since 2:14 PM" only means something with a
+// duration next to it.
+function agoLabel(ms?: number): string | null {
+  if (!ms) return null;
+  const mins = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem ? `${hrs} hr ${rem} min ago` : `${hrs} hr ago`;
+}
+
 // Direct port of the mobile app's ParkingMapScreen (admin's "Live Map" tab —
 // actually a slot occupancy grid, not a GPS map).
 export function AdminMapScreen() {
   const {colors} = useTheme();
-  const {slots} = useAppState();
+  const {slots, tasks} = useAppState();
   const [picked, setPicked] = useState<string | undefined>(undefined);
   const pickedSlot = picked ? slots.find(sl => sl.id === picked) : undefined;
+  // Cross-referenced against the live task list (already carries the
+  // owner's name, department, driver — works uniformly for staff/doctor AND
+  // visitor sessions since both run through the same ParkingTask) rather
+  // than adding a new backend field just for this popup.
+  const pickedOwnerTask = pickedSlot?.taskId ? tasks.find(t => t.id === pickedSlot.taskId) : undefined;
+  const showingOwnerDetail = pickedSlot?.status === 'occupied';
+  const selectSlot = (id: string) => setPicked(prev => (prev === id ? undefined : id));
 
   const blocks = useMemo(() => {
     const byBlock = new Map<string, typeof slots>();
@@ -35,24 +55,60 @@ export function AdminMapScreen() {
 
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background, padding: 16, paddingBottom: 40}}>
-      {/* Occupancy summary */}
-      <div style={{borderRadius: 20, padding: 18, marginBottom: 16, backgroundColor: colors.primary}}>
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14}}>
-          <div>
-            <div style={{fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: colors.textOnPrimary + '99'}}>OCCUPANCY</div>
-            <div style={{fontSize: 30, fontWeight: 900, marginTop: 2, color: colors.textOnPrimary}}>
-              {occupied}<span style={{fontSize: 18, fontWeight: 700, color: colors.textOnPrimary + '88'}}> / {total}</span>
+      {/* Occupancy summary — swaps to the clicked slot's owner details when
+          an occupied slot is selected; clicking that same slot again (see
+          selectSlot) clears the selection and this reverts automatically. */}
+      {showingOwnerDetail && pickedSlot ? (
+        <div style={{borderRadius: 20, padding: 18, marginBottom: 16, backgroundColor: colors.primary}}>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14}}>
+            <div style={{flex: 1, minWidth: 0}}>
+              <div style={{fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: colors.textOnPrimary + '99'}}>
+                SLOT {pickedSlot.id}{pickedOwnerTask?.isVisitor ? ' · VISITOR' : ''}
+              </div>
+              <div style={{fontSize: 20, fontWeight: 900, marginTop: 2, color: colors.textOnPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                {pickedOwnerTask?.doctorName ?? pickedSlot.carNumber ?? 'Occupied'}
+              </div>
+            </div>
+            <PressableScale
+              onClick={() => setPicked(undefined)}
+              style={{width: 30, height: 30, borderRadius: 15, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.18)'}}
+            >
+              <Icon name="close" size={16} color={colors.textOnPrimary} />
+            </PressableScale>
+          </div>
+          <div style={{display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14}}>
+            {([
+              ['Car', pickedSlot.carNumber || pickedOwnerTask?.carNumber || '—'],
+              ...(pickedOwnerTask?.doctorDepartment ? [['Department', pickedOwnerTask.doctorDepartment]] : []),
+              ...(pickedOwnerTask?.driverName ? [['Driver', pickedOwnerTask.driverName]] : []),
+              ...(agoLabel(pickedOwnerTask?.completedAt) ? [['Parked', agoLabel(pickedOwnerTask?.completedAt)!]] : []),
+            ] as [string, string][]).map(([k, v]) => (
+              <div key={k} style={{display: 'flex', justifyContent: 'space-between', gap: 12}}>
+                <span style={{fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: 'rgba(255,255,255,0.6)'}}>{k}</span>
+                <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textOnPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div style={{borderRadius: 20, padding: 18, marginBottom: 16, backgroundColor: colors.primary}}>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14}}>
+            <div>
+              <div style={{fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: colors.textOnPrimary + '99'}}>OCCUPANCY</div>
+              <div style={{fontSize: 30, fontWeight: 900, marginTop: 2, color: colors.textOnPrimary}}>
+                {occupied}<span style={{fontSize: 18, fontWeight: 700, color: colors.textOnPrimary + '88'}}> / {total}</span>
+              </div>
+            </div>
+            <div style={{textAlign: 'right'}}>
+              <div style={{fontSize: 24, fontWeight: 900, color: colors.textOnPrimary}}>{occupancyPct}%</div>
+              <div style={{fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: colors.textOnPrimary + '99'}}>{available} FREE</div>
             </div>
           </div>
-          <div style={{textAlign: 'right'}}>
-            <div style={{fontSize: 24, fontWeight: 900, color: colors.textOnPrimary}}>{occupancyPct}%</div>
-            <div style={{fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: colors.textOnPrimary + '99'}}>{available} FREE</div>
+          <div style={{height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.2)'}}>
+            <div style={{height: '100%', borderRadius: 4, width: `${occupancyPct}%`, backgroundColor: colors.textOnPrimary, transition: 'width 0.4s ease'}} />
           </div>
         </div>
-        <div style={{height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.2)'}}>
-          <div style={{height: '100%', borderRadius: 4, width: `${occupancyPct}%`, backgroundColor: colors.textOnPrimary, transition: 'width 0.4s ease'}} />
-        </div>
-      </div>
+      )}
 
       {/* Legend */}
       <div style={{display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: '0 2px'}}>
@@ -67,7 +123,9 @@ export function AdminMapScreen() {
           </div>
         ))}
         <div style={{flex: 1}} />
-        {pickedSlot && (
+        {/* Free-slot selection only — an occupied one already shows its full
+            detail in the swapped summary card above. */}
+        {pickedSlot && !showingOwnerDetail && (
           <div style={{display: 'flex', alignItems: 'center', gap: 4, borderRadius: 10, border: `1.5px solid ${colors.textPrimary}`, padding: '5px 10px', backgroundColor: colors.surface}}>
             <Icon name="pin" size={12} color={colors.textPrimary} />
             <span style={{fontSize: 11, fontWeight: 800, color: colors.textPrimary}}>{pickedSlot.id}{pickedSlot.carNumber ? ` · ${pickedSlot.carNumber}` : ''}</span>
@@ -99,7 +157,7 @@ export function AdminMapScreen() {
               return (
                 <PressableScale
                   key={sl.id}
-                  onClick={() => setPicked(sl.id)}
+                  onClick={() => selectSlot(sl.id)}
                   style={{width: 44, height: 40, borderRadius: 10, border: `2px solid ${isSel ? colors.textPrimary : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: bg}}
                 >
                   <span style={{fontSize: 12, fontWeight: 800, color: tc}}>{sl.number}</span>
