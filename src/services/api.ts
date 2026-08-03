@@ -10,6 +10,24 @@ const client: AxiosInstance = axios.create({
   validateStatus: status => (status >= 200 && status < 300) || status === 304,
 });
 
+/** Error thrown by every API call — carries the server's machine-readable code. */
+export class ApiCallError extends Error {
+  code?: string;
+  status?: number;
+  constructor(message: string, code?: string, status?: number) {
+    super(message);
+    this.name = 'ApiCallError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
+/** True when a call failed because the job it targeted moved on (taken,
+ * vanished, or finished) before the request landed — see ValetHomeScreen for
+ * the three ways that happens. */
+export const isJobGone = (err: unknown) =>
+  err instanceof ApiCallError && err.code === 'JOB_GONE';
+
 const etagCache = new Map<string, {etag: string; data: unknown}>();
 
 function conditionalGetKey(config: {method?: string; url?: string; params?: unknown}): string | null {
@@ -61,14 +79,18 @@ client.interceptors.response.use(
     if (etag) etagCache.set(key, {etag, data: res.data});
     return res;
   },
-  (error: AxiosError<{error?: {message?: string}}>) => {
+  (error: AxiosError<{error?: {message?: string; code?: string}}>) => {
     const status = error.response?.status;
     const isLoginCall = error.config?.url?.includes('/auth/login');
     if (status === 401 && !isLoginCall) {
       onUnauthorized?.();
     }
     const message = error.response?.data?.error?.message ?? error.message ?? 'Network error';
-    return Promise.reject(new Error(message));
+    // Carry the server's machine-readable code through. Callers that only
+    // read `.message` are unaffected; the ones that need to branch on WHICH
+    // conflict happened (e.g. isJobGone) now can, without string-matching
+    // copy that gets reworded.
+    return Promise.reject(new ApiCallError(message, error.response?.data?.error?.code, status));
   },
 );
 
@@ -108,6 +130,8 @@ export const tasksApi = {
   history: (params?: {doctorId?: number; driverId?: number}) =>
     client.get('/tasks', {params: {...params, history: true}}).then(r => r.data.tasks),
   get: (id: number) => client.get(`/tasks/${id}`).then(r => r.data.task),
+  create: (data: {type: 'park' | 'retrieve'; doctorId: number; carNumber: string; slotId?: string}) =>
+    client.post('/tasks', data).then(r => r.data.task),
   // plannedDepartureMinutes: 0 | 15 | 30 | custom — when the doctor intends
   // to leave. Planning info for the valet team, never rendered back as an
   // arrival ETA. The retrieval's actual destination now comes from the
@@ -117,13 +141,74 @@ export const tasksApi = {
     client.post('/tasks/request-retrieval', data).then(r => r.data.task),
   cancelMyRetrieval: (id: number) =>
     client.patch(`/tasks/${id}/cancel-my-retrieval`).then(r => r.data.task),
+  // lat/lng (optional): the valet's own live location at the moment of
+  // assignment — for a retrieve task this becomes its destination.
+  assignDriver: (id: number, driverId: number, coords?: {lat: number; lng: number}) =>
+    client.patch(`/tasks/${id}/assign`, {driverId, lat: coords?.lat, lng: coords?.lng}).then(r => r.data.task),
+  assignRetrievalDriverForDoctor: (doctorId: number, driverId: number, coords?: {lat: number; lng: number}) =>
+    client.patch(`/tasks/doctor/${doctorId}/assign-retrieval`, {driverId, lat: coords?.lat, lng: coords?.lng}).then(r => r.data.task),
+  cancelAssignment: (id: number) =>
+    client.patch(`/tasks/${id}/cancel-assignment`).then(r => r.data.task),
+  accept: (id: number) =>
+    client.patch(`/tasks/${id}/accept`).then(r => r.data.task),
+  reject: (id: number) =>
+    client.patch(`/tasks/${id}/reject`).then(r => r.data.task),
+  keyCollected: (id: number) =>
+    client.patch(`/tasks/${id}/key-collected`).then(r => r.data.task),
+  inTransit: (id: number) =>
+    client.patch(`/tasks/${id}/in-transit`).then(r => r.data.task),
+  park: (id: number, slotId: string) =>
+    client.patch(`/tasks/${id}/park`, {slotId}).then(r => r.data.task),
+  retrieve: (id: number) =>
+    client.patch(`/tasks/${id}/retrieve`).then(r => r.data.task),
+  confirmDelivered: (id: number) =>
+    client.patch(`/tasks/${id}/confirm-delivered`).then(r => r.data.task),
+  cancel: (id: number) =>
+    client.patch(`/tasks/${id}/cancel`).then(r => r.data.task),
+  acceptRetrieval: (id: number) =>
+    client.patch(`/tasks/${id}/accept-retrieval`).then(r => r.data.task),
+  // Valet dismissed a reassign prompt ("Later") without picking a driver —
+  // tells the server this valet has seen it, so the recovery sweep doesn't
+  // keep treating the job as unattended and pulling in every other valet.
+  acknowledge: (id: number) =>
+    client.patch(`/tasks/${id}/acknowledge`).then(() => undefined),
+  // Valet: abort a park job the driver is already out on — brings the car
+  // back to the counter instead of parking it.
+  recall: (id: number) =>
+    client.patch(`/tasks/${id}/recall`).then(r => r.data.task),
+  // Driver: "car returned to the valet counter" after a recall.
+  markReturned: (id: number) =>
+    client.patch(`/tasks/${id}/returned`).then(r => r.data.task),
+  updateLocation: (id: number, lat: number, lng: number) =>
+    client.patch(`/tasks/${id}/location`, {lat, lng}).then(r => r.data.task),
+};
+
+// ── Visitors ─────────────────────────────────────────────────────────────
+export const visitorsApi = {
+  suggestPlates: (q: string) =>
+    client.get('/visitors/plate-suggest', {params: {q}}).then(r => r.data.plates as string[]),
+  list: () => client.get('/visitors').then(r => r.data.visitors),
+  create: (data: {name: string; carNumber?: string; mobile: string; vehicleType?: 'car' | 'bike'}) =>
+    client.post('/visitors', data).then(r => r.data.visitor),
+  assignDriver: (id: number, driverId: number) =>
+    client.patch(`/visitors/${id}/assign`, {driverId}).then(r => r.data.visitor),
+  cancelAssignment: (id: number) =>
+    client.patch(`/visitors/${id}/cancel-assignment`).then(r => r.data.visitor),
+  cancel: (id: number, reason: 'no_show' | 'valet_cancelled' | 'parking_failed') =>
+    client.patch(`/visitors/${id}/cancel`, {reason}).then(r => r.data.visitor),
+  assignRetrievalDriver: (id: number, driverId: number) =>
+    client.patch(`/visitors/${id}/assign-retrieval`, {driverId}).then(r => r.data.visitor),
+  confirmDelivered: (id: number) =>
+    client.patch(`/visitors/${id}/confirm-delivered`).then(r => r.data.visitor),
 };
 
 // ── Arrival notices ─────────────────────────────────────────────────────
 // Doctor/staff "I'm on my way" notice — valet-facing only, not a
-// ParkingTask. Only `create` is needed here; list/dismiss are valet-only.
+// ParkingTask.
 export const arrivalsApi = {
   create: (eta: number) => client.post('/arrivals', {eta}).then(r => r.data.arrival),
+  list: () => client.get('/arrivals').then(r => r.data.arrivals),
+  dismiss: (id: number) => client.patch(`/arrivals/${id}/dismiss`).then(r => r.data.arrival),
 };
 
 // ── Slots ────────────────────────────────────────────────────────────────
@@ -155,6 +240,8 @@ export const notificationsApi = {
 export const driversApi = {
   list: (params?: {status?: string}) =>
     client.get('/drivers', {params}).then(r => r.data.drivers),
+  setStatus: (id: number, status: 'available' | 'busy' | 'off') =>
+    client.patch(`/drivers/${id}/status`, {status}).then(r => r.data.driver),
 };
 
 // ── Admin ────────────────────────────────────────────────────────────────

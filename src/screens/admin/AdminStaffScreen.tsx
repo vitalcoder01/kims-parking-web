@@ -4,6 +4,7 @@ import {useTheme} from '../../context/ThemeContext';
 import {adminApi} from '../../services/api';
 import {Badge} from '../../components/Badge';
 import {Icon, IconName} from '../../components/Icon';
+import {spacing, radius, typography} from '../../theme';
 
 // Direct port of the mobile app's AdminStaffScreen.
 type Filter = 'all' | 'doctor' | 'staff' | 'valet' | 'driver' | 'admin';
@@ -307,58 +308,60 @@ export function AdminStaffScreen() {
   // ── Staff list ─────────────────────────────────────────────────────────
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background, padding: 16, paddingBottom: 40}}>
-      <PressableScale style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, padding: '14px 0', marginBottom: 14, backgroundColor: colors.primary}} onClick={() => setShowAdd(true)}>
-        <Icon name="user" size={18} color="#fff" />
-        <span style={{color: '#fff', fontSize: 14, fontWeight: 800}}>+ Add Staff</span>
+      <PressableScale style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radius.lg, padding: '15px 0', marginBottom: spacing.base, backgroundColor: colors.primary, boxShadow: `0 4px 10px ${colors.shadow}`}} onClick={() => setShowAdd(true)}>
+        <Icon name="plus" size={18} color={colors.textOnPrimary} />
+        <span style={{color: colors.textOnPrimary, fontSize: 14, fontWeight: 800}}>Add Staff</span>
       </PressableScale>
 
-      <div style={{display: 'flex', gap: 10, marginBottom: 12}}>
+      <div style={{display: 'flex', gap: 10, marginBottom: spacing.md}}>
         {[
           {n: String(onDuty), l: 'Drivers Ready', c: colors.success},
           {n: String(onTask), l: 'On Task', c: colors.warning},
           {n: String(offDuty), l: 'Off Duty', c: colors.textMuted},
         ].map(st => (
-          <div key={st.l} style={{flex: 1, textAlign: 'center', padding: '14px 0', borderRadius: 14, border: `1px solid ${colors.border}`, backgroundColor: colors.surface}}>
-            <div style={{fontSize: 24, fontWeight: 900, color: st.c}}>{st.n}</div>
+          <div key={st.l} style={{flex: 1, textAlign: 'center', padding: '16px 0', borderRadius: radius.lg, border: `1px solid ${colors.border}`, backgroundColor: colors.surface}}>
+            <div style={{fontSize: typography.sizes['2xl'], fontWeight: typography.weights.black, color: st.c}}>{st.n}</div>
             <div style={{fontSize: 11, fontWeight: 600, marginTop: 2, color: colors.textMuted}}>{st.l}</div>
           </div>
         ))}
       </div>
 
-      <div style={{display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 14}}>
+      <div style={{display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: spacing.md}}>
         {FILTER_TABS.map(tab => {
           const on = filter === tab.key;
           return (
             <PressableScale key={tab.key} onClick={() => setFilter(tab.key)}
-              style={{flexShrink: 0, padding: '8px 16px', borderRadius: 20, border: `1.5px solid ${on ? colors.primary : colors.border}`, backgroundColor: on ? colors.primary : colors.surface}}>
-              <span style={{fontSize: 13, fontWeight: 700, color: on ? '#fff' : colors.textSecondary}}>{tab.label}</span>
+              style={{flexShrink: 0, padding: '9px 16px', borderRadius: radius.full, border: `1.5px solid ${on ? colors.primary : colors.border}`, backgroundColor: on ? colors.primary : colors.surface}}>
+              <span style={{fontSize: 13, fontWeight: 700, color: on ? colors.textOnPrimary : colors.textSecondary}}>{tab.label}</span>
             </PressableScale>
           );
         })}
       </div>
 
       {loading ? (
-        <div style={{display: 'flex', justifyContent: 'center', marginTop: 20}}>
+        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: spacing.md, padding: '40px 0'}}>
           <span className="spinner" style={{borderColor: colors.border, borderTopColor: colors.primary}} />
+          <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Loading staff…</span>
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{borderRadius: 14, border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center'}}>
-          <span style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>No staff in this category yet</span>
+        <div style={{borderRadius: radius.lg, border: `1px dashed ${colors.border}`, padding: 32, textAlign: 'center', backgroundColor: colors.surface}}>
+          <Icon name="people" size={26} color={colors.textMuted} />
+          <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>No staff in this category yet</div>
         </div>
       ) : (
-        <div style={{borderRadius: 18, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.surface}}>
+        <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.surface, boxShadow: `0 2px 8px ${colors.shadow}`}}>
           {filtered.map((u, i) => (
             <PressableScale key={u.id} onClick={() => openEdit(u)}
-              style={{width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: 14, borderBottom: i === filtered.length - 1 ? 'none' : `1px solid ${colors.border}`}}>
-              <div style={{width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.primary + '15'}}>
+              style={{width: '100%', display: 'flex', alignItems: 'center', gap: spacing.md, padding: 14, borderBottom: i === filtered.length - 1 ? 'none' : `1px solid ${colors.border}`}}>
+              <div style={{width: 40, height: 40, borderRadius: radius.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.primary + '15'}}>
                 <span style={{fontSize: 13, fontWeight: 900, color: colors.primary}}>{u.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
               </div>
-              <div style={{flex: 1, textAlign: 'left'}}>
+              <div style={{flex: 1, textAlign: 'left', minWidth: 0}}>
                 <div style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>{u.username}</div>
                 <div style={{fontSize: 11, marginTop: 2, color: colors.textSecondary}}>{roleLabel(u.role)} · ID {u.employeeId}</div>
-                {!!(u.department || u.phone) && <div style={{fontSize: 11, marginTop: 1, color: colors.textMuted}}>{u.department || u.phone}</div>}
+                {!!(u.department || u.phone) && <div style={{fontSize: 11, marginTop: 1, color: colors.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{u.department || u.phone}</div>}
               </div>
-              <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4}}>
+              <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0}}>
                 {statusBadge(u)}
                 <Icon name="arrowRight" size={14} color={colors.textMuted} />
               </div>

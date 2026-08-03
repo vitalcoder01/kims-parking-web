@@ -4,6 +4,7 @@ import {useTheme} from '../../context/ThemeContext';
 import {adminApi} from '../../services/api';
 import {Badge} from '../../components/Badge';
 import {Icon, IconName} from '../../components/Icon';
+import {spacing, radius, typography} from '../../theme';
 
 // Direct port of the mobile app's AdminAttendanceScreen.
 interface TodayRow {
@@ -54,13 +55,16 @@ function UserCalendar({user, monthStr, colors}: {user: MonthlyUser; monthStr: st
   const cells: (number | null)[] = [...Array(firstWeekday).fill(null), ...Array.from({length: daysInMonth}, (_, i) => i + 1)];
 
   return (
-    <div style={{borderRadius: 18, border: `1px solid ${colors.border}`, padding: 14, marginBottom: 12, backgroundColor: colors.card}}>
-      <div style={{display: 'flex', alignItems: 'center', marginBottom: 10}}>
-        <div style={{flex: 1}}>
+    <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, padding: spacing.md, marginBottom: spacing.md, backgroundColor: colors.card, boxShadow: `0 2px 8px ${colors.shadow}`}}>
+      <div style={{display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md}}>
+        <div style={{width: 34, height: 34, borderRadius: radius.sm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary + '15'}}>
+          <span style={{fontSize: 12, fontWeight: 900, color: colors.primary}}>{user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+        </div>
+        <div style={{flex: 1, minWidth: 0}}>
           <div style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>{user.name}</div>
           <div style={{fontSize: 11, marginTop: 2, color: colors.textMuted}}>{roleLabel[user.role] ?? user.role} · {user.employeeId}</div>
         </div>
-        <div style={{borderRadius: 10, padding: '5px 10px', textAlign: 'center', backgroundColor: colors.success + '15'}}>
+        <div style={{borderRadius: radius.sm, padding: '5px 10px', textAlign: 'center', backgroundColor: colors.successLight}}>
           <div style={{fontSize: 15, fontWeight: 900, color: colors.success}}>{presentCount}</div>
           <div style={{fontSize: 8, fontWeight: 700, textTransform: 'uppercase', color: colors.textMuted}}>days</div>
         </div>
@@ -127,30 +131,34 @@ export function AdminAttendanceScreen() {
   const filteredUsers = category === 'all' ? monthUsers : monthUsers.filter(u => u.role === category);
   const visibleCategories = CATEGORIES.filter(c => c.key === 'all' || categoryCounts[c.key] > 0);
 
-  const sec: React.CSSProperties = {fontSize: 10, fontWeight: 700, letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: 8, color: colors.textMuted};
+  const sec: React.CSSProperties = {fontSize: typography.sizes.xs, fontWeight: typography.weights.bold, letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: spacing.sm, color: colors.textMuted};
 
   if (loading) {
     return (
-      <div style={{display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: '60vh', backgroundColor: colors.background}}>
+      <div style={{display: 'flex', flexDirection: 'column', flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, minHeight: '60vh', backgroundColor: colors.background}}>
         <span className="spinner" style={{borderColor: colors.border, borderTopColor: colors.primary}} />
+        <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Loading attendance…</span>
       </div>
     );
   }
 
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background, padding: 16, paddingBottom: 40}}>
-      <div style={{borderRadius: 16, border: `1px solid ${colors.border}`, textAlign: 'center', padding: '18px 0', marginBottom: 16, backgroundColor: colors.card}}>
-        <div style={{fontSize: 32, fontWeight: 900, color: colors.success}}>{present}</div>
+      <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, textAlign: 'center', padding: '22px 0', marginBottom: spacing.base, backgroundColor: colors.card, boxShadow: `0 2px 8px ${colors.shadow}`}}>
+        <div style={{width: 44, height: 44, borderRadius: radius.full, margin: '0 auto', marginBottom: spacing.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.successLight}}>
+          <Icon name="checkBold" size={20} color={colors.success} />
+        </div>
+        <div style={{fontSize: typography.sizes['4xl'], fontWeight: typography.weights.black, color: colors.success, lineHeight: 1.1}}>{present}</div>
         <div style={{fontSize: 11, fontWeight: 700, marginTop: 4, color: colors.textMuted}}>Present right now</div>
       </div>
 
-      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 14}}>
-        <PressableScale style={{width: 34, height: 34, borderRadius: 10, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card}} onClick={() => setMonthStr(m => shiftMonth(m, -1))}>
+      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: spacing.base}}>
+        <PressableScale style={{width: 34, height: 34, borderRadius: radius.sm, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card}} onClick={() => setMonthStr(m => shiftMonth(m, -1))}>
           <span style={{fontSize: 18, fontWeight: 900, color: colors.textPrimary}}>‹</span>
         </PressableScale>
         <span style={{fontSize: 15, fontWeight: 800, minWidth: 140, textAlign: 'center', color: colors.textPrimary}}>{monthLabel(monthStr)}</span>
         <PressableScale
-          style={{width: 34, height: 34, borderRadius: 10, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, opacity: isCurrentMonth ? 0.35 : 1}}
+          style={{width: 34, height: 34, borderRadius: radius.sm, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, opacity: isCurrentMonth ? 0.35 : 1}}
           onClick={() => !isCurrentMonth && setMonthStr(m => shiftMonth(m, 1))} disabled={isCurrentMonth}>
           <span style={{fontSize: 18, fontWeight: 900, color: colors.textPrimary}}>›</span>
         </PressableScale>
@@ -162,11 +170,11 @@ export function AdminAttendanceScreen() {
           const on = category === c.key;
           return (
             <PressableScale key={c.key} onClick={() => setCategory(c.key)}
-              style={{flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, borderRadius: 20, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '9px 14px', backgroundColor: on ? colors.primary : colors.card}}>
-              <Icon name={c.icon} size={14} color={on ? '#fff' : colors.textPrimary} />
-              <span style={{fontSize: 12, fontWeight: 800, color: on ? '#fff' : colors.textPrimary}}>{c.label}</span>
-              <span style={{borderRadius: 10, padding: '1px 6px', minWidth: 18, textAlign: 'center', backgroundColor: on ? 'rgba(255,255,255,0.25)' : colors.cardAlt}}>
-                <span style={{fontSize: 10, fontWeight: 800, color: on ? '#fff' : colors.textMuted}}>{categoryCounts[c.key] ?? 0}</span>
+              style={{flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, borderRadius: radius.full, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '9px 14px', backgroundColor: on ? colors.primary : colors.card}}>
+              <Icon name={c.icon} size={14} color={on ? colors.textOnPrimary : colors.textPrimary} />
+              <span style={{fontSize: 12, fontWeight: 800, color: on ? colors.textOnPrimary : colors.textPrimary}}>{c.label}</span>
+              <span style={{borderRadius: 10, padding: '1px 6px', minWidth: 18, textAlign: 'center', backgroundColor: on ? colors.textOnPrimary + '40' : colors.cardAlt}}>
+                <span style={{fontSize: 10, fontWeight: 800, color: on ? colors.textOnPrimary : colors.textMuted}}>{categoryCounts[c.key] ?? 0}</span>
               </span>
             </PressableScale>
           );
@@ -175,21 +183,26 @@ export function AdminAttendanceScreen() {
 
       <div style={{...sec, marginTop: 4}}>PER-USER CALENDAR</div>
       {filteredUsers.length === 0 ? (
-        <div style={{borderRadius: 14, border: `1px dashed ${colors.border}`, padding: 24, textAlign: 'center', marginBottom: 8}}>
-          <span style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>No one in this category yet</span>
+        <div style={{borderRadius: radius.lg, border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center', marginBottom: spacing.sm}}>
+          <Icon name="calendar" size={22} color={colors.textMuted} />
+          <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>No one in this category yet</div>
         </div>
       ) : filteredUsers.map(u => <UserCalendar key={u.userId} user={u} monthStr={monthStr} colors={colors} />)}
 
-      <div style={{...sec, marginTop: 8}}>TODAY — MARKED AUTOMATICALLY</div>
+      <div style={{...sec, marginTop: spacing.sm}}>TODAY — MARKED AUTOMATICALLY</div>
       {todayRows.length === 0 ? (
-        <div style={{borderRadius: 14, border: `1px dashed ${colors.border}`, padding: 24, textAlign: 'center'}}>
-          <span style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>Nobody has been marked present yet today</span>
+        <div style={{borderRadius: radius.lg, border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center'}}>
+          <Icon name="clock" size={22} color={colors.textMuted} />
+          <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>Nobody has been marked present yet today</div>
         </div>
       ) : (
-        <div style={{borderRadius: 18, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card}}>
+        <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card, boxShadow: `0 2px 8px ${colors.shadow}`}}>
           {todayRows.map((r, i) => (
-            <div key={r.id} style={{display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: i === todayRows.length - 1 ? 'none' : `1px solid ${colors.divider}`}}>
-              <div style={{flex: 1}}>
+            <div key={r.id} style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '13px 14px', borderBottom: i === todayRows.length - 1 ? 'none' : `1px solid ${colors.divider}`}}>
+              <div style={{width: 34, height: 34, borderRadius: radius.sm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: r.checkOut ? colors.cardAlt : colors.successLight}}>
+                <span style={{fontSize: 12, fontWeight: 900, color: r.checkOut ? colors.textSecondary : colors.success}}>{r.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+              </div>
+              <div style={{flex: 1, minWidth: 0}}>
                 <div style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>{r.name}</div>
                 <div style={{fontSize: 11, marginTop: 2, color: colors.textMuted}}>{roleLabel[r.role] ?? r.role} · {r.employeeId} · In {formatTime(r.checkIn)}</div>
               </div>

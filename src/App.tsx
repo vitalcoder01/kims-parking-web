@@ -18,6 +18,11 @@ import {AdminDashboardScreen} from './screens/admin/AdminDashboardScreen';
 import {AdminStaffScreen} from './screens/admin/AdminStaffScreen';
 import {AdminAttendanceScreen} from './screens/admin/AdminAttendanceScreen';
 import {AdminMapScreen} from './screens/admin/AdminMapScreen';
+import {ValetHomeScreen} from './screens/valet/ValetHomeScreen';
+import {ValetRecordsScreen} from './screens/valet/ValetRecordsScreen';
+import {ValetMapScreen} from './screens/valet/ValetMapScreen';
+import {DriverDashboardScreen} from './screens/driver/DriverDashboardScreen';
+import {DriverJobsScreen} from './screens/driver/DriverJobsScreen';
 
 // Web port of the app's AppNavigator: bottom tabs per role.
 // Doctor/staff: Home / Setup / Settings — matching the mobile app's current
@@ -26,8 +31,14 @@ import {AdminMapScreen} from './screens/admin/AdminMapScreen';
 // "History" are reachable only from links on Home, not bottom tabs.
 // Admin: Dashboard / Staff / Attendance / Map / Settings — matching the
 // mobile app's AdminNavigator.
+// Valet: Queue / Records / Map / Settings — matching mobile's ValetNavigator.
+// Driver: Dashboard / My Jobs / Settings — matching mobile's DriverNavigator.
 
-type TabKey = 'Home' | 'Card' | 'History' | 'Setup' | 'Settings' | 'Dashboard' | 'Staff' | 'Attendance' | 'Map';
+type TabKey =
+  | 'Home' | 'Card' | 'History' | 'Setup' | 'Settings'
+  | 'Dashboard' | 'Staff' | 'Attendance' | 'Map'
+  | 'Queue' | 'Records' | 'ValetMap'
+  | 'DriverDashboard' | 'Jobs';
 
 interface TabDef {
   key: TabKey;
@@ -46,6 +57,21 @@ function tabsForRole(role: string | undefined): TabDef[] {
       {key: 'Settings', label: 'Settings', icon: 'settings', headerTitle: 'Settings'},
     ];
   }
+  if (role === 'valet') {
+    return [
+      {key: 'Queue', label: 'Queue', icon: 'key', headerTitle: null},
+      {key: 'Records', label: 'Records', icon: 'clipboard', headerTitle: null},
+      {key: 'ValetMap', label: 'Map', icon: 'map', headerTitle: null},
+      {key: 'Settings', label: 'Settings', icon: 'settings', headerTitle: 'Settings'},
+    ];
+  }
+  if (role === 'driver') {
+    return [
+      {key: 'DriverDashboard', label: 'Dashboard', icon: 'dashboard', headerTitle: null},
+      {key: 'Jobs', label: 'My Jobs', icon: 'tasks', headerTitle: null},
+      {key: 'Settings', label: 'Settings', icon: 'settings', headerTitle: 'Settings'},
+    ];
+  }
   const home: TabDef = {
     key: 'Home', label: 'Home', icon: 'home',
     headerTitle: role === 'staff' ? 'KIMS Staff' : 'KIMS Doctor',
@@ -58,7 +84,12 @@ function tabsForRole(role: string | undefined): TabDef[] {
 function RoleRouter() {
   const {colors} = useTheme();
   const {user} = useAuth();
-  const [tab, setTab] = useState<TabKey>(() => (user?.role === 'admin' ? 'Dashboard' : 'Home'));
+  const [tab, setTab] = useState<TabKey>(() => {
+    if (user?.role === 'admin') return 'Dashboard';
+    if (user?.role === 'valet') return 'Queue';
+    if (user?.role === 'driver') return 'DriverDashboard';
+    return 'Home';
+  });
 
   const tabs = tabsForRole(user?.role);
   const activeTab = tabs.find(t => t.key === tab);
@@ -76,6 +107,11 @@ function RoleRouter() {
     : tab === 'Staff'       ? <AdminStaffScreen />
     : tab === 'Attendance'  ? <AdminAttendanceScreen />
     : tab === 'Map'         ? <AdminMapScreen />
+    : tab === 'Queue'       ? <ValetHomeScreen />
+    : tab === 'Records'     ? <ValetRecordsScreen />
+    : tab === 'ValetMap'    ? <ValetMapScreen />
+    : tab === 'DriverDashboard' ? <DriverDashboardScreen onOpenJobs={() => setTab('Jobs')} />
+    : tab === 'Jobs'        ? <DriverJobsScreen />
     : <SettingsScreen />;
 
   return (

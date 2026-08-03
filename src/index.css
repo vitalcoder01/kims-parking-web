@@ -158,6 +158,17 @@ input:focus {
   outline-offset: 2px;
 }
 
+/* Skeleton placeholder pulse — port of the app's SkeletonBlock Animated loop.
+   Blocks shaped like the content they stand in for, so nothing shifts when
+   real data lands. */
+@keyframes kims-skel-pulse {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 1; }
+}
+.skel-pulse {
+  animation: kims-skel-pulse 1.4s ease-in-out infinite;
+}
+
 /* Fade-in for screen changes — a light, professional transition. */
 @keyframes kims-fade-in {
   from { opacity: 0; transform: translateY(4px); }

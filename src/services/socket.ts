@@ -35,3 +35,10 @@ export function disconnectSocket(): void {
 export function getSocket(): Socket | null {
   return socket;
 }
+
+// Driver's browser-Geolocation fix, forwarded straight to the backend the
+// same way the mobile app's GPS watcher does — the server fans it out as
+// driver:location to every valet/admin map.
+export function emitDriverLocation(lat: number, lng: number): void {
+  socket?.emit('driver:location', {lat, lng});
+}
