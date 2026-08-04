@@ -59,8 +59,8 @@ function tabsForRole(role: string | undefined): TabDef[] {
   }
   if (role === 'valet') {
     return [
-      {key: 'Queue', label: 'Queue', icon: 'key', headerTitle: null},
-      {key: 'Records', label: 'Records', icon: 'clipboard', headerTitle: null},
+      {key: 'Queue', label: 'Dashboard', icon: 'key', headerTitle: null},
+      {key: 'Records', label: 'Jobs', icon: 'clipboard', headerTitle: null},
       {key: 'ValetMap', label: 'Map', icon: 'map', headerTitle: null},
       {key: 'Settings', label: 'Settings', icon: 'settings', headerTitle: 'Settings'},
     ];
