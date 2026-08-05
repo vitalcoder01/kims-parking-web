@@ -64,6 +64,8 @@ export function AdminStaffScreen() {
   const [cardCode, setCardCode] = useState('');
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const loadUsers = useCallback(async () => {
     try {
@@ -149,26 +151,32 @@ export function AdminStaffScreen() {
   };
 
   const handleResetPassword = async () => {
-    if (!editingUser) return;
+    if (!editingUser || resettingPassword) return;
     const newPassword = genPassword();
     if (!window.confirm(`${editingUser.name}'s password will be changed to:\n\n${newPassword}\n\nShare this with them directly.\n\nReset now?`)) return;
+    setResettingPassword(true);
     try {
       await adminApi.resetPassword(editingUser.id, newPassword);
       window.alert(`New password: ${newPassword}`);
     } catch (err: any) {
       window.alert(err.message || 'Something went wrong');
+    } finally {
+      setResettingPassword(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!editingUser) return;
+    if (!editingUser || deleting) return;
     if (!window.confirm(`This permanently removes ${editingUser.name}'s login (${editingUser.username}). This can't be undone.\n\nDelete?`)) return;
+    setDeleting(true);
     try {
       await adminApi.deleteUser(editingUser.id);
       closeForm();
       loadUsers();
     } catch (err: any) {
       window.alert(err.message || 'Something went wrong');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -292,11 +300,21 @@ export function AdminStaffScreen() {
 
           {isEdit && (
             <>
-              <PressableScale style={{width: '100%', borderRadius: 14, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1px solid ${colors.warning}50`, backgroundColor: colors.warning + '10'}} onClick={handleResetPassword}>
-                <span style={{fontSize: 14, fontWeight: 800, color: colors.warning}}>Reset Password</span>
+              <PressableScale
+                style={{width: '100%', borderRadius: 14, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1px solid ${colors.warning}50`, backgroundColor: colors.warning + '10', opacity: resettingPassword ? 0.6 : 1}}
+                disabled={resettingPassword || deleting}
+                onClick={handleResetPassword}>
+                {resettingPassword
+                  ? <span className="spinner" style={{width: 16, height: 16, borderColor: colors.warning + '40', borderTopColor: colors.warning}} />
+                  : <span style={{fontSize: 14, fontWeight: 800, color: colors.warning}}>Reset Password</span>}
               </PressableScale>
-              <PressableScale style={{width: '100%', borderRadius: 14, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1px solid ${colors.error}50`, backgroundColor: colors.error + '10'}} onClick={handleDelete}>
-                <span style={{fontSize: 14, fontWeight: 800, color: colors.error}}>Delete Account</span>
+              <PressableScale
+                style={{width: '100%', borderRadius: 14, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1px solid ${colors.error}50`, backgroundColor: colors.error + '10', opacity: deleting ? 0.6 : 1}}
+                disabled={deleting || resettingPassword}
+                onClick={handleDelete}>
+                {deleting
+                  ? <span className="spinner" style={{width: 16, height: 16, borderColor: colors.error + '40', borderTopColor: colors.error}} />
+                  : <span style={{fontSize: 14, fontWeight: 800, color: colors.error}}>Delete Account</span>}
               </PressableScale>
             </>
           )}

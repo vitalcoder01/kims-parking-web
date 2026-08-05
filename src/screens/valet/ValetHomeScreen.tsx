@@ -124,6 +124,10 @@ export function ValetHomeScreen() {
   const [collectingKeyTaskId, setCollectingKeyTaskId] = useState<number | null>(null);
   const [arrivingId, setArrivingId] = useState<number | null>(null);
   const [assigningToId, setAssigningToId] = useState<number | null>(null);
+  // Same guard as arrivingId, for the sibling "No-show" action — it also
+  // calls the backend (not just a local list filter), so a fast double-tap
+  // could otherwise fire dismiss twice for the same notice.
+  const [dismissingArrivalId, setDismissingArrivalId] = useState<number | null>(null);
   // Read from async callbacks that would otherwise close over stale values.
   const assigningDriverIdRef = useRef<number | null>(null);
   assigningDriverIdRef.current = assigningDriverId;
@@ -484,6 +488,18 @@ export function ValetHomeScreen() {
     }
   };
 
+  const handleDismissArrival = async (id: number) => {
+    if (dismissingArrivalId != null) return;
+    setDismissingArrivalId(id);
+    try {
+      await dismissArrivalNotice(id);
+    } catch (err: any) {
+      window.alert(err.message || 'Could not dismiss');
+    } finally {
+      setDismissingArrivalId(null);
+    }
+  };
+
   const handleCancelTask = (taskId: number) => {
     if (!window.confirm('Cancel This Job?\n\nUse this if it’s stuck (e.g. never got a driver) and needs to be cleared.')) return;
     cancelTask(taskId).catch(err => window.alert(err.message || 'Could not cancel'));
@@ -838,9 +854,13 @@ export function ValetHomeScreen() {
                     {arrivingId === a.id ? 'Please wait…' : "They've arrived"}
                   </span>
                 </PressableScale>
-                <PressableScale style={{...taskActionBtnBase, width: 'auto', border: `1px solid ${colors.border}`, backgroundColor: colors.cardAlt, padding: '0 14px'}}
-                  onClick={() => dismissArrivalNotice(a.id)}>
-                  <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textSecondary}}>No-show</span>
+                <PressableScale
+                  style={{...taskActionBtnBase, width: 'auto', border: `1px solid ${colors.border}`, backgroundColor: colors.cardAlt, padding: '0 14px', opacity: dismissingArrivalId === a.id ? 0.6 : 1}}
+                  disabled={dismissingArrivalId === a.id}
+                  onClick={() => handleDismissArrival(a.id)}>
+                  {dismissingArrivalId === a.id
+                    ? <span className="spinner" style={{width: 15, height: 15}} />
+                    : <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textSecondary}}>No-show</span>}
                 </PressableScale>
               </div>
             </div>

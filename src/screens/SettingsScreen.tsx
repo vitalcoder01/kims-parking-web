@@ -29,6 +29,8 @@ export function SettingsScreen() {
   // opening a second field cleanly replaces the first instead of stacking.
   const [editMode, setEditMode] = React.useState<EditProfileMode | null>(null);
   const [flashMessage, setFlashMessage] = React.useState<string | null>(null);
+  const [installing, setInstalling] = React.useState(false);
+  const [loggingOut, setLoggingOut] = React.useState(false);
   React.useEffect(() => {
     if (!flashMessage) return;
     const t = window.setTimeout(() => setFlashMessage(null), 3000);
@@ -36,8 +38,25 @@ export function SettingsScreen() {
   }, [flashMessage]);
 
   const handleInstall = async () => {
-    const shown = await promptInstall();
-    if (!shown) setShowInstallHelp(true);
+    if (installing) return;
+    setInstalling(true);
+    try {
+      const shown = await promptInstall();
+      if (!shown) setShowInstallHelp(true);
+    } finally {
+      setInstalling(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    if (!window.confirm('Are you sure you want to logout?')) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+    } catch {
+      setLoggingOut(false);
+    }
   };
   const [notifShift,   setNotifShift]   = React.useState(true);
   const [notifUpdates, setNotifUpdates] = React.useState(false);
@@ -200,12 +219,13 @@ export function SettingsScreen() {
               ) : (
                 <PressableScale
                   onClick={handleInstall}
-                  style={{display: 'flex', alignItems: 'center', gap: spacing.md, width: '100%'}}>
+                  disabled={installing}
+                  style={{display: 'flex', alignItems: 'center', gap: spacing.md, width: '100%', opacity: installing ? 0.6 : 1}}>
                   <span style={{
                     width: 36, height: 36, borderRadius: 12, backgroundColor: colors.cardAlt,
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                   }}>
-                    <Icon name="phone" size={18} color={colors.textPrimary} />
+                    {installing ? <span className="spinner" style={{width: 16, height: 16}} /> : <Icon name="phone" size={18} color={colors.textPrimary} />}
                   </span>
                   <span style={{textAlign: 'left', flex: 1}}>
                     <span style={{display: 'block', fontSize: typography.sizes.base, fontWeight: typography.weights.bold, color: colors.textPrimary}}>

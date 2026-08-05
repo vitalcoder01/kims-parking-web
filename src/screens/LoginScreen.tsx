@@ -64,6 +64,7 @@ export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
   };
 
   const doLogin = useCallback(async (u: string, p: string) => {
+    if (loading) return;
     setError('');
     if (!u.trim() || !p) {
       setError('Username and password are required');
@@ -83,7 +84,7 @@ export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
     } finally {
       setLoading(false);
     }
-  }, [login]);
+  }, [login, loading]);
 
   const handleLogin = () => doLogin(username, password);
 
@@ -153,13 +154,15 @@ export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
                     key={acc.username}
                     className="pressable"
                     role="button"
-                    tabIndex={0}
-                    onClick={() => handleQuickLogin(acc)}
+                    tabIndex={loading ? -1 : 0}
+                    aria-disabled={loading}
+                    onClick={() => { if (!loading) handleQuickLogin(acc); }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
                       border: `1px solid ${colors.border}`, borderRadius: 14,
-                      padding: '8px 22px 8px 10px', position: 'relative', cursor: 'pointer',
+                      padding: '8px 22px 8px 10px', position: 'relative', cursor: loading ? 'default' : 'pointer',
                       backgroundColor: isDark ? colors.card : '#F8FAFF',
+                      opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : 'auto',
                     }}>
                     <span style={{
                       width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary,
