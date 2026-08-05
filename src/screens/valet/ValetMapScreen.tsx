@@ -1,9 +1,7 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {PressableScale} from '../../components/PressableScale';
+import React, {useEffect, useMemo, useRef} from 'react';
 import {useTheme} from '../../context/ThemeContext';
 import {useAppState} from '../../context/AppStateContext';
 import {Icon} from '../../components/Icon';
-import {AdminMapScreen} from '../admin/AdminMapScreen';
 
 // Same Leaflet multi-driver map the mobile app renders in a WebView (see
 // leafletMapHtml.ts) — here it lives in an iframe (srcDoc) and receives
@@ -91,13 +89,13 @@ function buildMultiMapHTML(isDark: boolean) {
 </html>`;
 }
 
-// Direct port of the mobile app's ValetMapScreen — a top tab switcher
-// between the slot occupancy grid (AdminMapScreen, reused as-is) and a
-// live multi-driver GPS map.
+// Direct port of the mobile app's ValetMapScreen. Used to also carry the
+// slot occupancy grid as a "Parking Layout" sub-tab; that moved into the
+// Jobs page (alongside Visitors/Staff, as another kind of record) so this
+// screen is GPS-only now.
 export function ValetMapScreen() {
   const {colors, isDark} = useTheme();
   const {drivers, tasks, driverLocations, onlineDriverIds} = useAppState();
-  const [tab, setTab] = useState<'layout' | 'live'>('layout');
   const frameRef = useRef<HTMLIFrameElement>(null);
   const fittedOnce = useRef(false);
 
@@ -137,100 +135,74 @@ export function ValetMapScreen() {
   // delta — the iframe keeps its own Leaflet map instance alive and just
   // repositions/adds/removes markers, it never reloads the page.
   useEffect(() => {
-    if (tab !== 'live') return;
     sendMarkers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveDrivers, tab]);
+  }, [liveDrivers]);
 
   const busyDrivers = drivers.filter(d => d.status === 'busy');
 
   return (
     <div style={{flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: colors.background, minHeight: 0}}>
-      {/* Top tab switcher */}
-      <div style={{display: 'flex', borderBottom: `1px solid ${colors.border}`, backgroundColor: colors.surface}}>
-        <PressableScale
-          onClick={() => setTab('layout')}
-          style={{flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 0', backgroundColor: 'transparent', borderRadius: 0}}
-        >
-          <span style={{fontSize: 15, fontWeight: 700, color: tab === 'layout' ? colors.textPrimary : colors.textMuted}}>Parking Layout</span>
-          {tab === 'layout' && <span style={{position: 'absolute', bottom: 0, left: 16, right: 16, height: 2, borderRadius: 1, backgroundColor: colors.textPrimary}} />}
-        </PressableScale>
-        <PressableScale
-          onClick={() => setTab('live')}
-          style={{flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 0', backgroundColor: 'transparent', borderRadius: 0}}
-        >
-          <span style={{display: 'flex', alignItems: 'center', gap: 6}}>
-            <span style={{fontSize: 15, fontWeight: 700, color: tab === 'live' ? colors.textPrimary : colors.textMuted}}>Live Map</span>
-            {liveDrivers.length > 0 && <span style={{width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success}} />}
-          </span>
-          {tab === 'live' && <span style={{position: 'absolute', bottom: 0, left: 16, right: 16, height: 2, borderRadius: 1, backgroundColor: colors.textPrimary}} />}
-        </PressableScale>
-      </div>
+      <div className="screen-scroll" style={{padding: 16, paddingBottom: 40}}>
+        {/* Leaflet + CARTO tiles card — markers driven purely by socket
+            deltas via postMessage (never a page reload) */}
+        <div style={{
+          position: 'relative', height: 320, borderRadius: 20, border: `2px solid ${colors.textPrimary}`, overflow: 'hidden', marginBottom: 20,
+          boxShadow: '0 6px 12px rgba(0,0,0,0.12)',
+        }}>
+          <iframe
+            ref={frameRef}
+            title="Live driver map"
+            srcDoc={mapHTML}
+            // Self-healing resync: whenever the document (re)loads, re-send
+            // whatever markers are already known — closes the race where a
+            // postMessage sent before the iframe's script has registered
+            // its listener would otherwise be silently dropped.
+            onLoad={sendMarkers}
+            style={{border: 'none', width: '100%', height: '100%'}}
+          />
+          <div style={{position: 'absolute', top: 12, right: 12, display: 'flex', alignItems: 'center', gap: 5, borderRadius: 20, padding: '5px 10px', backgroundColor: colors.error}}>
+            <span style={{width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff'}} />
+            <span style={{color: '#fff', fontSize: 10, fontWeight: 900, letterSpacing: 1}}>LIVE</span>
+          </div>
+        </div>
 
-      {tab === 'layout' ? (
-        <AdminMapScreen />
-      ) : (
-        <div className="screen-scroll" style={{padding: 16, paddingBottom: 40}}>
-          {/* Leaflet + CARTO tiles card — markers driven purely by socket
-              deltas via postMessage (never a page reload) */}
-          <div style={{
-            position: 'relative', height: 320, borderRadius: 20, border: `2px solid ${colors.textPrimary}`, overflow: 'hidden', marginBottom: 20,
-            boxShadow: '0 6px 12px rgba(0,0,0,0.12)',
-          }}>
-            <iframe
-              ref={frameRef}
-              title="Live driver map"
-              srcDoc={mapHTML}
-              // Self-healing resync: whenever the document (re)loads, re-send
-              // whatever markers are already known — closes the race where a
-              // postMessage sent before the iframe's script has registered
-              // its listener would otherwise be silently dropped.
-              onLoad={sendMarkers}
-              style={{border: 'none', width: '100%', height: '100%'}}
-            />
-            <div style={{position: 'absolute', top: 12, right: 12, display: 'flex', alignItems: 'center', gap: 5, borderRadius: 20, padding: '5px 10px', backgroundColor: colors.error}}>
-              <span style={{width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff'}} />
-              <span style={{color: '#fff', fontSize: 10, fontWeight: 900, letterSpacing: 1}}>LIVE</span>
+        {/* Drivers currently reachable */}
+        <div style={{fontSize: 15, fontWeight: 800, marginBottom: 12, color: colors.textPrimary}}>On the map ({liveDrivers.length})</div>
+        {liveDrivers.length === 0 ? (
+          <div style={{borderRadius: 14, border: `1px dashed ${colors.border}`, padding: 24, textAlign: 'center'}}>
+            <Icon name="navigate" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
+            <div style={{fontSize: 13, fontWeight: 600, textAlign: 'center', lineHeight: '19px', color: colors.textMuted}}>
+              No drivers reachable right now.<br />They appear the moment their app connects and shares GPS.
             </div>
           </div>
+        ) : liveDrivers.map(d => (
+          <div key={d.id} style={{display: 'flex', alignItems: 'center', gap: 12, borderRadius: 16, border: `1px solid ${colors.border}`, padding: 14, marginBottom: 10, backgroundColor: colors.surface}}>
+            <div style={{width: 40, height: 40, borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary}}>
+              <span style={{fontSize: 16, fontWeight: 800, color: colors.textOnPrimary}}>{d.name[0]}</span>
+            </div>
+            <div style={{flex: 1, minWidth: 0}}>
+              <div style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>{d.name}</div>
+              <div style={{fontSize: 12, fontWeight: 600, marginTop: 2, color: colors.textSecondary}}>{d.job}</div>
+            </div>
+            <span style={{width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success}} />
+          </div>
+        ))}
 
-          {/* Drivers currently reachable */}
-          <div style={{fontSize: 15, fontWeight: 800, marginBottom: 12, color: colors.textPrimary}}>On the map ({liveDrivers.length})</div>
-          {liveDrivers.length === 0 ? (
-            <div style={{borderRadius: 14, border: `1px dashed ${colors.border}`, padding: 24, textAlign: 'center'}}>
-              <Icon name="navigate" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
-              <div style={{fontSize: 13, fontWeight: 600, textAlign: 'center', lineHeight: '19px', color: colors.textMuted}}>
-                No drivers reachable right now.<br />They appear the moment their app connects and shares GPS.
-              </div>
+        {/* Busy but not on the map — assigned yet no GPS/socket reaching us */}
+        {busyDrivers.filter(d => !liveDrivers.some(ld => ld.id === d.id)).map(d => (
+          <div key={d.id} style={{display: 'flex', alignItems: 'center', gap: 12, borderRadius: 16, border: `1px solid ${colors.border}`, padding: 14, marginBottom: 10, backgroundColor: colors.surface}}>
+            <div style={{width: 40, height: 40, borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt}}>
+              <span style={{fontSize: 16, fontWeight: 800, color: colors.textSecondary}}>{d.name[0]}</span>
             </div>
-          ) : liveDrivers.map(d => (
-            <div key={d.id} style={{display: 'flex', alignItems: 'center', gap: 12, borderRadius: 16, border: `1px solid ${colors.border}`, padding: 14, marginBottom: 10, backgroundColor: colors.surface}}>
-              <div style={{width: 40, height: 40, borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary}}>
-                <span style={{fontSize: 16, fontWeight: 800, color: colors.textOnPrimary}}>{d.name[0]}</span>
-              </div>
-              <div style={{flex: 1, minWidth: 0}}>
-                <div style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>{d.name}</div>
-                <div style={{fontSize: 12, fontWeight: 600, marginTop: 2, color: colors.textSecondary}}>{d.job}</div>
-              </div>
-              <span style={{width: 8, height: 8, borderRadius: 4, backgroundColor: colors.success}} />
+            <div style={{flex: 1, minWidth: 0}}>
+              <div style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>{d.name}</div>
+              <div style={{fontSize: 12, fontWeight: 600, marginTop: 2, color: colors.textMuted}}>On task · waiting for GPS</div>
             </div>
-          ))}
-
-          {/* Busy but not on the map — assigned yet no GPS/socket reaching us */}
-          {busyDrivers.filter(d => !liveDrivers.some(ld => ld.id === d.id)).map(d => (
-            <div key={d.id} style={{display: 'flex', alignItems: 'center', gap: 12, borderRadius: 16, border: `1px solid ${colors.border}`, padding: 14, marginBottom: 10, backgroundColor: colors.surface}}>
-              <div style={{width: 40, height: 40, borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt}}>
-                <span style={{fontSize: 16, fontWeight: 800, color: colors.textSecondary}}>{d.name[0]}</span>
-              </div>
-              <div style={{flex: 1, minWidth: 0}}>
-                <div style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>{d.name}</div>
-                <div style={{fontSize: 12, fontWeight: 600, marginTop: 2, color: colors.textMuted}}>On task · waiting for GPS</div>
-              </div>
-              <span style={{width: 8, height: 8, borderRadius: 4, backgroundColor: colors.warning}} />
-            </div>
-          ))}
-        </div>
-      )}
+            <span style={{width: 8, height: 8, borderRadius: 4, backgroundColor: colors.warning}} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

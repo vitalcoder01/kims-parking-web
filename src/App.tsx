@@ -31,7 +31,9 @@ import {DriverJobsScreen} from './screens/driver/DriverJobsScreen';
 // "History" are reachable only from links on Home, not bottom tabs.
 // Admin: Dashboard / Staff / Attendance / Map / Settings — matching the
 // mobile app's AdminNavigator.
-// Valet: Queue / Records / Map / Settings — matching mobile's ValetNavigator.
+// Valet: Dashboard / Jobs / Map / Settings — matching mobile's ValetNavigator
+// (internal route keys stayed Queue/Records for continuity; only the
+// tabBarLabel changed).
 // Driver: Dashboard / My Jobs / Settings — matching mobile's DriverNavigator.
 
 type TabKey =
@@ -59,8 +61,8 @@ function tabsForRole(role: string | undefined): TabDef[] {
   }
   if (role === 'valet') {
     return [
-      {key: 'Queue', label: 'Queue', icon: 'key', headerTitle: null},
-      {key: 'Records', label: 'Records', icon: 'clipboard', headerTitle: null},
+      {key: 'Queue', label: 'Dashboard', icon: 'key', headerTitle: null},
+      {key: 'Records', label: 'Jobs', icon: 'clipboard', headerTitle: null},
       {key: 'ValetMap', label: 'Map', icon: 'map', headerTitle: null},
       {key: 'Settings', label: 'Settings', icon: 'settings', headerTitle: 'Settings'},
     ];

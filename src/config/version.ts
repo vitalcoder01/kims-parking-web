@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 11;
-export const APP_VERSION_NAME = '1.7.0';
+export const APP_VERSION_CODE = 12;
+export const APP_VERSION_NAME = '1.8.0';
 export const RELEASE_NOTES =
-  'Valet and driver can now sign in on the web portal — full dispatch queue, records, live map, and driver job flows. Plus a visual refresh of the Admin dashboard, staff, attendance, and map screens.';
+  'Valet Dashboard reorganized into Driver assign pending / Driver acceptance pending / In progress / Not completed, plus a Parked Vehicles list. Records renamed to Jobs, with a new Map Layout tab and stage filters (At hospital / Transit → parking lot / Parked / Transit → hospital). Creating a ticket and assigning a driver are now separate steps.';
