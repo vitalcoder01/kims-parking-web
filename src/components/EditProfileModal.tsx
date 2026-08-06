@@ -5,6 +5,7 @@ import {PressableScale} from './PressableScale';
 import {Icon, IconName} from './Icon';
 import {typography, spacing, radius} from '../theme';
 import {usersApi} from '../services/api';
+import {useBackStep} from '../hooks/useBackStep';
 
 export type EditProfileMode = 'name' | 'username' | 'password';
 
@@ -104,6 +105,9 @@ export function EditProfileModal({mode, onClose, onSuccess}: Props) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [mode, saving, onClose]);
+
+  // Back gesture should close this like Esc/the X button does.
+  useBackStep(!!mode, onClose);
 
   if (!mode) return null;
 

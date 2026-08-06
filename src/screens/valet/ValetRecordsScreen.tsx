@@ -5,6 +5,7 @@ import {Icon} from '../../components/Icon';
 import {PressableScale} from '../../components/PressableScale';
 import {HScrollHint} from '../../components/HScrollHint';
 import {useDialog} from '../../components/AppDialog';
+import {useBackStep} from '../../hooks/useBackStep';
 import {useValetActions} from './useValetActions';
 import {AdminMapScreen} from '../admin/AdminMapScreen';
 
@@ -122,6 +123,15 @@ export function ValetRecordsScreen() {
   // below can serve both flows.
   const [pendingDoctorTaskId, setPendingDoctorTaskId] = useState<number | null>(null);
   const [assigningDriverId, setAssigningDriverId] = useState<number | null>(null);
+
+  // Browser/PWA back gesture — the Assign Driver screen (below) is a plain
+  // conditional full-screen replace, not a real route. Mirrors mobile's
+  // BackHandler wiring. (Unlike mobile, the detail sheet below ALSO needs
+  // this — RN's <Modal> gets back support for free via onRequestClose, web
+  // has no equivalent, so it's wired the same way right by closeDetail.)
+  useBackStep(pendingVisitorId != null || pendingDoctorTaskId != null, () => {
+    setPendingVisitorId(null); setPendingMode(null); setPendingDoctorTaskId(null);
+  });
   const [confirmingVisitorId, setConfirmingVisitorId] = useState<number | null>(null);
   const [recallingVisitorId, setRecallingVisitorId] = useState<number | null>(null);
   const [confirmingTaskId, setConfirmingTaskId] = useState<number | null>(null);
@@ -599,6 +609,7 @@ export function ValetRecordsScreen() {
   ] : null;
 
   const closeDetail = () => { setDetailVisitor(null); setDetailTask(null); };
+  useBackStep(!!(detailVisitor || detailTask), closeDetail);
 
   return (
     <div style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, backgroundColor: colors.background}}>

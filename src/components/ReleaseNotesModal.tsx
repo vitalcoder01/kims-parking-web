@@ -3,6 +3,7 @@ import {PressableScale} from './PressableScale';
 import {useTheme} from '../context/ThemeContext';
 import {APP_VERSION_CODE, APP_VERSION_NAME, RELEASE_NOTES} from '../config/version';
 import {Icon} from './Icon';
+import {useBackStep} from '../hooks/useBackStep';
 
 // "What's New" popup on the login screen. Entirely local/static — NOT the
 // mobile app's /api/app/version endpoint (that serves the mobile APK's
@@ -21,12 +22,16 @@ export function ReleaseNotesModal() {
     if (APP_VERSION_CODE > seen) setShow(true);
   }, []);
 
-  if (!show) return null;
-
   const dismiss = () => {
     localStorage.setItem(SEEN_KEY, String(APP_VERSION_CODE));
     setShow(false);
   };
+  // Back gesture should dismiss this like any other close action, not skip
+  // past it — hooks must run unconditionally, so this sits above the early
+  // return below.
+  useBackStep(show, dismiss);
+
+  if (!show) return null;
 
   return (
     <div style={{

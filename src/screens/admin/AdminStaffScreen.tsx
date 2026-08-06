@@ -1,6 +1,7 @@
 import React, {useState, useEffect, useCallback} from 'react';
 import {PressableScale} from '../../components/PressableScale';
 import {useDialog} from '../../components/AppDialog';
+import {useBackStep} from '../../hooks/useBackStep';
 import {useTheme} from '../../context/ThemeContext';
 import {adminApi} from '../../services/api';
 import {Badge} from '../../components/Badge';
@@ -93,6 +94,9 @@ export function AdminStaffScreen() {
     setEditingUser(null);
     resetForm();
   };
+  // Browser/PWA back gesture — the Add/Edit Staff form (below) is a plain
+  // conditional full-screen replace, not a real route.
+  useBackStep(showAdd, closeForm);
 
   const openEdit = (u: AdminUser) => {
     setEditingUser(u);

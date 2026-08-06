@@ -3,6 +3,7 @@ import {ThemeProvider, useTheme} from './context/ThemeContext';
 import {AuthProvider, useAuth} from './context/AuthContext';
 import {AppStateProvider} from './context/AppStateContext';
 import {DialogProvider} from './components/AppDialog';
+import {useTabHistory} from './hooks/useTabHistory';
 import {Icon, IconName} from './components/Icon';
 import {AlarmBanner} from './components/AlarmBanner';
 import {InstallBanner} from './components/InstallBanner';
@@ -90,12 +91,12 @@ function tabsForRole(role: string | undefined): TabDef[] {
 function RoleRouter() {
   const {colors} = useTheme();
   const {user} = useAuth();
-  const [tab, setTab] = useState<TabKey>(() => {
-    if (user?.role === 'admin') return 'Dashboard';
-    if (user?.role === 'valet') return 'Queue';
-    if (user?.role === 'driver') return 'DriverDashboard';
-    return 'Home';
-  });
+  const [tab, setTab] = useTabHistory<TabKey>(
+    user?.role === 'admin' ? 'Dashboard'
+    : user?.role === 'valet' ? 'Queue'
+    : user?.role === 'driver' ? 'DriverDashboard'
+    : 'Home',
+  );
 
   const tabs = tabsForRole(user?.role);
   const activeTab = tabs.find(t => t.key === tab);

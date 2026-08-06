@@ -13,6 +13,7 @@ import type {ParkingTask} from '../../context/AppStateContext';
 import {useAppState} from '../../context/AppStateContext';
 import {HScrollHint} from '../../components/HScrollHint';
 import {useDialog} from '../../components/AppDialog';
+import {useBackStep} from '../../hooks/useBackStep';
 import {
   plannedDepartureLabel, minutesUntilDeparture, departureClockLabel,
   enRouteSeconds, fmtDuration, departurePriority, agoLabel,
@@ -149,6 +150,17 @@ export function ValetHomeScreen() {
   // Assign-driver screen: search box.
   const [driverSearch, setDriverSearch] = useState('');
   const [assigningDriverId, setAssigningDriverId] = useState<number | null>(null);
+
+  // Browser/PWA back gesture — this screen has its own internal sub-screens
+  // (scan/assign/visitor/retrievals) that are plain conditional renders, not
+  // real routes, so the back gesture had no idea they existed and skipped
+  // straight past to whatever tab/exit came next. Mirrors mobile's
+  // BackHandler wiring exactly — same reset logic as each screen's own
+  // on-screen back button.
+  useBackStep(screen === 'scan', () => { setScreen('home'); setFoundUser(null); setCode(''); setCodeError(''); });
+  useBackStep(screen === 'assign', () => { setScreen('home'); setPendingVisitorId(null); setPendingTaskId(null); setDriverSearch(''); });
+  useBackStep(screen === 'visitor', () => setScreen('home'));
+  useBackStep(screen === 'retrievals', () => setScreen('home'));
   // Which job's pending assignment is being cancelled right now — guards
   // against a double-tap firing the cancel-assignment call twice.
   const [cancellingAssignmentId, setCancellingAssignmentId] = useState<number | null>(null);

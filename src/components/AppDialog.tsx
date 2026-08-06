@@ -2,6 +2,7 @@ import React, {createContext, useCallback, useContext, useEffect, useRef, useSta
 import {useTheme} from '../context/ThemeContext';
 import {Icon, IconName} from './Icon';
 import {PressableScale} from './PressableScale';
+import {useBackStep} from '../hooks/useBackStep';
 
 // Web port of mobile's components/AppDialog.tsx — same API, same visual
 // language. Replaces window.confirm/window.alert everywhere: a native
@@ -122,6 +123,17 @@ export function DialogProvider({children}: {children: React.ReactNode}) {
     : tone === 'success' ? colors.success
     : colors.primary;
   const buttons = opts?.buttons?.length ? opts.buttons : [{text: 'OK'}];
+
+  // Back gesture — for a plain alert this is just a dismiss. For a real
+  // confirm() it has to actually resolve the pending promise (as a
+  // cancel), not just close the dialog visually, or `await dialog.confirm`
+  // at the call site would hang forever with nothing left to ever resume
+  // it.
+  useBackStep(!!opts, () => {
+    const cancelBtn = buttons.find(b => b.style === 'cancel');
+    dismiss();
+    cancelBtn?.onPress?.();
+  });
   const stacked = buttons.length > 2;
 
   return (

@@ -2,12 +2,16 @@ import React from 'react';
 import {PressableScale} from './PressableScale';
 import {useTheme} from '../context/ThemeContext';
 import {Icon} from './Icon';
+import {useBackStep} from '../hooks/useBackStep';
 
 // Manual install instructions — shown when the browser doesn't offer the
 // native install prompt (Firefox, iOS Safari, or Chrome before it has
 // verified the PWA criteria / after the user dismissed the native prompt).
 export function InstallHelpModal({onClose}: {onClose: () => void}) {
   const {colors} = useTheme();
+  // Only mounted while shown (parent gates it) — back gesture should close
+  // this like the X button does.
+  useBackStep(true, onClose);
 
   const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const steps = isIos
