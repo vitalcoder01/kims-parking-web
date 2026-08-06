@@ -263,18 +263,8 @@ export function ValetRecordsScreen() {
     }
   };
 
-  // Mobile shows a 3-way dialog (Never mind / No-Show / Cancel Visit,
-  // destructive). window.confirm only offers a binary choice, so this asks
-  // twice — first whether it's a no-show, then (only if not) whether to
-  // cancel the visit outright — same two end states, same "never mind"
-  // escape hatch at each step.
   const handleCancel = (visitorId: number) => {
-    const isNoShow = window.confirm('Cancel Visitor Token\n\nIs this a No-Show?\n\nOK = No-Show. Cancel = choose a different reason.');
-    if (isNoShow) {
-      cancelVisitor(visitorId, 'no_show').catch(err => window.alert(err.message || 'Something went wrong'));
-      return;
-    }
-    if (window.confirm('Cancel this visit instead?\n\nThis cannot be undone.')) {
+    if (window.confirm('Cancel Visitor Token\n\nThis will cancel the check-in. This cannot be undone.')) {
       cancelVisitor(visitorId, 'valet_cancelled').catch(err => window.alert(err.message || 'Something went wrong'));
     }
   };
@@ -425,7 +415,7 @@ export function ValetRecordsScreen() {
             <PressableScale style={{...actionBtnStyle('transparent'), border: `1.5px solid ${colors.border}`}}
               onClick={() => handleCancel(v.id)}>
               <Icon name="close" size={14} color={colors.textSecondary} />
-              <span style={{fontSize: 14, fontWeight: 700, color: colors.textSecondary}}>Cancel / No-Show</span>
+              <span style={{fontSize: 14, fontWeight: 700, color: colors.textSecondary}}>Cancel</span>
             </PressableScale>
           )}
           {/* A driver already has the key — the car is physically gone, so

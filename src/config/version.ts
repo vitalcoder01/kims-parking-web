@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 21;
-export const APP_VERSION_NAME = '1.8.9';
+export const APP_VERSION_CODE = 22;
+export const APP_VERSION_NAME = '1.8.10';
 export const RELEASE_NOTES =
-  'My Jobs now opens on In Progress. Accept/Reject show a clear "working…" state. Retrieval ticket cards are labelled (vehicle vs. requester). And once a driver has your car, the ticket now offers "Bring back my car" instead of a stale Cancel/No-Show.';
+  'Removed "No-Show" as a cancel reason on visitor tickets — the button now just says "Cancel" with a single confirm.';
