@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {useTheme} from '../context/ThemeContext';
 import {BRAND_GRADIENT, BRAND_GRADIENT_DARK, gradientCss} from '../theme/colors';
 import {Icon} from '../components/Icon';
@@ -26,12 +26,60 @@ function minutesLabel(m: number | null): string {
   return `${Math.floor(m / 60)}h ${Math.round(m % 60)}m`;
 }
 
+function relativeTime(iso: string | undefined): string {
+  if (!iso) return '';
+  const secs = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (secs < 60) return 'Updated just now';
+  if (secs < 3600) return `Updated ${Math.floor(secs / 60)}m ago`;
+  return `Updated ${Math.floor(secs / 3600)}h ago`;
+}
+
+// Tunable heuristics, not contractual SLAs — just enough to turn a raw
+// minutes figure into an at-a-glance "is this good" signal.
+function parkRating(m: number | null): {label: string; tone: 'good' | 'ok' | 'bad'} | null {
+  if (m == null) return null;
+  if (m <= 5) return {label: 'Excellent', tone: 'good'};
+  if (m <= 9) return {label: 'Good', tone: 'ok'};
+  return {label: 'Needs attention', tone: 'bad'};
+}
+function retrieveRating(m: number | null): {label: string; tone: 'good' | 'ok' | 'bad'} | null {
+  if (m == null) return null;
+  if (m <= 3) return {label: 'Excellent', tone: 'good'};
+  if (m <= 6) return {label: 'Good', tone: 'ok'};
+  return {label: 'Needs attention', tone: 'bad'};
+}
+
+function buildShareText(data: AnalyticsOverview): string {
+  const visitorTotal = data.visitorJobs + data.staffJobs;
+  const visitorPct = visitorTotal > 0 ? Math.round((data.visitorJobs / visitorTotal) * 100) : 0;
+  const lines = [
+    `📊 KIMS Parking — All-Time Analytics`,
+    ``,
+    `🚗 ${data.totalCarsParked} parked · ${data.totalCarsRetrieved} retrieved · ${data.totalJobsCompleted} total jobs`,
+    `⏱ Avg park ${minutesLabel(data.avgParkMinutes)} · Avg retrieve ${minutesLabel(data.avgRetrieveMinutes)}`,
+    `🕐 Busiest hour ${hourLabel(data.busiestHour)}`,
+    `👥 ${visitorPct}% visitor · ${100 - visitorPct}% staff`,
+    ``,
+    `🏆 Top Performers`,
+    ...data.drivers.filter(d => d.totalCompleted > 0).slice(0, 5).map((d, i) =>
+      `${i + 1}. ${d.name} — ${d.totalCompleted} jobs (${d.parksCompleted} parked, ${d.retrievesCompleted} retrieved)`),
+  ];
+  return lines.join('\n');
+}
+
+function toneColor(tone: 'good' | 'ok' | 'bad', colors: any) {
+  return tone === 'good' ? colors.success : tone === 'ok' ? colors.warning : colors.error;
+}
+
 export function AnalyticsScreen() {
   const {colors, isDark} = useTheme();
   const [data, setData] = useState<AnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [selectedHour, setSelectedHour] = useState<number | null>(null);
+  const [expandedDriverId, setExpandedDriverId] = useState<number | null>(null);
+  const [idleExpanded, setIdleExpanded] = useState(false);
 
   const load = useCallback((silent?: boolean) => {
     if (!silent) setLoading(true);
@@ -47,6 +95,40 @@ export function AnalyticsScreen() {
   const visitorPct = visitorTotal > 0 ? Math.round(((data?.visitorJobs ?? 0) / visitorTotal) * 100) : 0;
   const activeDrivers = (data?.drivers ?? []).filter(d => d.totalCompleted > 0);
   const idleDrivers = (data?.drivers ?? []).filter(d => d.totalCompleted === 0);
+  const pRating = parkRating(data?.avgParkMinutes ?? null);
+  const rRating = retrieveRating(data?.avgRetrieveMinutes ?? null);
+
+  const fastestParkId = useMemo(() => {
+    const withAvg = activeDrivers.filter(d => d.avgParkMinutes != null);
+    if (!withAvg.length) return null;
+    return withAvg.reduce((best, d) => d.avgParkMinutes! < best.avgParkMinutes! ? d : best).id;
+  }, [activeDrivers]);
+  const fastestRetrieveId = useMemo(() => {
+    const withAvg = activeDrivers.filter(d => d.avgRetrieveMinutes != null);
+    if (!withAvg.length) return null;
+    return withAvg.reduce((best, d) => d.avgRetrieveMinutes! < best.avgRetrieveMinutes! ? d : best).id;
+  }, [activeDrivers]);
+
+  const hourly = data?.hourlyDistribution ?? new Array(24).fill(0);
+  const maxHourly = Math.max(1, ...hourly);
+  const activeHour = selectedHour ?? data?.busiestHour ?? null;
+  const activeHourCount = activeHour != null ? hourly[activeHour] : 0;
+
+  const onShare = async () => {
+    if (!data) return;
+    const text = buildShareText(data);
+    const nav = navigator as any;
+    if (nav.share) {
+      try { await nav.share({title: 'KIMS Parking Analytics', text}); } catch { /* user cancelled */ }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      window.alert('Report copied to clipboard');
+    } catch {
+      window.alert(text);
+    }
+  };
 
   const cardStyle: React.CSSProperties = {backgroundColor: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 16};
   const emptyBoxStyle: React.CSSProperties = {
@@ -56,37 +138,51 @@ export function AnalyticsScreen() {
 
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background}}>
-      <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), padding: '16px 20px 22px', borderBottomLeftRadius: 26, borderBottomRightRadius: 26}}>
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20}}>
+      <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), padding: '16px 20px 18px', borderBottomLeftRadius: 28, borderBottomRightRadius: 28, position: 'relative', overflow: 'hidden'}}>
+        {/* Decorative depth — two soft glow discs, no image assets. */}
+        <div style={{position: 'absolute', top: -60, right: -40, width: 160, height: 160, borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.06)', pointerEvents: 'none'}} />
+        <div style={{position: 'absolute', bottom: -50, left: -30, width: 130, height: 130, borderRadius: '50%', backgroundColor: 'rgba(245,193,104,0.08)', pointerEvents: 'none'}} />
+
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, position: 'relative'}}>
           <div>
             <div style={{display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4}}>
               <Icon name="sparkle" size={12} color="rgba(255,255,255,0.75)" />
-              <span style={{color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 800, letterSpacing: 1.2}}>ALL-TIME</span>
+              <span style={{color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 800, letterSpacing: 1.2}}>ALL-TIME · LIVE</span>
             </div>
             <div style={{color: '#fff', fontSize: 24, fontWeight: 900}}>Analytics</div>
           </div>
-          <PressableScale
-            style={{width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}
-            onClick={() => { setRefreshing(true); load(true); }}>
-            <Icon name="refresh" size={18} color="#fff" />
-          </PressableScale>
+          <div style={{display: 'flex', gap: 8}}>
+            <PressableScale
+              style={{width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}
+              onClick={onShare}>
+              <Icon name="share" size={17} color="#fff" />
+            </PressableScale>
+            <PressableScale
+              style={{width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}
+              onClick={() => { setRefreshing(true); load(true); }}>
+              <Icon name="refresh" size={18} color="#fff" />
+            </PressableScale>
+          </div>
         </div>
 
-        <div style={{display: 'flex', alignItems: 'center'}}>
+        <div style={{display: 'flex', alignItems: 'center', position: 'relative'}}>
           {[
-            [data?.totalCarsParked ?? (loading ? '–' : 0), 'Parked'],
-            [data?.totalCarsRetrieved ?? (loading ? '–' : 0), 'Retrieved'],
-            [data?.totalJobsCompleted ?? (loading ? '–' : 0), 'Total Jobs'],
-          ].map(([num, lbl], i) => (
+            ['key', data?.totalCarsParked ?? (loading ? '–' : 0), 'Parked'],
+            ['route', data?.totalCarsRetrieved ?? (loading ? '–' : 0), 'Retrieved'],
+            ['flag', data?.totalJobsCompleted ?? (loading ? '–' : 0), 'Total Jobs'],
+          ].map(([icon, num, lbl], i) => (
             <React.Fragment key={lbl as string}>
-              {i > 0 && <div style={{width: 1, height: 34, backgroundColor: 'rgba(255,255,255,0.2)'}} />}
-              <div style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
-                <span style={{color: '#fff', fontSize: 28, fontWeight: 900}}>{num}</span>
-                <span style={{color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: 700, marginTop: 2}}>{lbl}</span>
+              {i > 0 && <div style={{width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.2)'}} />}
+              <div style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4}}>
+                <Icon name={icon as any} size={13} color="rgba(255,255,255,0.55)" />
+                <span style={{color: '#fff', fontSize: 28, fontWeight: 900, fontVariantNumeric: 'tabular-nums'}}>{num}</span>
+                <span style={{color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: 700}}>{lbl}</span>
               </div>
             </React.Fragment>
           ))}
         </div>
+
+        {data && <div style={{color: 'rgba(255,255,255,0.5)', fontSize: 10.5, fontWeight: 600, textAlign: 'center', marginTop: 14, position: 'relative'}}>{relativeTime(data.generatedAt)}</div>}
       </div>
 
       {loading && !data ? (
@@ -103,36 +199,70 @@ export function AnalyticsScreen() {
         </div>
       ) : (
         <div style={{padding: '18px 20px 32px'}}>
-          {/* Timing */}
+          {/* Performance — rated, not just reported */}
           <div style={{display: 'flex', gap: 12, marginBottom: 14}}>
-            <div style={{...cardStyle, flex: 1, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-start'}}>
-              <div style={{width: 34, height: 34, borderRadius: 10, backgroundColor: colors.success + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}>
-                <Icon name="carKey" size={18} color={colors.success} />
+            {([
+              ['carKey', colors.success, minutesLabel(data?.avgParkMinutes ?? null), 'Avg. park time', pRating],
+              ['route', colors.info, minutesLabel(data?.avgRetrieveMinutes ?? null), 'Avg. retrieve time', rRating],
+            ] as const).map(([icon, tint, val, lbl, rating], i) => (
+              <div key={i} style={{...cardStyle, flex: 1, display: 'flex', overflow: 'hidden'}}>
+                <div style={{width: 4, backgroundColor: rating ? toneColor(rating.tone, colors) : colors.border, flexShrink: 0}} />
+                <div style={{flex: 1, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-start'}}>
+                  <div style={{width: 32, height: 32, borderRadius: 10, backgroundColor: tint + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}>
+                    <Icon name={icon} size={17} color={tint} />
+                  </div>
+                  <span style={{fontSize: 17, fontWeight: 900, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums'}}>{val}</span>
+                  <span style={{fontSize: 11, fontWeight: 700, marginTop: 2, color: colors.textMuted}}>{lbl}</span>
+                  {rating && (
+                    <span style={{marginTop: 8, padding: '3px 8px', borderRadius: 999, backgroundColor: toneColor(rating.tone, colors) + '18'}}>
+                      <span style={{fontSize: 10, fontWeight: 800, color: toneColor(rating.tone, colors)}}>{rating.label}</span>
+                    </span>
+                  )}
+                </div>
               </div>
-              <span style={{fontSize: 18, fontWeight: 900, color: colors.textPrimary}}>{minutesLabel(data?.avgParkMinutes ?? null)}</span>
-              <span style={{fontSize: 11, fontWeight: 700, marginTop: 2, color: colors.textMuted}}>Avg. park time</span>
+            ))}
+          </div>
+
+          {/* Activity by hour — real 24h histogram, click any bar to inspect it */}
+          <div style={{...cardStyle, padding: 14, marginBottom: 14}}>
+            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12}}>
+              <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                <Icon name="trending" size={15} color={colors.primary} />
+                <span style={{fontSize: 13.5, fontWeight: 800, color: colors.textPrimary}}>Activity by Hour</span>
+              </div>
+              {activeHour != null && (
+                <span style={{fontSize: 11, fontWeight: 700, color: colors.textMuted}}>
+                  {activeHourCount} job{activeHourCount === 1 ? '' : 's'} · {hourLabel(activeHour)}
+                </span>
+              )}
             </div>
-            <div style={{...cardStyle, flex: 1, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-start'}}>
-              <div style={{width: 34, height: 34, borderRadius: 10, backgroundColor: colors.info + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}>
-                <Icon name="route" size={18} color={colors.info} />
-              </div>
-              <span style={{fontSize: 18, fontWeight: 900, color: colors.textPrimary}}>{minutesLabel(data?.avgRetrieveMinutes ?? null)}</span>
-              <span style={{fontSize: 11, fontWeight: 700, marginTop: 2, color: colors.textMuted}}>Avg. retrieve time</span>
+            <div style={{display: 'flex', alignItems: 'flex-end', height: 58, marginBottom: 6, gap: 2}}>
+              {hourly.map((count, h) => {
+                const isPeak = h === data?.busiestHour;
+                const isSelected = h === activeHour;
+                const heightPx = 6 + (count / maxHourly) * 46;
+                const barColor = isSelected ? '#F5C168' : count > 0 ? colors.primary : colors.border;
+                return (
+                  <button
+                    key={h}
+                    type="button"
+                    className="pressable"
+                    onClick={() => setSelectedHour(h === selectedHour ? null : h)}
+                    style={{flex: 1, height: 58, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer'}}>
+                    <div style={{width: '55%', minHeight: 4, borderRadius: 2, height: heightPx, backgroundColor: barColor, opacity: isPeak && !isSelected ? 1 : (isSelected ? 1 : 0.55)}} />
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{display: 'flex', justifyContent: 'space-between'}}>
+              {['12AM', '6AM', '12PM', '6PM', '11PM'].map(t => (
+                <span key={t} style={{fontSize: 9.5, fontWeight: 700, color: colors.textMuted}}>{t}</span>
+              ))}
             </div>
           </div>
 
-          {/* Insights */}
+          {/* Visitor vs staff */}
           <div style={{...cardStyle, padding: 14, marginBottom: 22}}>
-            <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
-              <div style={{width: 32, height: 32, borderRadius: 9, backgroundColor: '#F5C16818', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-                <Icon name="clock" size={16} color="#F5C168" />
-              </div>
-              <div style={{flex: 1}}>
-                <div style={{fontSize: 12, fontWeight: 700, color: colors.textMuted}}>Busiest hour</div>
-                <div style={{fontSize: 16, fontWeight: 900, marginTop: 2, color: colors.textPrimary}}>{hourLabel(data?.busiestHour ?? null)}</div>
-              </div>
-            </div>
-            <div style={{height: 1, margin: '12px 0', backgroundColor: colors.divider}} />
             <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
               <div style={{width: 32, height: 32, borderRadius: 9, backgroundColor: colors.primary + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
                 <Icon name="people" size={16} color={colors.primary} />
@@ -153,7 +283,7 @@ export function AnalyticsScreen() {
             </div>
           </div>
 
-          {/* Leaderboard */}
+          {/* Leaderboard — click a row to expand */}
           <div style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12}}>
             <Icon name="trophy" size={16} color="#F5C168" />
             <span style={{fontSize: 15, fontWeight: 900, color: colors.textPrimary}}>Top Performers</span>
@@ -173,34 +303,91 @@ export function AnalyticsScreen() {
             <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
               {activeDrivers.map((d, i) => {
                 const medal = MEDALS[i] ?? null;
+                const expanded = expandedDriverId === d.id;
+                const parkShare = d.totalCompleted > 0 ? Math.round((d.parksCompleted / d.totalCompleted) * 100) : 0;
+                const badges: string[] = [];
+                if (d.id === fastestParkId) badges.push('Fastest park');
+                if (d.id === fastestRetrieveId) badges.push('Fastest retrieve');
                 return (
-                  <div key={d.id} style={{
-                    ...cardStyle, borderColor: medal ?? colors.border, borderWidth: medal ? 1.5 : 1,
-                    display: 'flex', alignItems: 'center', gap: 12, padding: 14,
-                  }}>
-                    <div style={{width: 30, height: 30, borderRadius: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: medal ?? colors.border}}>
-                      <span style={{fontSize: 13, fontWeight: 900, color: medal ? '#15161A' : colors.textMuted}}>{i + 1}</span>
-                    </div>
-                    <div style={{flex: 1, minWidth: 0}}>
-                      <div style={{fontSize: 14.5, fontWeight: 800, color: colors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{d.name}</div>
-                      <div style={{fontSize: 11.5, fontWeight: 600, marginTop: 2, color: colors.textMuted}}>
-                        {d.parksCompleted} parked · {d.retrievesCompleted} retrieved
+                  <PressableScale
+                    key={d.id}
+                    onClick={() => setExpandedDriverId(expanded ? null : d.id)}
+                    style={{
+                      ...cardStyle, borderColor: medal ?? colors.border, borderWidth: medal ? 1.5 : 1,
+                      padding: 14, textAlign: 'left', display: 'block',
+                      boxShadow: i === 0 && medal ? '0 3px 10px rgba(245,193,104,0.35)' : undefined,
+                    }}>
+                    <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+                      <div style={{width: 30, height: 30, borderRadius: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: medal ?? colors.border}}>
+                        <span style={{fontSize: 13, fontWeight: 900, color: medal ? '#15161A' : colors.textMuted}}>{i + 1}</span>
                       </div>
-                      <div style={{fontSize: 11.5, fontWeight: 600, marginTop: 2, color: colors.textMuted}}>
-                        {minutesLabel(d.avgParkMinutes)} avg park · {minutesLabel(d.avgRetrieveMinutes)} avg retrieve
+                      <div style={{flex: 1, minWidth: 0}}>
+                        <div style={{fontSize: 14.5, fontWeight: 800, color: colors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{d.name}</div>
+                        <div style={{fontSize: 11.5, fontWeight: 600, marginTop: 2, color: colors.textMuted}}>
+                          {d.parksCompleted} parked · {d.retrievesCompleted} retrieved
+                        </div>
                       </div>
+                      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0}}>
+                        <span style={{fontSize: 20, fontWeight: 900, color: colors.textPrimary}}>{d.totalCompleted}</span>
+                        <span style={{fontSize: 10, fontWeight: 700, color: colors.textMuted}}>jobs</span>
+                      </div>
+                      <Icon name="chevronDown" size={16} color={colors.textMuted} style={{transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0}} />
                     </div>
-                    <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0}}>
-                      <span style={{fontSize: 20, fontWeight: 900, color: colors.textPrimary}}>{d.totalCompleted}</span>
-                      <span style={{fontSize: 10, fontWeight: 700, color: colors.textMuted}}>jobs</span>
-                    </div>
-                  </div>
+
+                    {badges.length > 0 && (
+                      <div style={{display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, marginLeft: 42}}>
+                        {badges.map(b => (
+                          <span key={b} style={{display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, backgroundColor: '#F5C16818'}}>
+                            <Icon name="crown" size={11} color="#F5C168" />
+                            <span style={{fontSize: 10, fontWeight: 800, color: '#B8860B'}}>{b}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {expanded && (
+                      <div style={{marginTop: 12, paddingTop: 12, borderTop: `1px solid ${colors.divider}`}}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 6}}>
+                          <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Avg park time</span>
+                          <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textPrimary}}>{minutesLabel(d.avgParkMinutes)}</span>
+                        </div>
+                        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 6}}>
+                          <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Avg retrieve time</span>
+                          <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textPrimary}}>{minutesLabel(d.avgRetrieveMinutes)}</span>
+                        </div>
+                        <div style={{height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: colors.border, marginTop: 8}}>
+                          <div style={{height: 6, borderRadius: 3, width: `${parkShare}%`, backgroundColor: colors.success}} />
+                        </div>
+                        <div style={{display: 'flex', justifyContent: 'space-between', marginTop: 4}}>
+                          <span style={{fontSize: 10.5, fontWeight: 700, color: colors.textMuted}}>{parkShare}% park jobs</span>
+                          <span style={{fontSize: 10.5, fontWeight: 700, color: colors.textMuted}}>{100 - parkShare}% retrieve jobs</span>
+                        </div>
+                      </div>
+                    )}
+                  </PressableScale>
                 );
               })}
+
               {idleDrivers.length > 0 && (
-                <span style={{fontSize: 11.5, fontWeight: 600, marginTop: 4, padding: '0 2px', color: colors.textMuted}}>
-                  {idleDrivers.length} driver{idleDrivers.length > 1 ? 's' : ''} with no completed jobs yet — {idleDrivers.map(d => d.name.split(' ')[0]).join(', ')}
-                </span>
+                <PressableScale
+                  onClick={() => setIdleExpanded(v => !v)}
+                  style={{...cardStyle, padding: 12, textAlign: 'left', display: 'block'}}>
+                  <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                    <span style={{fontSize: 12, fontWeight: 700, color: colors.textMuted, flex: 1}}>
+                      {idleDrivers.length} driver{idleDrivers.length > 1 ? 's' : ''} with no completed jobs yet
+                    </span>
+                    <Icon name="chevronDown" size={15} color={colors.textMuted} style={{transform: idleExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s'}} />
+                  </div>
+                  {idleExpanded && (
+                    <div style={{display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10}}>
+                      {idleDrivers.map(d => (
+                        <span key={d.id} style={{borderRadius: 999, border: `1px solid ${colors.border}`, padding: '5px 10px', backgroundColor: colors.background}}>
+                          <span style={{fontSize: 11, fontWeight: 700, color: colors.textMuted}}>{d.name}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </PressableScale>
               )}
             </div>
           )}
