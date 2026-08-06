@@ -34,6 +34,11 @@ type Screen = 'home' | 'scan' | 'assign' | 'visitor' | 'retrievals';
 
 type QueueTab = 'mine' | 'team';
 
+// The Dashboard's inner tab row — one category visible at a time under the
+// My Jobs/Team Jobs outer split, replacing the old vertically-stacked
+// sections-all-at-once layout. Mirrors the mobile app exactly.
+type DashboardCategory = 'assignPending' | 'acceptPending' | 'inProgress' | 'parked' | 'notCompleted';
+
 // Restored per the 4-card Dashboard grid brought back from v1.8.9 — the
 // Retrieval Requests inbox is a dedicated screen again (Now/Soon/Later
 // urgency tabs, full-card colour wash), alongside Expected Arrivals as a
@@ -170,6 +175,13 @@ export function ValetHomeScreen() {
   // Team jobs stay reachable on the second tab because the key can be handed
   // between valets — see QUEUE_TABS.
   const [queueTab, setQueueTab] = useState<QueueTab>('mine');
+  // Inner tab row under My Jobs/Team Jobs — one category visible at a time
+  // instead of every section stacked vertically. Parked Vehicles is nested
+  // in here too even though it isn't actually scoped by My/Team ownership
+  // (a parked car isn't anyone's active job) — it shows the same list
+  // either way, the natural (and harmless) result of nesting a non-owned
+  // category under an ownership-based outer tab.
+  const [dashboardCategory, setDashboardCategory] = useState<DashboardCategory>('assignPending');
   // Deadlines have to visibly tick — a static "wants it in 10 min" rendered
   // once tells the valet nothing about how much of that is left by now.
   const [now, setNow] = useState(Date.now());
@@ -1164,7 +1176,22 @@ export function ValetHomeScreen() {
   // Dashboard between "driver accepted" and "back at the counter".
   const isJobInProgress = (t: ParkingTask) => !isAssignPending(t) && !isAcceptPending(t) && !isNotCompleted(t);
 
-  const assignPendingJobs = dashboardJobsForTab.filter(isAssignPending);
+  // Longest-waiting / most-urgent first — a fixed distance to wherever a car
+  // actually gets parked was never assumed here. Tier 1: retrievals with an
+  // explicit planned departure, most urgent/overdue first. Tier 2:
+  // everything else, oldest-first. Mirrors the mobile app's
+  // sortAssignPendingByUrgency selector.
+  const sortedAssignPendingJobs = [...dashboardJobsForTab.filter(isAssignPending)].sort((a, b) => {
+    const age = (t: ParkingTask) => now - (t.requestedAt ?? t.assignedAt ?? now);
+    const hasDeadline = (t: ParkingTask) => t.type === 'retrieve' && t.plannedDepartureMinutes != null;
+    const aDeadline = hasDeadline(a), bDeadline = hasDeadline(b);
+    if (aDeadline !== bDeadline) return aDeadline ? -1 : 1;
+    if (aDeadline && bDeadline) {
+      return departurePriority(a.requestedAt, a.plannedDepartureMinutes, now)
+        - departurePriority(b.requestedAt, b.plannedDepartureMinutes, now);
+    }
+    return age(b) - age(a);
+  });
   const acceptPendingJobs = dashboardJobsForTab.filter(isAcceptPending);
   const inProgressJobs = dashboardJobsForTab.filter(isJobInProgress);
   const notCompletedJobs = dashboardJobsForTab.filter(isNotCompleted);
@@ -1193,18 +1220,35 @@ export function ValetHomeScreen() {
     const canDispatch = isMyJobToRun(t, myValetId);
     const canRecall = canDispatch && t.type === 'park' && !recalled
       && (t.status === 'key_collected' || t.status === 'in_transit');
+    // How long a job's been sitting without a driver has real operational
+    // weight — travel time to wherever it actually gets parked varies job to
+    // job, so nothing else tells a valet which unclaimed job has been
+    // waiting longest. Mirrors the mobile app's core/valet/state/JobAction.
+    const waitedSince = t.type === 'retrieve' ? t.requestedAt : t.assignedAt;
     const waitingNote =
         awaitingAccept ? `Waiting for ${t.driverName ?? 'driver'} to accept…`
       : recalled && t.status !== 'delivered' ? `${t.driverName ?? 'Driver'} is bringing it back`
       : t.status === 'key_collected' ? `${t.driverName ?? 'Driver'} has the key`
       : t.status === 'in_transit' ? (t.type === 'park' ? `${t.driverName ?? 'Driver'} is parking it` : `${t.driverName ?? 'Driver'} is bringing it`)
-      : t.status === 'requested' || t.status === 'accepted' ? 'Waiting to be claimed'
+      : (needsDriver || t.status === 'requested' || t.status === 'accepted') ? `Waiting for a driver · ${agoLabel(waitedSince, now)}`
       : null;
+
+    // Urgency wash for a still-unclaimed retrieval — restores the "hot to
+    // cool" visual weight the old standalone Retrieval Requests inbox had.
+    // Park jobs (no departure deadline) stay a plain card; only a retrieval
+    // genuinely racing a clock gets tinted.
+    const isPendingRetrieval = t.type === 'retrieve' && (t.status === 'requested' || t.status === 'accepted');
+    const departureLeft = isPendingRetrieval ? minutesUntilDeparture(t.requestedAt, t.plannedDepartureMinutes, now) : null;
+    const urgencyTone = isPendingRetrieval ? departureTone(departureLeft, colors) : null;
+    const urgencyWash = departureLeft == null ? '00' : departureLeft <= 0 ? '1C' : departureLeft <= 10 ? '14' : departureLeft <= 20 ? '0E' : departureLeft <= 30 ? '0A' : '08';
+    const urgencyEdge = departureLeft == null ? null : departureLeft <= 0 ? '66' : departureLeft <= 10 ? '4D' : departureLeft <= 20 ? '3A' : '26';
+    const cardBg = urgencyTone && urgencyEdge ? urgencyTone + urgencyWash : colors.surface;
+    const cardBorder = isEscalated ? colors.error : (urgencyTone && urgencyEdge ? urgencyTone + urgencyEdge : colors.border);
     return (
       <div key={t.id} style={{
         ...taskCardBase,
-        backgroundColor: colors.surface,
-        border: `${isEscalated ? 2 : 1}px solid ${isEscalated ? colors.error : colors.border}`,
+        backgroundColor: cardBg,
+        border: `${isEscalated ? 2 : 1}px solid ${cardBorder}`,
       }}>
         <div style={{display: 'flex', alignItems: 'flex-start', gap: 12}}>
           <div style={{flex: 1, minWidth: 0}}>
@@ -1363,16 +1407,6 @@ export function ValetHomeScreen() {
     );
   };
 
-  const jobSection = (title: string, icon: IconName, jobs: ParkingTask[]) => jobs.length === 0 ? null : (
-    <div style={{marginBottom: 20}}>
-      <div style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12}}>
-        <Icon name={icon} size={14} color={colors.textPrimary} />
-        <span style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>{title} ({jobs.length})</span>
-      </div>
-      {jobs.map(renderJobCard)}
-    </div>
-  );
-
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background}}>
       {/* Header */}
@@ -1482,10 +1516,8 @@ export function ValetHomeScreen() {
         </div>
 
         {/* Dashboard — every active job, grouped by the stage it's actually
-            stuck at (no more one flat undifferentiated list), plus the
-            unclaimed retrieval requests that used to live in their own
-            separate inbox. Same card everywhere, same one contextual action
-            button per job. */}
+            stuck at, one category visible at a time (an inner tab row under
+            My Jobs/Team Jobs, replacing the old stacked-sections layout). */}
         <div style={{fontSize: 14, fontWeight: 800, marginBottom: 12, color: colors.textPrimary}}>Dashboard ({dashboardJobsForTab.length})</div>
         {/* Counts sit on the tabs so a valet can see there IS team work
             without leaving their own list to check. */}
@@ -1502,60 +1534,82 @@ export function ValetHomeScreen() {
             );
           })}
         </div>
+
+        {/* Inner category row — Parked Vehicles is nested in here too even
+            though it isn't actually scoped by My/Team ownership (a parked
+            car isn't anyone's active job); it shows the same list either
+            way, the natural result of nesting a non-owned category under an
+            ownership-based outer tab. */}
+        <div style={{display: 'flex', gap: 8, overflowX: 'auto', margin: '0 -20px 14px', padding: '0 20px'}}>
+          {([
+            ['assignPending', 'Driver assign pending', sortedAssignPendingJobs.length],
+            ['acceptPending', 'Driver acceptance pending', acceptPendingJobs.length],
+            ['inProgress', 'In Progress', inProgressJobs.length],
+            ['parked', 'Parked Vehicles', parkedVehicles.length],
+            ['notCompleted', 'Not completed', notCompletedJobs.length],
+          ] as const).map(([key, label, count]) => {
+            const active = dashboardCategory === key;
+            return (
+              <PressableScale
+                key={key}
+                onClick={() => setDashboardCategory(key)}
+                style={{borderRadius: 99, border: `1px solid ${active ? colors.primary : colors.border}`, padding: '8px 14px', flexShrink: 0, backgroundColor: active ? colors.primary : colors.surface}}>
+                <span style={{fontSize: 12, fontWeight: 700, color: active ? colors.textOnPrimary : colors.textSecondary, whiteSpace: 'nowrap'}}>
+                  {label} {count}
+                </span>
+              </PressableScale>
+            );
+          })}
+        </div>
+
         {!hydrated ? (
           <>
             <SkeletonCard lines={2} style={{marginBottom: 12}} />
             <SkeletonCard lines={2} />
           </>
-        ) : dashboardJobsForTab.length === 0 ? (
-          <div style={emptyBoxStyle}>
-            <Icon name="check" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
-            <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>
-              {queueTab === 'mine' ? 'No active jobs' : 'No one else has a job right now'}
+        ) : dashboardCategory === 'parked' ? (
+          parkedVehicles.length === 0 ? (
+            <div style={emptyBoxStyle}>
+              <Icon name="car" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
+              <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>No cars parked right now</div>
             </div>
-          </div>
-        ) : (
-          <>
-            {jobSection('Driver assign pending', 'people', assignPendingJobs)}
-            {jobSection('Driver acceptance pending', 'timer', acceptPendingJobs)}
-            {jobSection('In progress', 'navigate', inProgressJobs)}
-            {jobSection('Not completed', 'checkBold', notCompletedJobs)}
-          </>
-        )}
-
-        {/* Parked Vehicles — not part of the mine/team job split above; a
-            parked car isn't anyone's active job, it's just sitting in its
-            slot, so this section isn't scoped by the My/Team tab. */}
-        <div style={{display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, marginBottom: 12}}>
-          <Icon name="car" size={14} color={colors.textPrimary} />
-          <span style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>Parked Vehicles ({parkedVehicles.length})</span>
-        </div>
-        {!hydrated ? (
-          <SkeletonCard lines={2} />
-        ) : parkedVehicles.length === 0 ? (
-          <div style={emptyBoxStyle}>
-            <Icon name="car" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
-            <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>No cars parked right now</div>
-          </div>
-        ) : parkedVehicles.map(sl => {
-          const ownerTask = sl.taskId ? tasks.find(t => t.id === sl.taskId) : undefined;
-          return (
-            <div key={sl.id} style={{...taskCardBase, backgroundColor: colors.surface}}>
-              <div style={{display: 'flex', alignItems: 'flex-start', gap: 12}}>
-                <div style={{flex: 1, minWidth: 0}}>
-                  <div style={{fontSize: 22, fontWeight: 900, letterSpacing: 0.5, fontVariantNumeric: 'tabular-nums', color: colors.textPrimary, ...ellipsis1}}>{sl.carNumber ?? 'Unknown plate'}</div>
-                  {!!ownerTask?.doctorName && (
-                    <div style={{fontSize: 12, fontWeight: 600, marginTop: 3, color: colors.textSecondary, ...ellipsis1}}>{ownerTask.doctorName}</div>
-                  )}
-                  <div style={{fontSize: 12, fontWeight: 600, marginTop: 1, color: colors.textMuted, ...ellipsis1}}>Slot {sl.id}</div>
+          ) : parkedVehicles.map(sl => {
+            const ownerTask = sl.taskId ? tasks.find(t => t.id === sl.taskId) : undefined;
+            return (
+              <div key={sl.id} style={{...taskCardBase, backgroundColor: colors.surface}}>
+                <div style={{display: 'flex', alignItems: 'flex-start', gap: 12}}>
+                  <div style={{flex: 1, minWidth: 0}}>
+                    <div style={{fontSize: 22, fontWeight: 900, letterSpacing: 0.5, fontVariantNumeric: 'tabular-nums', color: colors.textPrimary, ...ellipsis1}}>{sl.carNumber ?? 'Unknown plate'}</div>
+                    {!!ownerTask?.doctorName && (
+                      <div style={{fontSize: 12, fontWeight: 600, marginTop: 3, color: colors.textSecondary, ...ellipsis1}}>{ownerTask.doctorName}</div>
+                    )}
+                    <div style={{fontSize: 12, fontWeight: 600, marginTop: 1, color: colors.textMuted, ...ellipsis1}}>Slot {sl.id}</div>
+                  </div>
+                  <span style={{borderRadius: 8, padding: '6px 10px', backgroundColor: colors.success, flexShrink: 0}}>
+                    <span style={{color: '#fff', fontSize: 11, fontWeight: 900, letterSpacing: 0.8}}>PARKED</span>
+                  </span>
                 </div>
-                <span style={{borderRadius: 8, padding: '6px 10px', backgroundColor: colors.success, flexShrink: 0}}>
-                  <span style={{color: '#fff', fontSize: 11, fontWeight: 900, letterSpacing: 0.8}}>PARKED</span>
-                </span>
               </div>
+            );
+          })
+        ) : (() => {
+          const list =
+              dashboardCategory === 'assignPending' ? sortedAssignPendingJobs
+            : dashboardCategory === 'acceptPending' ? acceptPendingJobs
+            : dashboardCategory === 'inProgress' ? inProgressJobs
+            : notCompletedJobs;
+          const emptyLabel =
+              dashboardCategory === 'assignPending' ? 'No jobs waiting for a driver'
+            : dashboardCategory === 'acceptPending' ? 'No jobs waiting on a driver to accept'
+            : dashboardCategory === 'inProgress' ? 'No jobs on the move right now'
+            : 'Nothing waiting on a handover confirmation';
+          return list.length === 0 ? (
+            <div style={emptyBoxStyle}>
+              <Icon name="check" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
+              <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>{emptyLabel}</div>
             </div>
-          );
-        })}
+          ) : list.map(renderJobCard);
+        })()}
       </div>
     </div>
   );

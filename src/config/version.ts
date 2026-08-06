@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 14;
-export const APP_VERSION_NAME = '1.8.2';
+export const APP_VERSION_CODE = 15;
+export const APP_VERSION_NAME = '1.8.3';
 export const RELEASE_NOTES =
-  'Valet Dashboard\'s action grid is back to 4 cards — Staff / Visitor / Retrieval Requests / Expected Arrivals — with Retrieval Requests reopened as its own screen (Now/Soon/Later urgency tabs, colour-graded cards).';
+  'Dashboard job list is now 5 tabs (Driver assign pending / Driver acceptance pending / In Progress / Parked Vehicles / Not completed) instead of one long stacked list. Also brought the Dashboard\'s waiting-time labels and urgency sorting to full parity with the mobile app.';
