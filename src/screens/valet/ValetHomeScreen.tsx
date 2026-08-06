@@ -39,6 +39,10 @@ type QueueTab = 'mine' | 'team';
 // sections-all-at-once layout. Mirrors the mobile app exactly.
 type DashboardCategory = 'assignPending' | 'acceptPending' | 'inProgress' | 'parked' | 'notCompleted';
 
+// The header's stat row — tapping a stat filters (or, for "done today",
+// ranks) the Driver Status strip below it instead of being static text.
+type DriverStatFilter = 'ready' | 'onTask' | 'offDuty' | 'doneToday' | null;
+
 // Restored per the 4-card Dashboard grid brought back from v1.8.9 — the
 // Retrieval Requests inbox is a dedicated screen again (Now/Soon/Later
 // urgency tabs, full-card colour wash), alongside Expected Arrivals as a
@@ -182,6 +186,9 @@ export function ValetHomeScreen() {
   // either way, the natural (and harmless) result of nesting a non-owned
   // category under an ownership-based outer tab.
   const [dashboardCategory, setDashboardCategory] = useState<DashboardCategory>('assignPending');
+  // Tapping a header stat again clears it — same toggle pattern as the
+  // Dashboard's stage-filter chips elsewhere on this screen.
+  const [driverStatFilter, setDriverStatFilter] = useState<DriverStatFilter>(null);
   // Deadlines have to visibly tick — a static "wants it in 10 min" rendered
   // once tells the valet nothing about how much of that is left by now.
   const [now, setNow] = useState(Date.now());
@@ -1156,6 +1163,18 @@ export function ValetHomeScreen() {
   const completedToday = drivers.reduce((sum, d) => sum + (d.completedToday ?? 0), 0);
   const todayLabel = new Date().toLocaleDateString(undefined, {weekday: 'long', month: 'short', day: 'numeric'});
 
+  // Driver Status strip below reacts to whichever header stat is tapped —
+  // "Ready"/"On task"/"Off duty" filter to that status; "Done today" instead
+  // RANKS everyone by jobs completed today (a leaderboard, not a filter —
+  // an off-duty driver can still have completed jobs earlier in the shift,
+  // so filtering them out would hide exactly who did the most work).
+  const driverStatusList =
+      driverStatFilter === 'ready' ? drivers.filter(d => d.status === 'available')
+    : driverStatFilter === 'onTask' ? drivers.filter(d => d.status === 'busy')
+    : driverStatFilter === 'offDuty' ? drivers.filter(d => d.status === 'off')
+    : driverStatFilter === 'doneToday' ? [...drivers].sort((a, b) => (b.completedToday ?? 0) - (a.completedToday ?? 0))
+    : drivers;
+
   // ── Dashboard sections — the old flat Job Queue, regrouped by the stage
   // each job is actually stuck at, with the old standalone Retrieval
   // Requests inbox merged straight in (an unclaimed retrieval and a claimed
@@ -1435,21 +1454,33 @@ export function ValetHomeScreen() {
             )}
           </PressableScale>
         </div>
+        {/* Tappable, not decoration — each stat filters (or, for "Done
+            today", ranks) the Driver Status strip below. Tap the active one
+            again to clear it back to everyone. */}
         <div style={{display: 'flex', alignItems: 'center'}}>
-          {[
-            ['Ready', availableDrivers.length],
-            ['On task', busyDrivers],
-            ['Off duty', offDrivers],
-            ['Done today', completedToday],
-          ].map(([lbl, n], i) => (
-            <React.Fragment key={lbl as string}>
-              {i > 0 && <div style={{width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.15)', margin: '0 4px'}} />}
-              <div style={{flex: 1}}>
-                <div style={{color: '#fff', fontSize: 20, fontWeight: 900}}>{n}</div>
-                <div style={{color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600, marginTop: 2}}>{lbl}</div>
-              </div>
-            </React.Fragment>
-          ))}
+          {([
+            ['ready', 'people', availableDrivers.length, 'Ready', colors.success],
+            ['onTask', 'navigate', busyDrivers, 'On task', colors.warning],
+            ['offDuty', 'moon', offDrivers, 'Off duty', colors.textMuted],
+            ['doneToday', 'flag', completedToday, 'Done today', '#F5C168'],
+          ] as const).map(([key, icon, num, label, tint], i) => {
+            const active = driverStatFilter === key;
+            return (
+              <React.Fragment key={key}>
+                {i > 0 && <div style={{width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.15)', margin: '0 4px'}} />}
+                <PressableScale
+                  style={{flex: 1, textAlign: 'left', padding: '8px 6px', borderRadius: active ? 14 : 0, backgroundColor: active ? 'rgba(255,255,255,0.14)' : 'transparent'}}
+                  onClick={() => setDriverStatFilter(f => f === key ? null : key)}>
+                  <div style={{display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3}}>
+                    <Icon name={icon} size={11} color={active ? tint : 'rgba(255,255,255,0.55)'} />
+                    {active && <span style={{width: 5, height: 5, borderRadius: 3, backgroundColor: tint}} />}
+                  </div>
+                  <div style={{color: active ? tint : '#fff', fontSize: 20, fontWeight: 900}}>{num}</div>
+                  <div style={{color: active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600, marginTop: 2}}>{label}</div>
+                </PressableScale>
+              </React.Fragment>
+            );
+          })}
         </div>
       </div>
 
@@ -1492,19 +1523,51 @@ export function ValetHomeScreen() {
           </PressableScale>
         </div>
 
-        {/* Driver status */}
-        <div style={{fontSize: 14, fontWeight: 800, marginBottom: 12, color: colors.textPrimary}}>Driver Status ({drivers.length})</div>
+        {/* Driver status — reacts to whichever header stat is tapped above. */}
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12}}>
+          <div style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>
+            {driverStatFilter === 'ready' ? `Ready (${driverStatusList.length})`
+              : driverStatFilter === 'onTask' ? `On Task (${driverStatusList.length})`
+              : driverStatFilter === 'offDuty' ? `Off Duty (${driverStatusList.length})`
+              : driverStatFilter === 'doneToday' ? `Top Performers Today`
+              : `Driver Status (${drivers.length})`}
+          </div>
+          {driverStatFilter != null && (
+            <PressableScale onClick={() => setDriverStatFilter(null)}>
+              <span style={{fontSize: 12, fontWeight: 700, color: colors.primary}}>Show all</span>
+            </PressableScale>
+          )}
+        </div>
+        {driverStatusList.length === 0 ? (
+          <div style={{...emptyBoxStyle, marginBottom: 20}}>
+            <Icon name="people" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
+            <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>
+              {driverStatFilter === 'ready' ? 'No drivers ready right now'
+                : driverStatFilter === 'onTask' ? 'No drivers on a job right now'
+                : 'No drivers off duty right now'}
+            </div>
+          </div>
+        ) : (
         <div className="hscroll" style={{margin: '0 -20px 20px', padding: '0 20px', gap: 10}}>
-          {drivers.map(d => {
+          {driverStatusList.map((d, i) => {
             const sc = d.status === 'available' ? colors.success : d.status === 'busy' ? colors.warning : colors.textMuted;
             const sl = d.status === 'available' ? 'Ready' : d.status === 'busy' ? 'On task' : 'Off duty';
+            // Top 3 get a medal accent when ranked by today's completions —
+            // the one moment this strip is a leaderboard, not a roster.
+            const rank = driverStatFilter === 'doneToday' && (d.completedToday ?? 0) > 0 ? i + 1 : null;
+            const medal = rank === 1 ? '#F5C168' : rank === 2 ? '#C7CDD6' : rank === 3 ? '#D3946B' : null;
             return (
-              <div key={d.id} style={{borderRadius: 16, border: `1px solid ${colors.border}`, width: 128, flexShrink: 0, overflow: 'hidden', backgroundColor: colors.surface}}>
+              <div key={d.id} style={{borderRadius: 16, border: `${medal ? 1.5 : 1}px solid ${medal ?? colors.border}`, width: 128, flexShrink: 0, overflow: 'hidden', backgroundColor: colors.surface}}>
                 <div style={{display: 'flex', alignItems: 'center', gap: 8, padding: 12, borderBottom: `1px solid ${colors.divider}`}}>
                   <div style={{width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: sc + '14'}}>
                     <span style={{fontSize: 16, fontWeight: 800, color: sc}}>{d.name[0]}</span>
                   </div>
                   <span style={{flex: 1, minWidth: 0, fontSize: 13, fontWeight: 800, color: colors.textPrimary, ...ellipsis1}}>{d.name.split(' ')[0]}</span>
+                  {medal && (
+                    <span style={{width: 18, height: 18, borderRadius: 9, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: medal}}>
+                      <span style={{fontSize: 10, fontWeight: 900, color: '#15161A'}}>{rank}</span>
+                    </span>
+                  )}
                 </div>
                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px'}}>
                   <span style={{fontSize: 11, fontWeight: 700, color: sc}}>{sl}</span>
@@ -1514,6 +1577,7 @@ export function ValetHomeScreen() {
             );
           })}
         </div>
+        )}
 
         {/* Dashboard — every active job, grouped by the stage it's actually
             stuck at, one category visible at a time (an inner tab row under

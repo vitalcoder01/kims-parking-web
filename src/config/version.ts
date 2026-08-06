@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 16;
-export const APP_VERSION_NAME = '1.8.4';
+export const APP_VERSION_CODE = 17;
+export const APP_VERSION_NAME = '1.8.5';
 export const RELEASE_NOTES =
-  'Removed the stray scrollbar line under the Dashboard and Jobs page filter chip rows.';
+  'Dashboard header stats (Ready / On task / Off duty / Done today) are now tappable — filter the Driver Status strip to just that group, or tap "Done today" to see a leaderboard ranked by jobs completed.';
