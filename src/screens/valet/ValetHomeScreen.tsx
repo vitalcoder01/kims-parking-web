@@ -13,7 +13,7 @@ import type {ParkingTask} from '../../context/AppStateContext';
 import {useAppState} from '../../context/AppStateContext';
 import {
   plannedDepartureLabel, minutesUntilDeparture, departureClockLabel,
-  enRouteSeconds, fmtDuration,
+  enRouteSeconds, fmtDuration, departurePriority, agoLabel,
 } from '../../utils/retrievalClocks';
 
 // Web (DOM) port of the mobile app's ValetHomeScreen — same screens, same
@@ -33,6 +33,31 @@ import {
 type Screen = 'home' | 'scan' | 'assign' | 'visitor' | 'retrievals';
 
 type QueueTab = 'mine' | 'team';
+
+// Restored per the 4-card Dashboard grid brought back from v1.8.9 — the
+// Retrieval Requests inbox is a dedicated screen again (Now/Soon/Later
+// urgency tabs, full-card colour wash), alongside Expected Arrivals as a
+// second section of the same Inbox screen. This is IN ADDITION to the
+// Dashboard's "Driver assign pending" section below, which still also
+// shows unclaimed retrievals merged in with everything else needing a
+// driver — two ways to reach the same underlying `retrievalRequests` list,
+// kept deliberately: the Dashboard section for "what do I work on right
+// now", this dedicated inbox for "how urgent is each departure, at a
+// glance". Mirrors the same mobile restoration exactly.
+type InboxTab = 'all' | 'now' | 'soon' | 'later';
+type InboxSection = 'retrievals' | 'arrivals';
+const INBOX_TABS: {key: InboxTab; label: string}[] = [
+  {key: 'all',   label: 'All'},
+  {key: 'now',   label: 'Now'},
+  {key: 'soon',  label: 'Soon'},
+  {key: 'later', label: 'Later'},
+];
+function inboxBand(left: number | null): Exclude<InboxTab, 'all'> {
+  if (left == null) return 'later';
+  if (left <= 0) return 'now';
+  if (left <= 20) return 'soon';
+  return 'later';
+}
 
 // Planned-departure badge colours, most urgent first. This shows ONLY when
 // the doctor intends to leave — it is not a delivery estimate.
@@ -136,6 +161,11 @@ export function ValetHomeScreen() {
   const pendingTaskIdRef = useRef<number | null>(null);
   pendingTaskIdRef.current = pendingTaskId;
   const [arrivalQuery, setArrivalQuery] = useState('');
+  const [inboxTab, setInboxTab] = useState<InboxTab>('all');
+  // The inbox holds both kinds of incoming request. Retrievals are work;
+  // arrivals are information — separated so a flood of arrivals can never
+  // push a waiting car off the screen.
+  const [inboxSection, setInboxSection] = useState<InboxSection>('retrievals');
   // Job Queue is split so a valet reads only what they're accountable for.
   // Team jobs stay reachable on the second tab because the key can be handed
   // between valets — see QUEUE_TABS.
@@ -779,93 +809,220 @@ export function ValetHomeScreen() {
           <PressableScale onClick={() => setScreen('home')} style={circleBackStyle}>
             <Icon name="back" size={18} color={colors.textPrimary} />
           </PressableScale>
-          <span style={{fontSize: 17, fontWeight: 900, color: colors.textPrimary}}>Expected Arrivals</span>
+          <span style={{fontSize: 17, fontWeight: 900, color: colors.textPrimary}}>Inbox</span>
         </div>
 
-        {/* Search is what makes a flood survivable: the valet never scrolls
-            this list, they type whatever the person at the counter gives
-            them. One box matching code, plate or name — at the counter you
-            get whichever of the three they happen to say, and making them
-            pick a field first would be a decision with no information. */}
-        <div style={{display: 'flex', alignItems: 'center', gap: 8, margin: '12px 20px 0', padding: '0 12px', height: 42, borderRadius: 12, border: `1px solid ${colors.border}`, backgroundColor: colors.surface, flexShrink: 0}}>
-          <Icon name="search" size={15} color={colors.textMuted} />
-          <input
-            style={{flex: 1, fontSize: 14, fontWeight: 600, padding: 0, border: 'none', outline: 'none', background: 'transparent', color: colors.textPrimary}}
-            value={arrivalQuery}
-            onChange={e => setArrivalQuery(e.target.value)}
-            placeholder="Search code, plate or name"
-            autoCapitalize="characters"
-            autoCorrect="off"
-          />
-          {arrivalQuery.length > 0 && (
-            <PressableScale onClick={() => setArrivalQuery('')}>
-              <Icon name="close" size={15} color={colors.textMuted} />
-            </PressableScale>
-          )}
+        {/* Two kinds of incoming request, kept apart. The colour of each
+            count is the same language the inbox icon uses: red is a car
+            someone is waiting for, blue is only a heads-up. */}
+        <div style={inboxTabsStyle}>
+          {([
+            ['retrievals', 'Retrieval Requests', retrievalRequests.length, colors.error],
+            ['arrivals', 'Expected Arrivals', arrivalNotices.length, colors.info],
+          ] as const).map(([key, label, count, tint]) => {
+            const active = inboxSection === key;
+            return (
+              <PressableScale key={key} style={inboxTabStyle} onClick={() => setInboxSection(key)}>
+                <span style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                  <span style={{...inboxTabTxtStyle, color: active ? colors.textPrimary : colors.textSecondary}}>{label}</span>
+                  {count > 0 && (
+                    <span style={{minWidth: 18, height: 18, borderRadius: 9, padding: '0 5px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: tint}}>
+                      <span style={{color: '#fff', fontSize: 10, fontWeight: 800}}>{count > 99 ? '99+' : count}</span>
+                    </span>
+                  )}
+                </span>
+                {active && <span style={inboxTabBarStyle} />}
+              </PressableScale>
+            );
+          })}
         </div>
 
+        {inboxSection === 'retrievals' && (<>
+        {/* Counts live on the tabs so the distribution is visible without
+            switching. Zero-count tabs stay in place, dimmed — hiding them
+            would shift the others under the valet's thumb mid-triage. */}
+        {hydrated && retrievalRequests.length > 0 && (
+          <div style={inboxTabsStyle}>
+            {INBOX_TABS.map(tb => {
+              const count = tb.key === 'all'
+                ? retrievalRequests.length
+                : retrievalRequests.filter(t => inboxBand(minutesUntilDeparture(t.requestedAt, t.plannedDepartureMinutes, now)) === tb.key).length;
+              const active = inboxTab === tb.key;
+              const empty = count === 0;
+              return (
+                <PressableScale key={tb.key} style={inboxTabStyle} onClick={() => setInboxTab(tb.key)}>
+                  <span style={{...inboxTabTxtStyle, color: active ? colors.textPrimary : empty ? colors.textMuted : colors.textSecondary}}>
+                    {tb.label} {count}
+                  </span>
+                  {active && <span style={inboxTabBarStyle} />}
+                </PressableScale>
+              );
+            })}
+          </div>
+        )}
         <div className="screen-scroll" style={{padding: 20, paddingBottom: 40}}>
           {!hydrated ? (
             <SkeletonCard lines={2} />
-          ) : arrivalNotices.length === 0 ? (
+          ) : retrievalRequests.length === 0 ? (
             <div style={emptyBoxStyle}>
               <Icon name="inbox" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
-              <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>Nobody has announced an arrival.</div>
+              <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>No retrieval requests right now.</div>
             </div>
-          ) : arrivalsFiltered.length === 0 ? (
+          ) : retrievalRequests.filter(t => inboxTab === 'all' || inboxBand(minutesUntilDeparture(t.requestedAt, t.plannedDepartureMinutes, now)) === inboxTab).length === 0 ? (
             <div style={emptyBoxStyle}>
-              <Icon name="search" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
-              <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>No arrival matches "{arrivalQuery.trim()}".</div>
+              <Icon name="check" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
+              <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>Nothing in this group.</div>
             </div>
-          ) : arrivalsFiltered.map(a => (
-            <div key={a.id} style={{...taskCardBase, backgroundColor: colors.surface}}>
-              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
-                <span style={{display: 'flex', alignItems: 'center', gap: 4, borderRadius: 6, padding: '3px 8px', backgroundColor: colors.info + '15'}}>
-                  <Icon name="bellAlert" size={11} color={colors.info} />
-                  <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 0.5, color: colors.info}}>ARRIVING</span>
-                </span>
-                {/* Doctors can now say an hour out, and "~60 min" reads
-                    worse than "~1 hr" on a card being scanned at a counter. */}
-                <span style={{fontSize: 11, fontWeight: 700, color: colors.info}}>
-                  ~{a.eta >= 60 ? `${Math.round(a.eta / 6) / 10} hr` : `${a.eta} min`}
-                </span>
-              </div>
-              <div style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>{a.doctorName}</div>
-              <div style={{fontSize: 12, fontWeight: 600, marginTop: 2, color: colors.textSecondary, ...ellipsis1}}>
-                {a.doctorCarNumber?.trim() || 'Plate not on file'}
-              </div>
-              {!!a.doctorCardCode && (
-                <div style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Code {a.doctorCardCode}</div>
-              )}
-              {/* "They've arrived" skips typing the code once they're
-                  standing here. "No-show" is not decoration — a notice
-                  only clears itself when a key is taken, so without it a
-                  doctor who never turns up leaves the blue count
-                  permanently wrong. */}
-              <div style={{display: 'flex', gap: 8, marginTop: 12}}>
-                <PressableScale
-                  style={{...taskActionBtnBase, flex: 1, backgroundColor: colors.primary, opacity: arrivingId === a.id ? 0.6 : 1}}
-                  disabled={arrivingId === a.id}
-                  onClick={() => handleArrivalArrived(a)}>
-                  {arrivingId === a.id
-                    ? <span className="spinner" style={{width: 15, height: 15, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: colors.textOnPrimary}} />
-                    : <Icon name="key" size={13} color={colors.textOnPrimary} />}
-                  <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textOnPrimary}}>
-                    {arrivingId === a.id ? 'Please wait…' : "They've arrived"}
+          ) : [...retrievalRequests]
+                .filter(t => inboxTab === 'all' || inboxBand(minutesUntilDeparture(t.requestedAt, t.plannedDepartureMinutes, now)) === inboxTab)
+                .sort((a, b) =>
+                  departurePriority(a.requestedAt, a.plannedDepartureMinutes, now) - departurePriority(b.requestedAt, b.plannedDepartureMinutes, now)
+                  || (a.requestedAt ?? 0) - (b.requestedAt ?? 0))
+                .map(t => {
+            // Everything on this card is driven by time LEFT, recomputed each
+            // second, so a card genuinely heats up as its deadline approaches.
+            const left = minutesUntilDeparture(t.requestedAt, t.plannedDepartureMinutes, now);
+            const tone = departureTone(left, colors);
+            const wash = left == null ? '00' : left <= 0 ? '1C' : left <= 10 ? '14' : left <= 20 ? '0E' : left <= 30 ? '0A' : '08';
+            const edge = left == null ? null : left <= 0 ? '66' : left <= 10 ? '4D' : left <= 20 ? '3A' : '26';
+            return (
+            <div key={t.id} style={{
+              ...taskCardBase,
+              backgroundColor: left == null ? colors.surface : tone + wash,
+              border: `1px solid ${edge ? tone + edge : colors.border}`,
+            }}>
+              <div style={{display: 'flex', alignItems: 'flex-start', gap: 12}}>
+                <div style={{flex: 1, minWidth: 0}}>
+                  <div style={{fontSize: 22, fontWeight: 900, letterSpacing: 0.5, fontVariantNumeric: 'tabular-nums', color: colors.textPrimary, ...ellipsis1}}>{t.carNumber}</div>
+                  <div style={{fontSize: 12, fontWeight: 600, marginTop: 3, color: colors.textSecondary, ...ellipsis1}}>{t.doctorName}</div>
+                  {!!t.slotId && (
+                    <div style={{fontSize: 12, fontWeight: 600, marginTop: 1, color: colors.textMuted, ...ellipsis1}}>Slot {t.slotId}</div>
+                  )}
+                </div>
+                {/* Planned departure only — NOT a delivery ETA. */}
+                <span style={{borderRadius: 8, padding: '6px 10px', flexShrink: 0, backgroundColor: tone}}>
+                  <span style={{color: '#fff', fontSize: 11, fontWeight: 900, letterSpacing: 0.8}}>
+                    {plannedDepartureLabel(t.requestedAt, t.plannedDepartureMinutes, now)}
                   </span>
-                </PressableScale>
-                <PressableScale
-                  style={{...taskActionBtnBase, width: 'auto', border: `1px solid ${colors.border}`, backgroundColor: colors.cardAlt, padding: '0 14px', opacity: dismissingArrivalId === a.id ? 0.6 : 1}}
-                  disabled={dismissingArrivalId === a.id}
-                  onClick={() => handleDismissArrival(a.id)}>
-                  {dismissingArrivalId === a.id
-                    ? <span className="spinner" style={{width: 15, height: 15}} />
-                    : <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textSecondary}}>No-show</span>}
-                </PressableScale>
+                </span>
               </div>
+
+              <div style={{fontSize: 12, fontWeight: 600, marginTop: 10, color: colors.textSecondary}}>
+                {left == null
+                  ? 'Departure time not given'
+                  : left <= 0
+                  ? 'Leaving now'
+                  : `Leaves at ${departureClockLabel(t.requestedAt, t.plannedDepartureMinutes, t.plannedDepartureAt)}`}
+              </div>
+              {!!t.requestedAt && (
+                <div style={{fontSize: 12, fontWeight: 600, marginTop: 1, color: colors.textMuted}}>Requested {agoLabel(t.requestedAt, now)}</div>
+              )}
+
+              {/* Why this is on a non-owner's screen at all. */}
+              {t.recoveryBroadcastAt != null && t.arrivalOwnerValetId !== myValetId && (
+                <div style={{display: 'flex', alignItems: 'center', gap: 5, marginTop: 6}}>
+                  <Icon name="bellAlert" size={12} color={colors.warning} />
+                  <span style={{fontSize: 12, fontWeight: 600, color: colors.warning}}>Original owner unavailable</span>
+                </div>
+              )}
+
+              <PressableScale style={{...taskActionBtnBase, marginTop: 12, backgroundColor: colors.primary}}
+                onClick={() => handleAssignDriverTo(t)}>
+                <Icon name="people" size={13} color={colors.textOnPrimary} />
+                <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textOnPrimary}}>Assign driver</span>
+              </PressableScale>
             </div>
-          ))}
+            );
+          })}
         </div>
+        </>)}
+
+        {inboxSection === 'arrivals' && (<>
+          {/* Search is what makes a flood survivable: the valet never scrolls
+              this list, they type whatever the person at the counter gives
+              them. One box matching code, plate or name — at the counter you
+              get whichever of the three they happen to say, and making them
+              pick a field first would be a decision with no information. */}
+          <div style={{display: 'flex', alignItems: 'center', gap: 8, margin: '12px 20px 0', padding: '0 12px', height: 42, borderRadius: 12, border: `1px solid ${colors.border}`, backgroundColor: colors.surface, flexShrink: 0}}>
+            <Icon name="search" size={15} color={colors.textMuted} />
+            <input
+              style={{flex: 1, fontSize: 14, fontWeight: 600, padding: 0, border: 'none', outline: 'none', background: 'transparent', color: colors.textPrimary}}
+              value={arrivalQuery}
+              onChange={e => setArrivalQuery(e.target.value)}
+              placeholder="Search code, plate or name"
+              autoCapitalize="characters"
+              autoCorrect="off"
+            />
+            {arrivalQuery.length > 0 && (
+              <PressableScale onClick={() => setArrivalQuery('')}>
+                <Icon name="close" size={15} color={colors.textMuted} />
+              </PressableScale>
+            )}
+          </div>
+
+          <div className="screen-scroll" style={{padding: 20, paddingBottom: 40}}>
+            {!hydrated ? (
+              <SkeletonCard lines={2} />
+            ) : arrivalNotices.length === 0 ? (
+              <div style={emptyBoxStyle}>
+                <Icon name="inbox" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
+                <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>Nobody has announced an arrival.</div>
+              </div>
+            ) : arrivalsFiltered.length === 0 ? (
+              <div style={emptyBoxStyle}>
+                <Icon name="search" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
+                <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>No arrival matches "{arrivalQuery.trim()}".</div>
+              </div>
+            ) : arrivalsFiltered.map(a => (
+              <div key={a.id} style={{...taskCardBase, backgroundColor: colors.surface}}>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
+                  <span style={{display: 'flex', alignItems: 'center', gap: 4, borderRadius: 6, padding: '3px 8px', backgroundColor: colors.info + '15'}}>
+                    <Icon name="bellAlert" size={11} color={colors.info} />
+                    <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 0.5, color: colors.info}}>ARRIVING</span>
+                  </span>
+                  {/* Doctors can now say an hour out, and "~60 min" reads
+                      worse than "~1 hr" on a card being scanned at a counter. */}
+                  <span style={{fontSize: 11, fontWeight: 700, color: colors.info}}>
+                    ~{a.eta >= 60 ? `${Math.round(a.eta / 6) / 10} hr` : `${a.eta} min`}
+                  </span>
+                </div>
+                <div style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>{a.doctorName}</div>
+                <div style={{fontSize: 12, fontWeight: 600, marginTop: 2, color: colors.textSecondary, ...ellipsis1}}>
+                  {a.doctorCarNumber?.trim() || 'Plate not on file'}
+                </div>
+                {!!a.doctorCardCode && (
+                  <div style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Code {a.doctorCardCode}</div>
+                )}
+                {/* "They've arrived" skips typing the code once they're
+                    standing here. "No-show" is not decoration — a notice
+                    only clears itself when a key is taken, so without it a
+                    doctor who never turns up leaves the blue count
+                    permanently wrong. */}
+                <div style={{display: 'flex', gap: 8, marginTop: 12}}>
+                  <PressableScale
+                    style={{...taskActionBtnBase, flex: 1, backgroundColor: colors.primary, opacity: arrivingId === a.id ? 0.6 : 1}}
+                    disabled={arrivingId === a.id}
+                    onClick={() => handleArrivalArrived(a)}>
+                    {arrivingId === a.id
+                      ? <span className="spinner" style={{width: 15, height: 15, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: colors.textOnPrimary}} />
+                      : <Icon name="key" size={13} color={colors.textOnPrimary} />}
+                    <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textOnPrimary}}>
+                      {arrivingId === a.id ? 'Please wait…' : "They've arrived"}
+                    </span>
+                  </PressableScale>
+                  <PressableScale
+                    style={{...taskActionBtnBase, width: 'auto', border: `1px solid ${colors.border}`, backgroundColor: colors.cardAlt, padding: '0 14px', opacity: dismissingArrivalId === a.id ? 0.6 : 1}}
+                    disabled={dismissingArrivalId === a.id}
+                    onClick={() => handleDismissArrival(a.id)}>
+                    {dismissingArrivalId === a.id
+                      ? <span className="spinner" style={{width: 15, height: 15}} />
+                      : <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textSecondary}}>No-show</span>}
+                  </PressableScale>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>)}
       </div>
     );
   }
@@ -1225,12 +1382,18 @@ export function ValetHomeScreen() {
             <div style={{color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: 600}}>{todayLabel}</div>
             <div style={{color: '#fff', fontSize: 24, fontWeight: 900, marginTop: 2, marginBottom: 18}}>{user?.name}</div>
           </div>
-          {/* Unclaimed retrievals now surface directly in the Driver
-              assign pending section below, not behind a separate inbox —
-              this badge is arrivals-only (a heads-up, not work waiting to
-              be dispatched). */}
+          {/* Two counts, and the colour carries the meaning: red is a car
+              someone is waiting for, blue is only a heads-up that someone
+              is on their way. They sit on opposite corners so neither
+              moves or overlaps as the other changes, and a zero count
+              hides rather than showing "0". */}
           <PressableScale style={{position: 'relative', width: 40, height: 40, borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.18)'}} onClick={() => setScreen('retrievals')}>
-            <Icon name="bellAlert" size={20} color="#fff" />
+            <Icon name="inbox" size={20} color="#fff" />
+            {retrievalRequests.length > 0 && (
+              <span style={{position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, padding: '0 4px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#E53935', border: '1.5px solid #fff'}}>
+                <span style={{color: '#fff', fontSize: 10, fontWeight: 800}}>{retrievalRequests.length > 9 ? '9+' : retrievalRequests.length}</span>
+              </span>
+            )}
             {arrivalNotices.length > 0 && (
               <span style={{position: 'absolute', bottom: -4, left: -4, minWidth: 18, height: 18, borderRadius: 9, padding: '0 4px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#2F6FA8', border: '1.5px solid #fff'}}>
                 <span style={{color: '#fff', fontSize: 10, fontWeight: 800}}>{arrivalNotices.length > 9 ? '9+' : arrivalNotices.length}</span>
@@ -1257,26 +1420,35 @@ export function ValetHomeScreen() {
       </div>
 
       <div style={{padding: 16, display: 'flex', flexDirection: 'column', gap: 8}}>
-        {/* Primary action grid — 3 across, same dark card language throughout
-            (the badge colour carries the "needs attention" signal, not the
-            card background, so nothing here introduces a new colour).
-            Retrieval Requests used to be a 4th tile here, opening its own
-            inbox screen; that inbox is retired now that unclaimed retrievals
-            show up directly in the Driver assign pending section below. */}
+        {/* Primary action grid — restored to the 2x2 layout with Retrieval
+            Requests as its own tile (v1.8.9), same dark card language
+            throughout. Retrieval Requests still ALSO surfaces in the
+            Dashboard's "Driver assign pending" section below — this tile
+            is the dedicated urgency-sorted view, not a replacement for it. */}
         <div style={{display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12, marginBottom: 24}}>
-          <PressableScale style={{width: '31.5%', borderRadius: 22, padding: 16, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary}} onClick={() => setScreen('scan')}>
+          <PressableScale style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary}} onClick={() => setScreen('scan')}>
             <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="key" size={24} color="#fff" /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Staff</span>
             <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Collect key from doctor / staff</span>
           </PressableScale>
-          <PressableScale style={{width: '31.5%', borderRadius: 22, padding: 16, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary}} onClick={() => setScreen('visitor')}>
+          <PressableScale style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary}} onClick={() => setScreen('visitor')}>
             <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="ticket" size={24} color="#fff" /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Visitor</span>
             <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Patient / VIP token</span>
           </PressableScale>
           <PressableScale
-            style={{width: '31.5%', borderRadius: 22, padding: 16, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary}}
-            onClick={() => setScreen('retrievals')}>
+            style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary}}
+            onClick={() => { setInboxSection('retrievals'); setScreen('retrievals'); }}>
+            <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="inbox" size={24} color="#fff" /></div>
+            <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Retrieval Requests</span>
+            <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Cars waiting to leave</span>
+            <span style={{alignSelf: 'center', borderRadius: 99, padding: '4px 9px', marginTop: 10, backgroundColor: retrievalRequests.length > 0 ? '#E53935' : 'rgba(255,255,255,0.14)'}}>
+              <span style={{color: '#fff', fontSize: 10.5, fontWeight: 800}}>{retrievalRequests.length} Pending</span>
+            </span>
+          </PressableScale>
+          <PressableScale
+            style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary}}
+            onClick={() => { setInboxSection('arrivals'); setScreen('retrievals'); }}>
             <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="bellAlert" size={24} color="#fff" /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Expected Arrivals</span>
             <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Heads-up, on the way in</span>
