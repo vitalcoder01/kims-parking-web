@@ -1540,7 +1540,7 @@ export function ValetHomeScreen() {
             car isn't anyone's active job); it shows the same list either
             way, the natural result of nesting a non-owned category under an
             ownership-based outer tab. */}
-        <div style={{display: 'flex', gap: 8, overflowX: 'auto', margin: '0 -20px 14px', padding: '0 20px'}}>
+        <div className="hscroll" style={{gap: 8, margin: '0 -20px 14px', padding: '0 20px'}}>
           {([
             ['assignPending', 'Driver assign pending', sortedAssignPendingJobs.length],
             ['acceptPending', 'Driver acceptance pending', acceptPendingJobs.length],

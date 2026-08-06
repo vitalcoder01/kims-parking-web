@@ -612,7 +612,7 @@ export function ValetRecordsScreen() {
           Same 4 chips, same meaning, whichever tab (Visitors or Staff) is
           showing — it's one shared vehicle-lifecycle filter, not two. */}
       {statusFilter === 'active' && (
-        <div style={{display: 'flex', gap: 8, padding: '10px 20px 0', overflowX: 'auto'}}>
+        <div className="hscroll" style={{gap: 8, padding: '10px 20px 0'}}>
           {STAGE_FILTERS.map(sf => {
             const on = stageFilter === sf.key;
             return (
