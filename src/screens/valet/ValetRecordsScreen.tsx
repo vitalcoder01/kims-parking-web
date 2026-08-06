@@ -105,7 +105,7 @@ const STAGE_FILTERS: {key: Exclude<StageFilter, 'all'>; label: string}[] = [
 export function ValetRecordsScreen() {
   const {colors} = useTheme();
   const {tasks, activeVisitors, availableDrivers, hasActiveRetrievalDriver,
-    assignVisitorPickupDriver, assignVisitorRetrievalDriver, assignStaffRetrievalDriver, cancelVisitor, confirmVisitorDelivered,
+    assignVisitorPickupDriver, assignVisitorRetrievalDriver, assignStaffRetrievalDriver, cancelVisitor, recallVisitor, confirmVisitorDelivered,
     confirmTaskDelivered, fetchTaskHistory} = useValetActions();
 
   const [tab, setTab] = useState<RecordsTab>('visitors');
@@ -120,6 +120,7 @@ export function ValetRecordsScreen() {
   const [pendingDoctorTaskId, setPendingDoctorTaskId] = useState<number | null>(null);
   const [assigningDriverId, setAssigningDriverId] = useState<number | null>(null);
   const [confirmingVisitorId, setConfirmingVisitorId] = useState<number | null>(null);
+  const [recallingVisitorId, setRecallingVisitorId] = useState<number | null>(null);
   const [confirmingTaskId, setConfirmingTaskId] = useState<number | null>(null);
   // Detail sheet — shared by both tabs, holds whichever ticket was tapped.
   const [detailVisitor, setDetailVisitor] = useState<Visitor | null>(null);
@@ -278,6 +279,22 @@ export function ValetRecordsScreen() {
     }
   };
 
+  // Past the key handover the car is physically with a driver — it can't be
+  // cancelled/no-shown anymore (see cancelVisitor's backend comment), so
+  // this is the only thing left on offer at that stage.
+  const handleRecallVisitor = async (visitorId: number, carNumber?: string) => {
+    if (!window.confirm(`Bring the Car Back?\n\nThe driver will be told NOT to park ${carNumber || 'this car'} and to return it to the valet counter instead.`)) return;
+    if (recallingVisitorId != null) return;
+    setRecallingVisitorId(visitorId);
+    try {
+      await recallVisitor(visitorId);
+    } catch (err: any) {
+      window.alert(err.message || 'Could not recall the car');
+    } finally {
+      setRecallingVisitorId(null);
+    }
+  };
+
   const ticketStyle = (highlight: boolean): React.CSSProperties => ({
     position: 'relative', display: 'flex', flexDirection: 'row', borderRadius: 22, marginBottom: 14, overflow: 'hidden',
     backgroundColor: colors.surface, boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
@@ -324,6 +341,15 @@ export function ValetRecordsScreen() {
     const retrieving = v.status === 'parked' && v.retrievalRequested && !needsDriver;
     const parkedIdle = v.status === 'parked' && !v.retrievalRequested;
     const delivered = v.status === 'delivered';
+    // The visitor row itself doesn't track a driver's key handover — that
+    // lives on its linked ParkingTask (see backend createVisitor). Reading
+    // it here is what tells the difference between "nobody's touched this
+    // yet" (Cancel/No-Show is still valid) and "a driver already has the
+    // key" (only a recall makes sense from here on).
+    const linkedTask = tasks.find(t => t.visitorId === v.id && t.type === 'park' && t.status !== 'completed' && t.status !== 'cancelled');
+    const keyWithDriver = v.status === 'pending' && !!v.driverId;
+    const awaitingDriver = v.status === 'pending' && !v.driverId;
+    const recalled = !!linkedTask?.recalledAt;
     const chipTone = parkedIdle ? colors.success : colors.warning;
     const chipBg = parkedIdle ? colors.successLight : colors.warningLight;
     const chipLabel = parkedIdle ? `Parked · ${v.slotId ?? ''}`
@@ -393,11 +419,42 @@ export function ValetRecordsScreen() {
               </span>
             </PressableScale>
           )}
-          {v.status === 'pending' && (
+          {/* Awaiting driver — nobody's touched this yet, cancel/no-show is
+              still the right call. */}
+          {awaitingDriver && (
             <PressableScale style={{...actionBtnStyle('transparent'), border: `1.5px solid ${colors.border}`}}
               onClick={() => handleCancel(v.id)}>
               <Icon name="close" size={14} color={colors.textSecondary} />
               <span style={{fontSize: 14, fontWeight: 700, color: colors.textSecondary}}>Cancel / No-Show</span>
+            </PressableScale>
+          )}
+          {/* A driver already has the key — the car is physically gone, so
+              cancelling/no-showing it no longer makes sense. The only real
+              action left is asking for it back. */}
+          {keyWithDriver && !recalled && (
+            <PressableScale style={{...actionBtnStyle('transparent'), border: `1.5px solid ${colors.warning}`}}
+              onClick={() => handleRecallVisitor(v.id, v.carNumber)}>
+              <Icon name="back" size={14} color={colors.warning} />
+              <span style={{fontSize: 14, fontWeight: 700, color: colors.warning}}>Bring back my car</span>
+            </PressableScale>
+          )}
+          {keyWithDriver && recalled && linkedTask?.status !== 'delivered' && (
+            <div style={actionBtnStyle(colors.cardAlt)}>
+              <Icon name="timer" size={14} color={colors.textMuted} />
+              <span style={{fontSize: 14, fontWeight: 700, color: colors.textMuted}}>Driver is bringing it back…</span>
+            </div>
+          )}
+          {keyWithDriver && linkedTask?.status === 'delivered' && (
+            <PressableScale
+              style={{...actionBtnStyle(colors.success), opacity: confirmingTaskId === linkedTask.id ? 0.6 : 1}}
+              disabled={confirmingTaskId === linkedTask.id}
+              onClick={() => handleConfirmTaskDelivered(linkedTask.id)}>
+              {confirmingTaskId === linkedTask.id
+                ? <span className="spinner" style={{width: 15, height: 15, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} />
+                : <Icon name="checkBold" size={15} color="#fff" />}
+              <span style={{fontSize: 14, fontWeight: 700, color: '#fff'}}>
+                {confirmingTaskId === linkedTask.id ? 'Please wait…' : 'Confirm car returned'}
+              </span>
             </PressableScale>
           )}
         </div>

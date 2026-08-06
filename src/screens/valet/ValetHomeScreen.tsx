@@ -185,7 +185,7 @@ export function ValetHomeScreen() {
   // (a parked car isn't anyone's active job) — it shows the same list
   // either way, the natural (and harmless) result of nesting a non-owned
   // category under an ownership-based outer tab.
-  const [dashboardCategory, setDashboardCategory] = useState<DashboardCategory>('assignPending');
+  const [dashboardCategory, setDashboardCategory] = useState<DashboardCategory>('inProgress');
   // Tapping a header stat again clears it — same toggle pattern as the
   // Dashboard's stage-filter chips elsewhere on this screen.
   const [driverStatFilter, setDriverStatFilter] = useState<DriverStatFilter>(null);
@@ -912,14 +912,25 @@ export function ValetHomeScreen() {
             }}>
               <div style={{display: 'flex', alignItems: 'flex-start', gap: 12}}>
                 <div style={{flex: 1, minWidth: 0}}>
-                  <div style={{fontSize: 22, fontWeight: 900, letterSpacing: 0.5, fontVariantNumeric: 'tabular-nums', color: colors.textPrimary, ...ellipsis1}}>{t.carNumber}</div>
-                  <div style={{fontSize: 12, fontWeight: 600, marginTop: 3, color: colors.textSecondary, ...ellipsis1}}>{t.doctorName}</div>
+                  {/* Icon-led, not just bold text — "QWERT" alone reads as
+                      an unlabeled code; the vehicle icon is what says
+                      "this is the plate", same as the person icon below
+                      says "this is who it belongs to". */}
+                  <div style={{display: 'flex', alignItems: 'center', gap: 5, marginTop: 3}}>
+                    <Icon name="carSide" size={13} color={colors.textMuted} />
+                    <span style={{fontSize: 22, fontWeight: 900, letterSpacing: 0.5, fontVariantNumeric: 'tabular-nums', color: colors.textPrimary, ...ellipsis1}}>{t.carNumber}</span>
+                  </div>
+                  <div style={{display: 'flex', alignItems: 'center', gap: 5, marginTop: 3}}>
+                    <Icon name={t.isVisitor ? 'ticket' : 'stethoscope'} size={11} color={colors.textMuted} />
+                    <span style={{fontSize: 12, fontWeight: 600, color: colors.textSecondary, ...ellipsis1}}>{t.doctorName}</span>
+                  </div>
                   {!!t.slotId && (
                     <div style={{fontSize: 12, fontWeight: 600, marginTop: 1, color: colors.textMuted, ...ellipsis1}}>Slot {t.slotId}</div>
                   )}
                 </div>
                 {/* Planned departure only — NOT a delivery ETA. */}
-                <span style={{borderRadius: 8, padding: '6px 10px', flexShrink: 0, backgroundColor: tone}}>
+                <span style={{display: 'flex', flexDirection: 'column', alignItems: 'center', borderRadius: 8, padding: '6px 10px', flexShrink: 0, backgroundColor: tone}}>
+                  <span style={{color: 'rgba(255,255,255,0.75)', fontSize: 8, fontWeight: 800, letterSpacing: 0.6, marginBottom: 1}}>LEAVES IN</span>
                   <span style={{color: '#fff', fontSize: 11, fontWeight: 900, letterSpacing: 0.8}}>
                     {plannedDepartureLabel(t.requestedAt, t.plannedDepartureMinutes, now)}
                   </span>
@@ -1627,9 +1638,9 @@ export function ValetHomeScreen() {
             ownership-based outer tab. */}
         <div className="hscroll" style={{gap: 8, margin: '0 -20px 14px', padding: '0 20px'}}>
           {([
+            ['inProgress', 'In Progress', inProgressJobs.length],
             ['assignPending', 'Driver assign pending', sortedAssignPendingJobs.length],
             ['acceptPending', 'Driver acceptance pending', acceptPendingJobs.length],
-            ['inProgress', 'In Progress', inProgressJobs.length],
             ['parked', 'Parked Vehicles', parkedVehicles.length],
             ['notCompleted', 'Not completed', notCompletedJobs.length],
           ] as const).map(([key, label, count]) => {

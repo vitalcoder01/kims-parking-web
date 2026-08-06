@@ -60,6 +60,10 @@ export function DriverJobsScreen() {
   // left the button tappable, and a second tap either fired the same action
   // twice or landed after the job had already moved past that stage.
   const [actionBusy, setActionBusy] = useState(false);
+  // Accept/Reject show together and actionBusy alone can't say which one is
+  // running — without this the tapped button gave no visible feedback (just
+  // a dimmed opacity easy to miss), so a driver would tap it again.
+  const [respondingAction, setRespondingAction] = useState<'accept' | 'reject' | null>(null);
 
   const myDriverId = useMyDriverId();
   // 'delivered' means the driver's own part is already done (car dropped at
@@ -109,6 +113,7 @@ export function DriverJobsScreen() {
   const handleAcceptTask = async () => {
     if (!activeTask || actionBusy) return;
     setActionBusy(true);
+    setRespondingAction('accept');
     try {
       await acceptTask(activeTask.id);
     } catch (err: any) {
@@ -116,12 +121,14 @@ export function DriverJobsScreen() {
       await refreshTasks().catch(() => {});
     } finally {
       setActionBusy(false);
+      setRespondingAction(null);
     }
   };
 
   const handleRejectTask = async () => {
     if (!activeTask || actionBusy) return;
     setActionBusy(true);
+    setRespondingAction('reject');
     try {
       await rejectTask(activeTask.id);
     } catch (err: any) {
@@ -129,6 +136,7 @@ export function DriverJobsScreen() {
       await refreshTasks().catch(() => {});
     } finally {
       setActionBusy(false);
+      setRespondingAction(null);
     }
   };
 
@@ -286,15 +294,19 @@ export function DriverJobsScreen() {
                   style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 14, padding: '0 16px', height: 48, flex: 1, backgroundColor: c.cardAlt, opacity: actionBusy ? 0.6 : 1}}
                   onClick={handleRejectTask} disabled={actionBusy}
                 >
-                  <Icon name="close" size={15} color={c.primary} />
-                  <span style={{fontSize: 13, fontWeight: 800, color: c.primary}}>Reject</span>
+                  {respondingAction === 'reject'
+                    ? <span className="spinner" style={{width: 15, height: 15, borderColor: 'rgba(0,0,0,0.15)', borderTopColor: c.primary}} />
+                    : <Icon name="close" size={15} color={c.primary} />}
+                  <span style={{fontSize: 13, fontWeight: 800, color: c.primary}}>{respondingAction === 'reject' ? 'Rejecting…' : 'Reject'}</span>
                 </PressableScale>
                 <PressableScale
                   style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 14, padding: '0 16px', height: 48, flex: 1, backgroundColor: c.primary, opacity: actionBusy ? 0.6 : 1}}
                   onClick={handleAcceptTask} disabled={actionBusy}
                 >
-                  <Icon name="check" size={15} color={c.textOnPrimary} />
-                  <span style={{fontSize: 13, fontWeight: 800, color: c.textOnPrimary}}>Accept</span>
+                  {respondingAction === 'accept'
+                    ? <span className="spinner" style={{width: 15, height: 15, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: c.textOnPrimary}} />
+                    : <Icon name="check" size={15} color={c.textOnPrimary} />}
+                  <span style={{fontSize: 13, fontWeight: 800, color: c.textOnPrimary}}>{respondingAction === 'accept' ? 'Accepting…' : 'Accept'}</span>
                 </PressableScale>
               </div>
             )}

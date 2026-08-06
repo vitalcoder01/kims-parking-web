@@ -75,7 +75,7 @@ self.addEventListener('notificationclick', event => {
 // indefinitely with no way to know a fix had shipped. Changing this value
 // makes sw.js itself byte-different each time, which the browser DOES
 // detect, triggering the update flow that UpdateBanner listens for.
-const CACHE = 'kims-parking-web-v22';
+const CACHE = 'kims-parking-web-v23';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', event => {
