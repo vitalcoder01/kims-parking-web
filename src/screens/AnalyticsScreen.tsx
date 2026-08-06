@@ -3,6 +3,7 @@ import {useTheme} from '../context/ThemeContext';
 import {BRAND_GRADIENT, BRAND_GRADIENT_DARK, gradientCss} from '../theme/colors';
 import {Icon} from '../components/Icon';
 import {PressableScale} from '../components/PressableScale';
+import {useDialog} from '../components/AppDialog';
 import {analyticsApi, AnalyticsOverview} from '../services/api';
 
 // Shared by both the valet and admin tabs — the data isn't role-scoped (see
@@ -73,6 +74,7 @@ function toneColor(tone: 'good' | 'ok' | 'bad', colors: any) {
 
 export function AnalyticsScreen() {
   const {colors, isDark} = useTheme();
+  const dialog = useDialog();
   const [data, setData] = useState<AnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -127,9 +129,9 @@ export function AnalyticsScreen() {
       }
       try {
         await navigator.clipboard.writeText(text);
-        window.alert('Report copied to clipboard');
+        dialog.alert('Report copied to clipboard', {tone: 'success'});
       } catch {
-        window.alert(text);
+        dialog.alert(text);
       }
     } finally {
       setSharing(false);
@@ -144,12 +146,8 @@ export function AnalyticsScreen() {
 
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background}}>
-      <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), padding: '16px 20px 18px', borderBottomLeftRadius: 28, borderBottomRightRadius: 28, position: 'relative', overflow: 'hidden'}}>
-        {/* Decorative depth — two soft glow discs, no image assets. */}
-        <div style={{position: 'absolute', top: -60, right: -40, width: 160, height: 160, borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.06)', pointerEvents: 'none'}} />
-        <div style={{position: 'absolute', bottom: -50, left: -30, width: 130, height: 130, borderRadius: '50%', backgroundColor: 'rgba(245,193,104,0.08)', pointerEvents: 'none'}} />
-
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, position: 'relative'}}>
+      <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), padding: '16px 20px 18px', borderBottomLeftRadius: 28, borderBottomRightRadius: 28}}>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20}}>
           <div>
             <div style={{display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4}}>
               <Icon name="sparkle" size={12} color="rgba(255,255,255,0.75)" />

@@ -4,6 +4,7 @@ import {Visitor, ParkingTask, Driver} from '../../context/AppStateContext';
 import {Icon} from '../../components/Icon';
 import {PressableScale} from '../../components/PressableScale';
 import {HScrollHint} from '../../components/HScrollHint';
+import {useDialog} from '../../components/AppDialog';
 import {useValetActions} from './useValetActions';
 import {AdminMapScreen} from '../admin/AdminMapScreen';
 
@@ -105,6 +106,7 @@ const STAGE_FILTERS: {key: Exclude<StageFilter, 'all'>; label: string}[] = [
 
 export function ValetRecordsScreen() {
   const {colors} = useTheme();
+  const dialog = useDialog();
   const {tasks, activeVisitors, availableDrivers, hasActiveRetrievalDriver,
     assignVisitorPickupDriver, assignVisitorRetrievalDriver, assignStaffRetrievalDriver, cancelVisitor, recallVisitor, confirmVisitorDelivered,
     confirmTaskDelivered, fetchTaskHistory} = useValetActions();
@@ -234,7 +236,7 @@ export function ValetRecordsScreen() {
         setPendingVisitorId(null); setPendingMode(null);
       }
     } catch (err: any) {
-      window.alert(err.message || 'Something went wrong');
+      dialog.alert(err.message || 'Something went wrong');
     } finally {
       setAssigningDriverId(null);
     }
@@ -246,7 +248,7 @@ export function ValetRecordsScreen() {
     try {
       await confirmVisitorDelivered(visitorId);
     } catch (err: any) {
-      window.alert(err.message || 'Could not confirm handover');
+      dialog.alert(err.message || 'Could not confirm handover');
     } finally {
       setConfirmingVisitorId(null);
     }
@@ -258,15 +260,20 @@ export function ValetRecordsScreen() {
     try {
       await confirmTaskDelivered(taskId);
     } catch (err: any) {
-      window.alert(err.message || 'Could not confirm handover');
+      dialog.alert(err.message || 'Could not confirm handover');
     } finally {
       setConfirmingTaskId(null);
     }
   };
 
-  const handleCancel = (visitorId: number) => {
-    if (window.confirm('Cancel Visitor Token\n\nThis will cancel the check-in. This cannot be undone.')) {
-      cancelVisitor(visitorId, 'valet_cancelled').catch(err => window.alert(err.message || 'Something went wrong'));
+  const handleCancel = async (visitorId: number) => {
+    const ok = await dialog.confirm({
+      title: 'Cancel Visitor Token',
+      message: 'This will cancel the check-in. This cannot be undone.',
+      confirmText: 'Cancel Token', destructive: true,
+    });
+    if (ok) {
+      cancelVisitor(visitorId, 'valet_cancelled').catch(err => dialog.alert(err.message || 'Something went wrong'));
     }
   };
 
@@ -274,13 +281,18 @@ export function ValetRecordsScreen() {
   // cancelled/no-shown anymore (see cancelVisitor's backend comment), so
   // this is the only thing left on offer at that stage.
   const handleRecallVisitor = async (visitorId: number, carNumber?: string) => {
-    if (!window.confirm(`Bring the Car Back?\n\nThe driver will be told NOT to park ${carNumber || 'this car'} and to return it to the valet counter instead.`)) return;
+    const ok = await dialog.confirm({
+      title: 'Bring the Car Back?',
+      message: `The driver will be told NOT to park ${carNumber || 'this car'} and to return it to the valet counter instead.`,
+      confirmText: 'Recall Car', destructive: true,
+    });
+    if (!ok) return;
     if (recallingVisitorId != null) return;
     setRecallingVisitorId(visitorId);
     try {
       await recallVisitor(visitorId);
     } catch (err: any) {
-      window.alert(err.message || 'Could not recall the car');
+      dialog.alert(err.message || 'Could not recall the car');
     } finally {
       setRecallingVisitorId(null);
     }
@@ -644,7 +656,7 @@ export function ValetRecordsScreen() {
             <PressableScale
               key={f}
               onClick={() => { setStatusFilter(f); if (f !== 'active') setStageFilter('all'); }}
-              style={{borderRadius: 99, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '7px 14px', backgroundColor: on ? colors.primary : colors.surface}}
+              style={{flex: 1, textAlign: 'center', borderRadius: 99, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '9px 14px', backgroundColor: on ? colors.primary : colors.surface}}
             >
               <span style={{fontSize: 12, fontWeight: 900, fontFamily: 'Arial', color: on ? colors.textOnPrimary : colors.textSecondary}}>
                 {f === 'all' ? 'All' : f === 'active' ? 'Active' : 'Completed'}

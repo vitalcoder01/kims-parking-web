@@ -1,5 +1,6 @@
 import React, {useState, useEffect, useCallback} from 'react';
 import {PressableScale} from '../../components/PressableScale';
+import {useDialog} from '../../components/AppDialog';
 import {useTheme} from '../../context/ThemeContext';
 import {adminApi} from '../../services/api';
 import {Badge} from '../../components/Badge';
@@ -50,6 +51,7 @@ const roleLabel = (r: Role) => ({doctor: 'Doctor', staff: 'Staff', valet: 'Valet
 
 export function AdminStaffScreen() {
   const {colors} = useTheme();
+  const dialog = useDialog();
   const [filter, setFilter] = useState<Filter>('all');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,7 +108,7 @@ export function AdminStaffScreen() {
   const handleCreate = async () => {
     if (!name.trim() || !employeeId.trim() || !password.trim()) return;
     if (password.length < 8 || password.length > 64) {
-      window.alert('Password must be 8–64 characters.');
+      dialog.alert('Password must be 8–64 characters.');
       return;
     }
     setSubmitting(true);
@@ -120,11 +122,11 @@ export function AdminStaffScreen() {
         cardCode: (role === 'doctor' || role === 'staff') && cardCode.trim() ? cardCode.trim() : undefined,
         phone: role === 'driver' && phone.trim() ? phone.trim() : undefined,
       });
-      window.alert(`${name.trim()} can now sign in with:\n\nUsername: ${created.username}\nPassword: ${password.trim()}\n\nShare these credentials securely — they won't be shown again here.`);
+      dialog.alert(`Username: ${created.username}\nPassword: ${password.trim()}\n\nShare these credentials securely — they won't be shown again here.`, {title: `${name.trim()} can now sign in`, tone: 'success'});
       closeForm();
       loadUsers();
     } catch (err: any) {
-      window.alert(err.message || 'Something went wrong');
+      dialog.alert(err.message || 'Something went wrong');
     } finally {
       setSubmitting(false);
     }
@@ -144,7 +146,7 @@ export function AdminStaffScreen() {
       closeForm();
       loadUsers();
     } catch (err: any) {
-      window.alert(err.message || 'Something went wrong');
+      dialog.alert(err.message || 'Something went wrong');
     } finally {
       setSubmitting(false);
     }
@@ -153,13 +155,18 @@ export function AdminStaffScreen() {
   const handleResetPassword = async () => {
     if (!editingUser || resettingPassword) return;
     const newPassword = genPassword();
-    if (!window.confirm(`${editingUser.name}'s password will be changed to:\n\n${newPassword}\n\nShare this with them directly.\n\nReset now?`)) return;
+    const ok = await dialog.confirm({
+      title: 'Reset Password?',
+      message: `${editingUser.name}'s password will be changed to:\n\n${newPassword}\n\nShare this with them directly.`,
+      confirmText: 'Reset Now', destructive: true,
+    });
+    if (!ok) return;
     setResettingPassword(true);
     try {
       await adminApi.resetPassword(editingUser.id, newPassword);
-      window.alert(`New password: ${newPassword}`);
+      dialog.alert(`New password: ${newPassword}`, {tone: 'success', title: 'Password Reset'});
     } catch (err: any) {
-      window.alert(err.message || 'Something went wrong');
+      dialog.alert(err.message || 'Something went wrong');
     } finally {
       setResettingPassword(false);
     }
@@ -167,14 +174,19 @@ export function AdminStaffScreen() {
 
   const handleDelete = async () => {
     if (!editingUser || deleting) return;
-    if (!window.confirm(`This permanently removes ${editingUser.name}'s login (${editingUser.username}). This can't be undone.\n\nDelete?`)) return;
+    const ok = await dialog.confirm({
+      title: 'Delete Account?',
+      message: `This permanently removes ${editingUser.name}'s login (${editingUser.username}). This can't be undone.`,
+      confirmText: 'Delete', destructive: true,
+    });
+    if (!ok) return;
     setDeleting(true);
     try {
       await adminApi.deleteUser(editingUser.id);
       closeForm();
       loadUsers();
     } catch (err: any) {
-      window.alert(err.message || 'Something went wrong');
+      dialog.alert(err.message || 'Something went wrong');
     } finally {
       setDeleting(false);
     }

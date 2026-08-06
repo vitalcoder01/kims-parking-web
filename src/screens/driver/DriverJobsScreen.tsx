@@ -6,6 +6,7 @@ import {useTheme} from '../../context/ThemeContext';
 import {computeTrip} from '../../utils/geo';
 import {Icon, IconName} from '../../components/Icon';
 import {PressableScale} from '../../components/PressableScale';
+import {useDialog} from '../../components/AppDialog';
 
 // Direct port of the mobile app's driver DriverJobsScreen — the driver's
 // current assigned job (accept/reject, key-collected, in-transit, parked,
@@ -48,6 +49,7 @@ export function DriverJobsScreen() {
     acceptTask, rejectTask, fetchTaskHistory, markTaskReturned,
     hydrated, refreshTasks} = useAppState();
   const {colors: c} = useTheme();
+  const dialog = useDialog();
 
   const [slotInput, setSlotInput] = useState('');
   // Guards handleMarkParked against a double-tap firing the same "mark
@@ -107,7 +109,7 @@ export function DriverJobsScreen() {
   // with just a message, so that distinction isn't available here — every
   // failure gets the same alert, with the server's own message.
   const handleActionError = (err: any, fallback: string) => {
-    window.alert(err?.message || fallback);
+    dialog.alert(err?.message || fallback);
   };
 
   const handleAcceptTask = async () => {
@@ -146,7 +148,7 @@ export function DriverJobsScreen() {
     try {
       await updateTask(activeTask.id, {status: 'in_transit'});
     } catch (err: any) {
-      window.alert(err.message || 'Could not start retrieval');
+      dialog.alert(err.message || 'Could not start retrieval');
     } finally {
       setActionBusy(false);
     }
@@ -175,7 +177,7 @@ export function DriverJobsScreen() {
       });
       setSlotInput('');
     } catch (err: any) {
-      window.alert(err.message || 'Could not mark parked');
+      dialog.alert(err.message || 'Could not mark parked');
     } finally {
       setMarkingParked(false);
     }
@@ -189,7 +191,7 @@ export function DriverJobsScreen() {
     try {
       await markTaskReturned(activeTask.id);
     } catch (err: any) {
-      window.alert(err.message || 'Could not mark returned');
+      dialog.alert(err.message || 'Could not mark returned');
     } finally {
       setActionBusy(false);
     }
@@ -214,7 +216,7 @@ export function DriverJobsScreen() {
         type: 'alarm',
       });
     } catch (err: any) {
-      window.alert(err.message || 'Could not mark retrieved');
+      dialog.alert(err.message || 'Could not mark retrieved');
       return;
     } finally {
       setActionBusy(false);

@@ -1,5 +1,6 @@
 import React from 'react';
 import {PressableScale} from '../components/PressableScale';
+import {useDialog} from '../components/AppDialog';
 import {useTheme} from '../context/ThemeContext';
 import {useAuth} from '../context/AuthContext';
 import {ThemeToggleRow, AppSwitch} from '../components/AppSwitch';
@@ -21,6 +22,7 @@ const ROLE_LABELS: Record<string, string> = {
 export function SettingsScreen() {
   const {colors, mode, setMode} = useTheme();
   const {user, logout} = useAuth();
+  const dialog = useDialog();
 
   const {canInstall, installed, promptInstall} = useInstallPrompt();
   const [showInstallHelp, setShowInstallHelp] = React.useState(false);
@@ -50,7 +52,7 @@ export function SettingsScreen() {
 
   const handleLogout = async () => {
     if (loggingOut) return;
-    if (!window.confirm('Are you sure you want to logout?')) return;
+    if (!await dialog.confirm({title: 'Logout', message: 'Are you sure you want to logout?', destructive: true})) return;
     setLoggingOut(true);
     try {
       await logout();
@@ -267,9 +269,7 @@ export function SettingsScreen() {
             (black background, white text) instead of a red accent. */}
         <PressableScale
           disabled={loggingOut}
-          onClick={() => {
-            if (window.confirm('Are you sure you want to logout?')) handleLogout();
-          }}
+          onClick={handleLogout}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
             borderRadius: radius.lg, height: 54, width: '100%', marginTop: spacing.md,

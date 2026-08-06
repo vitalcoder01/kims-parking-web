@@ -2,6 +2,7 @@ import React, {useState} from 'react';
 import {ThemeProvider, useTheme} from './context/ThemeContext';
 import {AuthProvider, useAuth} from './context/AuthContext';
 import {AppStateProvider} from './context/AppStateContext';
+import {DialogProvider} from './components/AppDialog';
 import {Icon, IconName} from './components/Icon';
 import {AlarmBanner} from './components/AlarmBanner';
 import {InstallBanner} from './components/InstallBanner';
@@ -198,11 +199,13 @@ function AppInner() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <AppStateProvider>
-          <AppInner />
-        </AppStateProvider>
-      </AuthProvider>
+      <DialogProvider>
+        <AuthProvider>
+          <AppStateProvider>
+            <AppInner />
+          </AppStateProvider>
+        </AuthProvider>
+      </DialogProvider>
     </ThemeProvider>
   );
 }

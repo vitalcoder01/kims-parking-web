@@ -8,6 +8,7 @@ import {useRetrievalRequest} from '../hooks/useRetrievalRequest';
 import {computeTrip} from '../utils/geo';
 import {BRAND_GRADIENT, BRAND_GRADIENT_DARK, gradientCss} from '../theme/colors';
 import {Icon} from '../components/Icon';
+import {useDialog} from '../components/AppDialog';
 import {
   PLANNED_DEPARTURE_OPTIONS, ARRIVAL_ETA_OPTIONS, clockToMinutes, fmtClock12, to12, to24,
   enRouteSeconds,
@@ -86,6 +87,7 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
   const {user} = useAuth();
   const {tasks, sendArrivalNotice, cancelMyRetrieval, hydrated} = useAppState();
   const {colors, isDark} = useTheme();
+  const dialog = useDialog();
   const {activeRetrieve, now, requestRetrieval} = useRetrievalRequest();
 
   const [showArrivalModal, setShowArrivalModal] = useState(false);
@@ -122,7 +124,7 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
       setArrivalSent(arrivalEta);
       setShowArrivalModal(false);
     } catch (err: any) {
-      window.alert(err.message || 'Could not notify the valet');
+      dialog.alert(err.message || 'Could not notify the valet');
     } finally {
       setSendingArrival(false);
     }
@@ -138,7 +140,7 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
       setShowDepartureModal(false);
       setCustomOn(false); setSelectedEta(null);
     } catch (err: any) {
-      window.alert(err.message || 'Could not request retrieval');
+      dialog.alert(err.message || 'Could not request retrieval');
     } finally {
       setRequesting(false);
     }
@@ -146,13 +148,17 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
 
   const handleCancelRetrieval = async () => {
     if (!activeRetrieve) return;
-    const ok = window.confirm(`The valet will be told you no longer need ${activeRetrieve.carNumber}. Your car stays parked.\n\nCancel your request?`);
+    const ok = await dialog.confirm({
+      title: 'Cancel Your Request?',
+      message: `The valet will be told you no longer need ${activeRetrieve.carNumber}. Your car stays parked.`,
+      confirmText: 'Cancel Request', destructive: true,
+    });
     if (!ok) return;
     setCancelling(true);
     try {
       await cancelMyRetrieval(activeRetrieve.id);
     } catch (err: any) {
-      window.alert(err.message || 'Could not cancel');
+      dialog.alert(err.message || 'Could not cancel');
     } finally {
       setCancelling(false);
     }

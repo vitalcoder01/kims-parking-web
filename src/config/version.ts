@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 23;
-export const APP_VERSION_NAME = '1.8.11';
+export const APP_VERSION_CODE = 24;
+export const APP_VERSION_NAME = '1.8.12';
 export const RELEASE_NOTES =
-  'Dashboard header polish, scroll-fade hints on every horizontal row, clearer Jobs tab labels, and a proper logout loading state.';
+  'Every browser popup (confirm/alert) is now a proper in-app dialog matching the rest of the design — no more bare "vercel.app says" boxes. Fixed logout asking twice, and the Active/Completed/All tabs now fill the row evenly.';

@@ -12,6 +12,7 @@ import {useValetActions, isMyJobToRun} from './useValetActions';
 import type {ParkingTask} from '../../context/AppStateContext';
 import {useAppState} from '../../context/AppStateContext';
 import {HScrollHint} from '../../components/HScrollHint';
+import {useDialog} from '../../components/AppDialog';
 import {
   plannedDepartureLabel, minutesUntilDeparture, departureClockLabel,
   enRouteSeconds, fmtDuration, departurePriority, agoLabel,
@@ -101,6 +102,7 @@ const clamp2: React.CSSProperties = {display: '-webkit-box', WebkitLineClamp: 2,
 
 export function ValetHomeScreen() {
   const {user} = useAuth();
+  const dialog = useDialog();
   const {drivers, tasks, visitors, addTask, addVisitor, markKeyCollected,
     activeTasks, availableDrivers, retrievalRequests, assignTaskDriver, assignVisitorPickupDriver,
     cancelTaskAssignment,
@@ -233,25 +235,25 @@ export function ValetHomeScreen() {
     const message = noDriverYet
       ? `${what} still has no driver. Assign one?`
       : `${reassignPrompt.driverName} ${why} for ${what}. Assign another driver?`;
-    // window.confirm stands in for the mobile dialog's two-button prompt:
-    // OK = "Reassign now", Cancel = "Later".
-    const reassignNow = window.confirm(`${title}\n\n${message}`);
-    if (reassignNow) {
-      if (reassignPrompt.kind === 'task' && reassignPrompt.task) {
-        setPendingVisitorId(null);
-        setPendingTaskId(reassignPrompt.task.id);
-      } else if (reassignPrompt.visitor) {
-        setPendingTaskId(null);
-        setPendingVisitorId(reassignPrompt.visitor.id);
+    (async () => {
+      const reassignNow = await dialog.confirm({title, message, confirmText: 'Reassign now', cancelText: 'Later'});
+      if (reassignNow) {
+        if (reassignPrompt.kind === 'task' && reassignPrompt.task) {
+          setPendingVisitorId(null);
+          setPendingTaskId(reassignPrompt.task.id);
+        } else if (reassignPrompt.visitor) {
+          setPendingTaskId(null);
+          setPendingVisitorId(reassignPrompt.visitor.id);
+        }
+        setScreen('assign');
+      } else {
+        // Acknowledge server-side, not just locally — otherwise the sweep
+        // still treats this job as unattended and pulls in every valet.
+        const id = reassignPrompt.kind === 'task' ? reassignPrompt.task?.id : null;
+        if (id) tasksApi.acknowledge(id).catch(() => {});
       }
-      setScreen('assign');
-    } else {
-      // Acknowledge server-side, not just locally — otherwise the sweep
-      // still treats this job as unattended and pulls in every valet.
-      const id = reassignPrompt.kind === 'task' ? reassignPrompt.task?.id : null;
-      if (id) tasksApi.acknowledge(id).catch(() => {});
-    }
-    clearReassignPrompt();
+      clearReassignPrompt();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reassignPrompt, clearReassignPrompt]);
 
@@ -301,11 +303,12 @@ export function ValetHomeScreen() {
       });
       setFoundUser(null); setCarNumber('');
       setScreen('home');
-      window.alert(
-        `Ticket created\n\n${plate.toUpperCase()} is now waiting for a driver in "Driver assign pending" on the Dashboard.`,
+      dialog.alert(
+        `${plate.toUpperCase()} is now waiting for a driver in "Driver assign pending" on the Dashboard.`,
+        {title: 'Ticket Created', tone: 'success'},
       );
     } catch (err: any) {
-      window.alert(err.message || 'Something went wrong');
+      dialog.alert(err.message || 'Something went wrong');
     }
   };
 
@@ -347,7 +350,7 @@ export function ValetHomeScreen() {
         setPendingTaskId(null); setPendingVisitorId(null);
         setScreen('home');
       }
-      window.alert(`${isJobGone(err) ? 'Job already handled' : 'Error'}\n\n${err.message || 'Something went wrong'}`);
+      dialog.alert(err.message || 'Something went wrong', {title: isJobGone(err) ? 'Job already handled' : 'Error'});
     } finally {
       setAssigningDriverId(null);
     }
@@ -393,11 +396,11 @@ export function ValetHomeScreen() {
     setScreen('home');
     if (taken) {
       const who = pendingTask?.valetName ?? 'Another valet';
-      window.alert(`Job already handled\n\n${who} already assigned a driver to this job.`);
+      dialog.alert(`${who} already assigned a driver to this job.`, {title: 'Job already handled'});
       return;
     }
     // Nobody to name — it left our list, so we don't know who took it.
-    window.alert('Job no longer available\n\nThis job is no longer available.');
+    dialog.alert('This job is no longer available.', {title: 'Job no longer available'});
   }, [screen, pendingTaskId, pendingVisitorId, pendingTask, pendingVisitor, assigningDriverId, hydrated]);
 
   const handleAddVisitor = async () => {
@@ -426,14 +429,15 @@ export function ValetHomeScreen() {
       // assign pending" on the Dashboard until any valet picks it up,
       // rather than forcing whoever checked the visitor in to also be the
       // one who assigns a driver in the same breath.
-      window.alert(
-        `Checked in\n\nParking token  ${visitor.token}\n\n${visitor.carNumber || 'Vehicle'} — ${vMobileDigits}\n\n` +
+      dialog.alert(
+        `Parking token  ${visitor.token}\n\n${visitor.carNumber || 'Vehicle'} — ${vMobileDigits}\n\n` +
         'Give this token to the visitor. Their car is now waiting for a driver in "Driver assign pending" on the Dashboard.',
+        {title: 'Checked In', tone: 'success'},
       );
       setVName(''); setVCar(''); setVMobile(''); setVVehicleType('car');
       setScreen('home');
     } catch (err: any) {
-      window.alert(err.message || 'Something went wrong');
+      dialog.alert(err.message || 'Something went wrong');
     } finally {
       setSubmitting(false);
     }
@@ -445,7 +449,7 @@ export function ValetHomeScreen() {
     try {
       await confirmTaskDelivered(taskId);
     } catch (err: any) {
-      window.alert(err.message || 'Could not confirm handover');
+      dialog.alert(err.message || 'Could not confirm handover');
     } finally {
       setConfirmingTaskId(null);
     }
@@ -512,7 +516,7 @@ export function ValetHomeScreen() {
         if (screenRef.current !== 'assign' || pendingTaskIdRef.current !== t.id) return;
         setPendingTaskId(null);
         setScreen('home');
-        window.alert(`Already taken\n\n${err?.message || 'This retrieval request has already been accepted.'}`);
+        dialog.alert(err?.message || 'This retrieval request has already been accepted.', {title: 'Already taken'});
       })
       .finally(() => setAssigningToId(null));
   };
@@ -544,15 +548,20 @@ export function ValetHomeScreen() {
     try {
       await dismissArrivalNotice(id);
     } catch (err: any) {
-      window.alert(err.message || 'Could not dismiss');
+      dialog.alert(err.message || 'Could not dismiss');
     } finally {
       setDismissingArrivalId(null);
     }
   };
 
-  const handleCancelTask = (taskId: number) => {
-    if (!window.confirm('Cancel This Job?\n\nUse this if it’s stuck (e.g. never got a driver) and needs to be cleared.')) return;
-    cancelTask(taskId).catch(err => window.alert(err.message || 'Could not cancel'));
+  const handleCancelTask = async (taskId: number) => {
+    const ok = await dialog.confirm({
+      title: 'Cancel This Job?',
+      message: 'Use this if it’s stuck (e.g. never got a driver) and needs to be cleared.',
+      confirmText: 'Cancel Job', destructive: true,
+    });
+    if (!ok) return;
+    cancelTask(taskId).catch(err => dialog.alert(err.message || 'Could not cancel'));
   };
 
   // Give up on a driver who hasn't accepted yet, right now, instead of
@@ -562,15 +571,20 @@ export function ValetHomeScreen() {
     if (cancellingAssignmentId != null) return;
     setCancellingAssignmentId(taskId);
     cancelTaskAssignment(taskId)
-      .catch(err => window.alert(err.message || 'Could not cancel the assignment'))
+      .catch(err => dialog.alert(err.message || 'Could not cancel the assignment'))
       .finally(() => setCancellingAssignmentId(null));
   };
 
   // Past the key handover the car is physically with a driver, so it can't
   // just be voided — this tells them to bring it back to the counter.
-  const handleRecallTask = (taskId: number, plate: string) => {
-    if (!window.confirm(`Bring the Car Back?\n\nThe driver will be told NOT to park ${plate} and to return it to the valet counter instead.`)) return;
-    recallTask(taskId).catch(err => window.alert(err.message || 'Could not recall'));
+  const handleRecallTask = async (taskId: number, plate: string) => {
+    const ok = await dialog.confirm({
+      title: 'Bring the Car Back?',
+      message: `The driver will be told NOT to park ${plate} and to return it to the valet counter instead.`,
+      confirmText: 'Recall Car', destructive: true,
+    });
+    if (!ok) return;
+    recallTask(taskId).catch(err => dialog.alert(err.message || 'Could not recall'));
   };
 
   // ── shared style bits ───────────────────────────────────────────────────
@@ -1394,7 +1408,7 @@ export function ValetHomeScreen() {
                 try {
                   await markKeyCollected(t.id);
                 } catch (err: any) {
-                  window.alert(err.message || 'Could not mark key handed over');
+                  dialog.alert(err.message || 'Could not mark key handed over');
                 } finally {
                   setCollectingKeyTaskId(null);
                 }

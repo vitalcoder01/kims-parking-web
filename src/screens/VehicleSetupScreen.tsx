@@ -4,6 +4,7 @@ import {useAuth} from '../context/AuthContext';
 import {usersApi} from '../services/api';
 import {Icon} from '../components/Icon';
 import {PressableScale} from '../components/PressableScale';
+import {useDialog} from '../components/AppDialog';
 
 // Same three.js mini-car scene the mobile app renders in a WebView — the
 // scene HTML is identical; here it lives in an iframe (srcDoc) and receives
@@ -270,6 +271,7 @@ function isLightColor(hex: string) {
 export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
   const {colors} = useTheme();
   const {user, updateProfile} = useAuth();
+  const dialog = useDialog();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const modelInputRef = useRef<HTMLInputElement>(null);
@@ -290,7 +292,7 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
 
   const handleSave = async () => {
     if (!vehicleNumber.trim()) {
-      window.alert('Please enter your vehicle number before saving.');
+      dialog.alert('Please enter your vehicle number before saving.');
       return;
     }
     setSaving(true);
@@ -308,14 +310,14 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
       });
       setMode('view');
     } catch (err: any) {
-      window.alert(err.message || 'Could not save vehicle details');
+      dialog.alert(err.message || 'Could not save vehicle details');
     } finally {
       setSaving(false);
     }
   };
 
   const handleHelp = () => {
-    window.alert('Add your vehicle number, phone number, and pick a body colour — the preview above updates live. This is saved to your account and used by the valet team.');
+    dialog.alert('Add your vehicle number, phone number, and pick a body colour — the preview above updates live. This is saved to your account and used by the valet team.', {tone: 'info', title: 'Vehicle Setup'});
   };
 
   // srcDoc is only computed once — colour/plate updates go via postMessage,
