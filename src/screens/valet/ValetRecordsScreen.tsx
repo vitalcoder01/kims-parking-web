@@ -3,6 +3,7 @@ import {useTheme} from '../../context/ThemeContext';
 import {Visitor, ParkingTask, Driver} from '../../context/AppStateContext';
 import {Icon} from '../../components/Icon';
 import {PressableScale} from '../../components/PressableScale';
+import {HScrollHint} from '../../components/HScrollHint';
 import {useValetActions} from './useValetActions';
 import {AdminMapScreen} from '../admin/AdminMapScreen';
 
@@ -97,9 +98,9 @@ type StatusFilter = 'all' | 'active' | 'completed';
 type StageFilter = 'all' | 'atHospital' | 'transitToLot' | 'parked' | 'transitToHospital';
 const STAGE_FILTERS: {key: Exclude<StageFilter, 'all'>; label: string}[] = [
   {key: 'atHospital', label: 'At hospital'},
-  {key: 'transitToLot', label: 'Transit → parking lot'},
+  {key: 'transitToLot', label: 'Vehicle → parking lot'},
   {key: 'parked', label: 'Parked'},
-  {key: 'transitToHospital', label: 'Transit → hospital'},
+  {key: 'transitToHospital', label: 'Vehicle → hospital'},
 ];
 
 export function ValetRecordsScreen() {
@@ -603,15 +604,15 @@ export function ValetRecordsScreen() {
       <div style={{display: 'flex', marginTop: 14, borderBottom: `1px solid ${colors.border}`, backgroundColor: colors.surface}}>
         <PressableScale style={{flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 0', backgroundColor: 'transparent', borderRadius: 0}} onClick={() => setTab('visitors')}>
           <span style={{fontSize: 14, fontWeight: 800, color: tab === 'visitors' ? colors.textPrimary : colors.textMuted}}>Visitors</span>
-          {tab === 'visitors' && <span style={{position: 'absolute', bottom: 0, left: 16, right: 16, height: 2, borderRadius: 1, backgroundColor: colors.textPrimary}} />}
+          {tab === 'visitors' && <span style={{position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: colors.textPrimary}} />}
         </PressableScale>
         <PressableScale style={{flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 0', backgroundColor: 'transparent', borderRadius: 0}} onClick={() => setTab('staff')}>
           <span style={{fontSize: 14, fontWeight: 800, color: tab === 'staff' ? colors.textPrimary : colors.textMuted}}>Staff</span>
-          {tab === 'staff' && <span style={{position: 'absolute', bottom: 0, left: 16, right: 16, height: 2, borderRadius: 1, backgroundColor: colors.textPrimary}} />}
+          {tab === 'staff' && <span style={{position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: colors.textPrimary}} />}
         </PressableScale>
         <PressableScale style={{flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 0', backgroundColor: 'transparent', borderRadius: 0}} onClick={() => setTab('map')}>
           <span style={{fontSize: 14, fontWeight: 800, color: tab === 'map' ? colors.textPrimary : colors.textMuted}}>Map Layout</span>
-          {tab === 'map' && <span style={{position: 'absolute', bottom: 0, left: 16, right: 16, height: 2, borderRadius: 1, backgroundColor: colors.textPrimary}} />}
+          {tab === 'map' && <span style={{position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: colors.textPrimary}} />}
         </PressableScale>
       </div>
 
@@ -645,7 +646,7 @@ export function ValetRecordsScreen() {
               onClick={() => { setStatusFilter(f); if (f !== 'active') setStageFilter('all'); }}
               style={{borderRadius: 99, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '7px 14px', backgroundColor: on ? colors.primary : colors.surface}}
             >
-              <span style={{fontSize: 12, fontWeight: 700, color: on ? colors.textOnPrimary : colors.textSecondary}}>
+              <span style={{fontSize: 12, fontWeight: 900, fontFamily: 'Arial', color: on ? colors.textOnPrimary : colors.textSecondary}}>
                 {f === 'all' ? 'All' : f === 'active' ? 'Active' : 'Completed'}
               </span>
             </PressableScale>
@@ -659,7 +660,7 @@ export function ValetRecordsScreen() {
           Same 4 chips, same meaning, whichever tab (Visitors or Staff) is
           showing — it's one shared vehicle-lifecycle filter, not two. */}
       {statusFilter === 'active' && (
-        <div className="hscroll" style={{gap: 8, padding: '10px 20px 0'}}>
+        <HScrollHint fadeColor={colors.background} className="hscroll" style={{gap: 8, padding: '10px 20px 0'}}>
           {STAGE_FILTERS.map(sf => {
             const on = stageFilter === sf.key;
             return (
@@ -668,13 +669,13 @@ export function ValetRecordsScreen() {
                 onClick={() => setStageFilter(on ? 'all' : sf.key)}
                 style={{borderRadius: 99, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '7px 14px', backgroundColor: on ? colors.primary : colors.surface, flexShrink: 0}}
               >
-                <span style={{fontSize: 12, fontWeight: 700, color: on ? colors.textOnPrimary : colors.textSecondary, whiteSpace: 'nowrap'}}>
+                <span style={{fontSize: 12, fontWeight: 900, fontFamily: 'Arial', color: on ? colors.textOnPrimary : colors.textSecondary, whiteSpace: 'nowrap'}}>
                   {sf.label}
                 </span>
               </PressableScale>
             );
           })}
-        </div>
+        </HScrollHint>
       )}
 
       <div className="screen-scroll" style={{padding: '14px 20px 40px'}}>

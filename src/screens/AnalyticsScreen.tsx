@@ -114,19 +114,25 @@ export function AnalyticsScreen() {
   const activeHour = selectedHour ?? data?.busiestHour ?? null;
   const activeHourCount = activeHour != null ? hourly[activeHour] : 0;
 
+  const [sharing, setSharing] = useState(false);
   const onShare = async () => {
-    if (!data) return;
-    const text = buildShareText(data);
-    const nav = navigator as any;
-    if (nav.share) {
-      try { await nav.share({title: 'KIMS Parking Analytics', text}); } catch { /* user cancelled */ }
-      return;
-    }
+    if (!data || sharing) return;
+    setSharing(true);
     try {
-      await navigator.clipboard.writeText(text);
-      window.alert('Report copied to clipboard');
-    } catch {
-      window.alert(text);
+      const text = buildShareText(data);
+      const nav = navigator as any;
+      if (nav.share) {
+        try { await nav.share({title: 'KIMS Parking Analytics', text}); } catch { /* user cancelled */ }
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+        window.alert('Report copied to clipboard');
+      } catch {
+        window.alert(text);
+      }
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -153,12 +159,14 @@ export function AnalyticsScreen() {
           </div>
           <div style={{display: 'flex', gap: 8}}>
             <PressableScale
-              style={{width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}
+              disabled={sharing}
+              style={{width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: sharing ? 0.6 : 1}}
               onClick={onShare}>
-              <Icon name="share" size={17} color="#fff" />
+              {sharing ? <span className="spinner" style={{width: 16, height: 16, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} /> : <Icon name="share" size={17} color="#fff" />}
             </PressableScale>
             <PressableScale
-              style={{width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}
+              disabled={refreshing}
+              style={{width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: refreshing ? 0.6 : 1}}
               onClick={() => { setRefreshing(true); load(true); }}>
               <Icon name="refresh" size={18} color="#fff" />
             </PressableScale>
@@ -193,8 +201,10 @@ export function AnalyticsScreen() {
         <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 30px'}}>
           <Icon name="alert" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
           <span style={{color: colors.textMuted, marginBottom: 12}}>{err}</span>
-          <PressableScale onClick={() => load()} style={{padding: '10px 20px', borderRadius: 12, backgroundColor: colors.primary}}>
-            <span style={{color: colors.background, fontWeight: 800}}>Retry</span>
+          <PressableScale disabled={loading} onClick={() => load()} style={{padding: '10px 20px', borderRadius: 12, backgroundColor: colors.primary, opacity: loading ? 0.6 : 1}}>
+            {loading
+              ? <span className="spinner" style={{width: 14, height: 14, borderColor: 'rgba(0,0,0,0.2)', borderTopColor: colors.background}} />
+              : <span style={{color: colors.background, fontWeight: 800}}>Retry</span>}
           </PressableScale>
         </div>
       ) : (

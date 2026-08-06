@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 22;
-export const APP_VERSION_NAME = '1.8.10';
+export const APP_VERSION_CODE = 23;
+export const APP_VERSION_NAME = '1.8.11';
 export const RELEASE_NOTES =
-  'Removed "No-Show" as a cancel reason on visitor tickets — the button now just says "Cancel" with a single confirm.';
+  'Dashboard header polish, scroll-fade hints on every horizontal row, clearer Jobs tab labels, and a proper logout loading state.';

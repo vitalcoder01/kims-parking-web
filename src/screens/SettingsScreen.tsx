@@ -266,16 +266,21 @@ export function SettingsScreen() {
             Save Vehicle / Edit Vehicle Details elsewhere in the app
             (black background, white text) instead of a red accent. */}
         <PressableScale
+          disabled={loggingOut}
           onClick={() => {
-            if (window.confirm('Are you sure you want to logout?')) logout();
+            if (window.confirm('Are you sure you want to logout?')) handleLogout();
           }}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
             borderRadius: radius.lg, height: 54, width: '100%', marginTop: spacing.md,
-            backgroundColor: colors.primary,
+            backgroundColor: colors.primary, opacity: loggingOut ? 0.6 : 1,
           }}>
-          <Icon name="logout" size={17} color={colors.textOnPrimary} />
-          <span style={{fontSize: typography.sizes.base, fontWeight: typography.weights.black, color: colors.textOnPrimary}}>Logout</span>
+          {loggingOut
+            ? <span className="spinner" style={{borderColor: 'rgba(255,255,255,0.4)', borderTopColor: colors.textOnPrimary}} />
+            : <Icon name="logout" size={17} color={colors.textOnPrimary} />}
+          <span style={{fontSize: typography.sizes.base, fontWeight: typography.weights.black, color: colors.textOnPrimary}}>
+            {loggingOut ? 'Logging out…' : 'Logout'}
+          </span>
         </PressableScale>
 
       </div>

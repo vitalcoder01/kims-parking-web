@@ -11,6 +11,7 @@ import {VehicleNumberInput} from '../../components/VehicleNumberInput';
 import {useValetActions, isMyJobToRun} from './useValetActions';
 import type {ParkingTask} from '../../context/AppStateContext';
 import {useAppState} from '../../context/AppStateContext';
+import {HScrollHint} from '../../components/HScrollHint';
 import {
   plannedDepartureLabel, minutesUntilDeparture, departureClockLabel,
   enRouteSeconds, fmtDuration, departurePriority, agoLabel,
@@ -1440,12 +1441,8 @@ export function ValetHomeScreen() {
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background}}>
       {/* Header */}
-      <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), padding: '16px 20px 20px', borderBottomLeftRadius: 28, borderBottomRightRadius: 28, position: 'relative', overflow: 'hidden'}}>
-        {/* Decorative depth — same glow-disc language as the Analytics tab,
-            so both screens read as one consistent premium surface. */}
-        <div style={{position: 'absolute', top: -60, right: -40, width: 160, height: 160, borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.06)', pointerEvents: 'none'}} />
-        <div style={{position: 'absolute', bottom: -50, left: -30, width: 130, height: 130, borderRadius: '50%', backgroundColor: 'rgba(245,193,104,0.08)', pointerEvents: 'none'}} />
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative'}}>
+      <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), padding: '16px 20px 20px', borderBottomLeftRadius: 28, borderBottomRightRadius: 28}}>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
           <div>
             <div style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6}}>
               <span style={{width: 6, height: 6, borderRadius: 3, backgroundColor: '#4ADE9A'}} />
@@ -1513,13 +1510,11 @@ export function ValetHomeScreen() {
             is the dedicated urgency-sorted view, not a replacement for it. */}
         <div style={{display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12, marginBottom: 24}}>
           <PressableScale style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary, border: `1px solid ${colors.success}40`, position: 'relative'}} onClick={() => setScreen('scan')}>
-            <Icon name="chevronRight" size={14} color="rgba(255,255,255,0.3)" style={{position: 'absolute', top: 14, right: 14}} />
             <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: colors.success + '26', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="key" size={24} color={colors.success} /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Staff</span>
             <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Collect key from doctor / staff</span>
           </PressableScale>
           <PressableScale style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary, border: '1px solid #F5C16840', position: 'relative'}} onClick={() => setScreen('visitor')}>
-            <Icon name="chevronRight" size={14} color="rgba(255,255,255,0.3)" style={{position: 'absolute', top: 14, right: 14}} />
             <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: '#F5C16826', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="ticket" size={24} color="#F5C168" /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Visitor</span>
             <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Patient / VIP token</span>
@@ -1527,7 +1522,6 @@ export function ValetHomeScreen() {
           <PressableScale
             style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary, border: '1px solid #E5393540', position: 'relative'}}
             onClick={() => { setInboxSection('retrievals'); setScreen('retrievals'); }}>
-            <Icon name="chevronRight" size={14} color="rgba(255,255,255,0.3)" style={{position: 'absolute', top: 14, right: 14}} />
             <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: '#E5393526', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="inbox" size={24} color="#F1786F" /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Retrieval Requests</span>
             <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Cars waiting to leave</span>
@@ -1538,7 +1532,6 @@ export function ValetHomeScreen() {
           <PressableScale
             style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary, border: '1px solid #2F6FA840', position: 'relative'}}
             onClick={() => { setInboxSection('arrivals'); setScreen('retrievals'); }}>
-            <Icon name="chevronRight" size={14} color="rgba(255,255,255,0.3)" style={{position: 'absolute', top: 14, right: 14}} />
             <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: '#2F6FA826', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="bellAlert" size={24} color="#6FA8DC" /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Expected Arrivals</span>
             <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Heads-up, on the way in</span>
@@ -1576,7 +1569,7 @@ export function ValetHomeScreen() {
             </div>
           </div>
         ) : (
-        <div className="hscroll" style={{margin: '0 -20px 20px', padding: '0 20px', gap: 10}}>
+        <HScrollHint fadeColor={colors.background} wrapStyle={{margin: '0 -20px 20px'}} className="hscroll" style={{padding: '0 20px', gap: 10}}>
           {driverStatusList.map((d, i) => {
             const sc = d.status === 'available' ? colors.success : d.status === 'busy' ? colors.warning : colors.textMuted;
             const sl = d.status === 'available' ? 'Ready' : d.status === 'busy' ? 'On task' : 'Off duty';
@@ -1605,7 +1598,7 @@ export function ValetHomeScreen() {
               </div>
             );
           })}
-        </div>
+        </HScrollHint>
         )}
 
         {/* Dashboard — every active job, grouped by the stage it's actually
@@ -1636,7 +1629,7 @@ export function ValetHomeScreen() {
             car isn't anyone's active job); it shows the same list either
             way, the natural result of nesting a non-owned category under an
             ownership-based outer tab. */}
-        <div className="hscroll" style={{gap: 8, margin: '0 -20px 14px', padding: '0 20px'}}>
+        <HScrollHint fadeColor={colors.background} wrapStyle={{margin: '0 -20px 14px'}} className="hscroll" style={{gap: 8, padding: '0 20px'}}>
           {([
             ['inProgress', 'In Progress', inProgressJobs.length],
             ['assignPending', 'Driver assign pending', sortedAssignPendingJobs.length],
@@ -1656,7 +1649,7 @@ export function ValetHomeScreen() {
               </PressableScale>
             );
           })}
-        </div>
+        </HScrollHint>
 
         {!hydrated ? (
           <>
