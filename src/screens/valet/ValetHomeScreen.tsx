@@ -1429,9 +1429,17 @@ export function ValetHomeScreen() {
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background}}>
       {/* Header */}
-      <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), padding: '16px 20px 20px'}}>
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+      <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), padding: '16px 20px 20px', borderBottomLeftRadius: 28, borderBottomRightRadius: 28, position: 'relative', overflow: 'hidden'}}>
+        {/* Decorative depth — same glow-disc language as the Analytics tab,
+            so both screens read as one consistent premium surface. */}
+        <div style={{position: 'absolute', top: -60, right: -40, width: 160, height: 160, borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.06)', pointerEvents: 'none'}} />
+        <div style={{position: 'absolute', bottom: -50, left: -30, width: 130, height: 130, borderRadius: '50%', backgroundColor: 'rgba(245,193,104,0.08)', pointerEvents: 'none'}} />
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative'}}>
           <div>
+            <div style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6}}>
+              <span style={{width: 6, height: 6, borderRadius: 3, backgroundColor: '#4ADE9A'}} />
+              <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 10.5, fontWeight: 800, letterSpacing: 1.2}}>ON SHIFT</span>
+            </div>
             <div style={{color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: 600}}>{todayLabel}</div>
             <div style={{color: '#fff', fontSize: 24, fontWeight: 900, marginTop: 2, marginBottom: 18}}>{user?.name}</div>
           </div>
@@ -1457,7 +1465,7 @@ export function ValetHomeScreen() {
         {/* Tappable, not decoration — each stat filters (or, for "Done
             today", ranks) the Driver Status strip below. Tap the active one
             again to clear it back to everyone. */}
-        <div style={{display: 'flex', alignItems: 'center'}}>
+        <div style={{display: 'flex', alignItems: 'center', position: 'relative'}}>
           {([
             ['ready', 'people', availableDrivers.length, 'Ready', colors.success],
             ['onTask', 'navigate', busyDrivers, 'On task', colors.warning],
@@ -1467,16 +1475,18 @@ export function ValetHomeScreen() {
             const active = driverStatFilter === key;
             return (
               <React.Fragment key={key}>
-                {i > 0 && <div style={{width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.15)', margin: '0 4px'}} />}
+                {i > 0 && <div style={{width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.15)', margin: '0 4px'}} />}
                 <PressableScale
                   style={{flex: 1, textAlign: 'left', padding: '8px 6px', borderRadius: active ? 14 : 0, backgroundColor: active ? 'rgba(255,255,255,0.14)' : 'transparent'}}
                   onClick={() => setDriverStatFilter(f => f === key ? null : key)}>
-                  <div style={{display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3}}>
-                    <Icon name={icon} size={11} color={active ? tint : 'rgba(255,255,255,0.55)'} />
+                  <div style={{width: 24, height: 24, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 6, backgroundColor: active ? tint + '33' : 'rgba(255,255,255,0.1)'}}>
+                    <Icon name={icon} size={13} color={active ? tint : 'rgba(255,255,255,0.6)'} />
+                  </div>
+                  <div style={{color: active ? tint : '#fff', fontSize: 20, fontWeight: 900, fontVariantNumeric: 'tabular-nums'}}>{num}</div>
+                  <div style={{display: 'flex', alignItems: 'center', gap: 4, marginTop: 2}}>
+                    <span style={{color: active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600}}>{label}</span>
                     {active && <span style={{width: 5, height: 5, borderRadius: 3, backgroundColor: tint}} />}
                   </div>
-                  <div style={{color: active ? tint : '#fff', fontSize: 20, fontWeight: 900}}>{num}</div>
-                  <div style={{color: active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600, marginTop: 2}}>{label}</div>
                 </PressableScale>
               </React.Fragment>
             );
@@ -1491,20 +1501,23 @@ export function ValetHomeScreen() {
             Dashboard's "Driver assign pending" section below — this tile
             is the dedicated urgency-sorted view, not a replacement for it. */}
         <div style={{display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12, marginBottom: 24}}>
-          <PressableScale style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary}} onClick={() => setScreen('scan')}>
-            <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="key" size={24} color="#fff" /></div>
+          <PressableScale style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary, border: `1px solid ${colors.success}40`, position: 'relative'}} onClick={() => setScreen('scan')}>
+            <Icon name="chevronRight" size={14} color="rgba(255,255,255,0.3)" style={{position: 'absolute', top: 14, right: 14}} />
+            <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: colors.success + '26', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="key" size={24} color={colors.success} /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Staff</span>
             <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Collect key from doctor / staff</span>
           </PressableScale>
-          <PressableScale style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary}} onClick={() => setScreen('visitor')}>
-            <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="ticket" size={24} color="#fff" /></div>
+          <PressableScale style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary, border: '1px solid #F5C16840', position: 'relative'}} onClick={() => setScreen('visitor')}>
+            <Icon name="chevronRight" size={14} color="rgba(255,255,255,0.3)" style={{position: 'absolute', top: 14, right: 14}} />
+            <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: '#F5C16826', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="ticket" size={24} color="#F5C168" /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Visitor</span>
             <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Patient / VIP token</span>
           </PressableScale>
           <PressableScale
-            style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary}}
+            style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary, border: '1px solid #E5393540', position: 'relative'}}
             onClick={() => { setInboxSection('retrievals'); setScreen('retrievals'); }}>
-            <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="inbox" size={24} color="#fff" /></div>
+            <Icon name="chevronRight" size={14} color="rgba(255,255,255,0.3)" style={{position: 'absolute', top: 14, right: 14}} />
+            <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: '#E5393526', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="inbox" size={24} color="#F1786F" /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Retrieval Requests</span>
             <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Cars waiting to leave</span>
             <span style={{alignSelf: 'center', borderRadius: 99, padding: '4px 9px', marginTop: 10, backgroundColor: retrievalRequests.length > 0 ? '#E53935' : 'rgba(255,255,255,0.14)'}}>
@@ -1512,9 +1525,10 @@ export function ValetHomeScreen() {
             </span>
           </PressableScale>
           <PressableScale
-            style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary}}
+            style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary, border: '1px solid #2F6FA840', position: 'relative'}}
             onClick={() => { setInboxSection('arrivals'); setScreen('retrievals'); }}>
-            <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="bellAlert" size={24} color="#fff" /></div>
+            <Icon name="chevronRight" size={14} color="rgba(255,255,255,0.3)" style={{position: 'absolute', top: 14, right: 14}} />
+            <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: '#2F6FA826', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="bellAlert" size={24} color="#6FA8DC" /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Expected Arrivals</span>
             <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Heads-up, on the way in</span>
             <span style={{alignSelf: 'center', borderRadius: 99, padding: '4px 9px', marginTop: 10, backgroundColor: arrivalNotices.length > 0 ? '#2F6FA8' : 'rgba(255,255,255,0.14)'}}>
@@ -1525,12 +1539,15 @@ export function ValetHomeScreen() {
 
         {/* Driver status — reacts to whichever header stat is tapped above. */}
         <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12}}>
-          <div style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>
-            {driverStatFilter === 'ready' ? `Ready (${driverStatusList.length})`
-              : driverStatFilter === 'onTask' ? `On Task (${driverStatusList.length})`
-              : driverStatFilter === 'offDuty' ? `Off Duty (${driverStatusList.length})`
-              : driverStatFilter === 'doneToday' ? `Top Performers Today`
-              : `Driver Status (${drivers.length})`}
+          <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+            <Icon name={driverStatFilter === 'doneToday' ? 'trophy' : 'people'} size={15} color={driverStatFilter === 'doneToday' ? '#F5C168' : colors.primary} />
+            <span style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>
+              {driverStatFilter === 'ready' ? `Ready (${driverStatusList.length})`
+                : driverStatFilter === 'onTask' ? `On Task (${driverStatusList.length})`
+                : driverStatFilter === 'offDuty' ? `Off Duty (${driverStatusList.length})`
+                : driverStatFilter === 'doneToday' ? `Top Performers Today`
+                : `Driver Status (${drivers.length})`}
+            </span>
           </div>
           {driverStatFilter != null && (
             <PressableScale onClick={() => setDriverStatFilter(null)}>
@@ -1557,7 +1574,8 @@ export function ValetHomeScreen() {
             const rank = driverStatFilter === 'doneToday' && (d.completedToday ?? 0) > 0 ? i + 1 : null;
             const medal = rank === 1 ? '#F5C168' : rank === 2 ? '#C7CDD6' : rank === 3 ? '#D3946B' : null;
             return (
-              <div key={d.id} style={{borderRadius: 16, border: `${medal ? 1.5 : 1}px solid ${medal ?? colors.border}`, width: 128, flexShrink: 0, overflow: 'hidden', backgroundColor: colors.surface}}>
+              <div key={d.id} style={{borderRadius: 16, border: `${medal ? 1.5 : 1}px solid ${medal ?? colors.border}`, width: 128, flexShrink: 0, overflow: 'hidden', backgroundColor: colors.surface, boxShadow: medal ? '0 2px 8px rgba(245,193,104,0.3)' : undefined}}>
+                <div style={{height: 3, width: '100%', backgroundColor: sc}} />
                 <div style={{display: 'flex', alignItems: 'center', gap: 8, padding: 12, borderBottom: `1px solid ${colors.divider}`}}>
                   <div style={{width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: sc + '14'}}>
                     <span style={{fontSize: 16, fontWeight: 800, color: sc}}>{d.name[0]}</span>
@@ -1582,7 +1600,10 @@ export function ValetHomeScreen() {
         {/* Dashboard — every active job, grouped by the stage it's actually
             stuck at, one category visible at a time (an inner tab row under
             My Jobs/Team Jobs, replacing the old stacked-sections layout). */}
-        <div style={{fontSize: 14, fontWeight: 800, marginBottom: 12, color: colors.textPrimary}}>Dashboard ({dashboardJobsForTab.length})</div>
+        <div style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12}}>
+          <Icon name="dashboard" size={15} color={colors.primary} />
+          <span style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>Dashboard ({dashboardJobsForTab.length})</span>
+        </div>
         {/* Counts sit on the tabs so a valet can see there IS team work
             without leaving their own list to check. */}
         <div style={{...inboxTabsStyle, padding: 0, marginBottom: 12}}>

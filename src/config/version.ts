@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 19;
-export const APP_VERSION_NAME = '1.8.7';
+export const APP_VERSION_CODE = 20;
+export const APP_VERSION_NAME = '1.8.8';
 export const RELEASE_NOTES =
-  'Analytics got a premium upgrade — rated park/retrieve performance, a tap-to-inspect 24-hour activity chart, expandable leaderboard rows with Fastest Park/Retrieve crowns, and a one-tap Share Report.';
+  'Dashboard got the same premium treatment as Analytics — glowing header, color-coded action tiles with tap chevrons, richer stat badges, and accented driver status cards.';
