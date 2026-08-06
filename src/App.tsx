@@ -23,6 +23,7 @@ import {ValetRecordsScreen} from './screens/valet/ValetRecordsScreen';
 import {ValetMapScreen} from './screens/valet/ValetMapScreen';
 import {DriverDashboardScreen} from './screens/driver/DriverDashboardScreen';
 import {DriverJobsScreen} from './screens/driver/DriverJobsScreen';
+import {AnalyticsScreen} from './screens/AnalyticsScreen';
 
 // Web port of the app's AppNavigator: bottom tabs per role.
 // Doctor/staff: Home / Setup / Settings — matching the mobile app's current
@@ -38,7 +39,7 @@ import {DriverJobsScreen} from './screens/driver/DriverJobsScreen';
 
 type TabKey =
   | 'Home' | 'Card' | 'History' | 'Setup' | 'Settings'
-  | 'Dashboard' | 'Staff' | 'Attendance' | 'Map'
+  | 'Dashboard' | 'Staff' | 'Attendance' | 'Map' | 'Analytics'
   | 'Queue' | 'Records' | 'ValetMap'
   | 'DriverDashboard' | 'Jobs';
 
@@ -56,6 +57,7 @@ function tabsForRole(role: string | undefined): TabDef[] {
       {key: 'Staff', label: 'Staff', icon: 'staff', headerTitle: 'Staff'},
       {key: 'Attendance', label: 'Attendance', icon: 'calendar', headerTitle: 'Attendance'},
       {key: 'Map', label: 'Map', icon: 'map', headerTitle: 'Live Map'},
+      {key: 'Analytics', label: 'Analytics', icon: 'analytics', headerTitle: null},
       {key: 'Settings', label: 'Settings', icon: 'settings', headerTitle: 'Settings'},
     ];
   }
@@ -64,6 +66,7 @@ function tabsForRole(role: string | undefined): TabDef[] {
       {key: 'Queue', label: 'Dashboard', icon: 'key', headerTitle: null},
       {key: 'Records', label: 'Jobs', icon: 'clipboard', headerTitle: null},
       {key: 'ValetMap', label: 'Map', icon: 'map', headerTitle: null},
+      {key: 'Analytics', label: 'Analytics', icon: 'analytics', headerTitle: null},
       {key: 'Settings', label: 'Settings', icon: 'settings', headerTitle: 'Settings'},
     ];
   }
@@ -109,6 +112,7 @@ function RoleRouter() {
     : tab === 'Staff'       ? <AdminStaffScreen />
     : tab === 'Attendance'  ? <AdminAttendanceScreen />
     : tab === 'Map'         ? <AdminMapScreen />
+    : tab === 'Analytics'   ? <AnalyticsScreen />
     : tab === 'Queue'       ? <ValetHomeScreen />
     : tab === 'Records'     ? <ValetRecordsScreen />
     : tab === 'ValetMap'    ? <ValetMapScreen />
