@@ -172,6 +172,11 @@ export const tasksApi = {
   // keep treating the job as unattended and pulling in every other valet.
   acknowledge: (id: number) =>
     client.patch(`/tasks/${id}/acknowledge`).then(() => undefined),
+  // "Later" on the repeating driver-reminder prompt — stops it permanently
+  // for this ticket (see backend driverReminder.js), unlike acknowledge
+  // above which only defers the one-time escalation prompt.
+  silenceDriverReminder: (id: number) =>
+    client.patch(`/tasks/${id}/silence-driver-reminder`).then(() => undefined),
   // Valet: abort a park job the driver is already out on — brings the car
   // back to the counter instead of parking it.
   recall: (id: number) =>

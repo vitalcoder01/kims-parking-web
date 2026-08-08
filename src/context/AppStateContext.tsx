@@ -149,6 +149,13 @@ export interface ReassignPrompt {
   visitor?: Visitor;
   driverName: string | null;
   rejected?: boolean;
+  // 'escalation' (default) is the existing one-time grace-period ladder in
+  // jobAlerts.js — "Later" there DEFERS (touchOwnerWindow, one more prompt
+  // after another grace window). 'reminder' is the repeating 60s loop in
+  // driverReminder.js for a freshly-created park ticket — "Later" there
+  // SILENCES permanently instead. Same dialog, different backend call on
+  // the same button.
+  source?: 'escalation' | 'reminder';
 }
 
 export interface ActiveAlert {
@@ -471,6 +478,19 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
         if (prev?.kind === 'visitor' && prev.visitor?.id === mapped.id) return prev;
         reassignShownAt.current = Date.now();
         return {kind: 'visitor', visitor: mapped, driverName, rejected};
+      });
+    });
+    // Repeating "still needs a driver" reminder for a freshly-created park
+    // ticket (see backend driverReminder.js) — fires every 60s until a
+    // driver's assigned or the valet taps Later. Same dialog as the
+    // escalation prompts above, tagged source:'reminder' so Later calls the
+    // silence endpoint instead of the defer one.
+    socket.on('task:driver-reminder', ({task}: any) => {
+      const mapped = mapTask(task);
+      setReassignPrompt(prev => {
+        if (prev?.kind === 'task' && prev.task?.id === mapped.id && prev.source === 'reminder') return prev;
+        reassignShownAt.current = Date.now();
+        return {kind: 'task', task: mapped, driverName: null, source: 'reminder'};
       });
     });
 

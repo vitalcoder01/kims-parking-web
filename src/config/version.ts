@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 25;
-export const APP_VERSION_NAME = '1.8.13';
+export const APP_VERSION_CODE = 26;
+export const APP_VERSION_NAME = '1.8.14';
 export const RELEASE_NOTES =
-  'The back gesture now actually works like a native app — undoes a tab switch, closes a sub-screen, or dismisses a popup one step at a time, instead of exiting straight out of the app from wherever you were.';
+  'Generate Ticket and visitor check-in now go straight into Assign Driver instead of back to Home. Unassigned park tickets also now get a repeating reminder every 60s until a driver is assigned or you tap Later to stop it for that ticket.';
