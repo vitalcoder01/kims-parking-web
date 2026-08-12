@@ -39,7 +39,18 @@ export function useValetActions() {
     && (t.status === 'requested' || t.status === 'accepted')
     && isMyRetrieval(t, myValetId));
   const activeVisitors = visitors.filter(v => v.status !== 'retrieved' && v.status !== 'cancelled');
-  const hasActiveRetrievalDriver = (v: Visitor) => drivers.some(d => d.currentTaskId === v.id && d.status === 'busy');
+  // Driver.currentTaskId is a ParkingTask id, never a visitor id (see the
+  // backend's visitor.service.js freeDriverIfStillOn comment — the same
+  // mixup once left a driver stuck "busy" forever because a visitor id
+  // happened to collide with an unrelated task id, and separately made this
+  // exact check flip back to false right after a driver was assigned and
+  // accepted a visitor's retrieval — see the mobile app's identical fix).
+  // Resolving the visitor's actual retrieve task first and comparing
+  // against ITS id is what actually disambiguates this.
+  const hasActiveRetrievalDriver = (v: Visitor) => {
+    const task = tasks.find(t => t.visitorId === v.id && t.type === 'retrieve' && t.status !== 'completed' && t.status !== 'cancelled');
+    return !!task && drivers.some(d => d.currentTaskId === task.id && d.status === 'busy');
+  };
 
   const assignTaskDriver = async (taskId: number, driverId: number) => {
     await assignDriver(taskId, driverId);

@@ -1,12 +1,14 @@
 import React, {useState, useEffect} from 'react';
 import {useTheme} from '../../context/ThemeContext';
-import {Visitor, ParkingTask, Driver} from '../../context/AppStateContext';
+import {Visitor, ParkingTask, Driver, mapVisitor} from '../../context/AppStateContext';
 import {Icon} from '../../components/Icon';
 import {PressableScale} from '../../components/PressableScale';
 import {HScrollHint} from '../../components/HScrollHint';
+import {CalendarPicker} from '../../components/CalendarPicker';
 import {useDialog} from '../../components/AppDialog';
 import {useBackStep} from '../../hooks/useBackStep';
 import {useValetActions} from './useValetActions';
+import {visitorsApi} from '../../services/api';
 import {AdminMapScreen} from '../admin/AdminMapScreen';
 
 // Direct DOM port of the mobile app's ValetRecordsScreen — same
@@ -108,8 +110,8 @@ const STAGE_FILTERS: {key: Exclude<StageFilter, 'all'>; label: string}[] = [
 export function ValetRecordsScreen() {
   const {colors} = useTheme();
   const dialog = useDialog();
-  const {tasks, activeVisitors, availableDrivers, hasActiveRetrievalDriver,
-    assignVisitorPickupDriver, assignVisitorRetrievalDriver, assignStaffRetrievalDriver, cancelVisitor, recallVisitor, confirmVisitorDelivered,
+  const {tasks, visitors, activeVisitors, availableDrivers, hasActiveRetrievalDriver,
+    assignVisitorPickupDriver, assignVisitorRetrievalDriver, assignStaffRetrievalDriver, cancelVisitor, cancelVisitorAssignment, recallVisitor, confirmVisitorDelivered,
     confirmTaskDelivered, fetchTaskHistory} = useValetActions();
 
   const [tab, setTab] = useState<RecordsTab>('visitors');
@@ -134,6 +136,32 @@ export function ValetRecordsScreen() {
   });
   const [confirmingVisitorId, setConfirmingVisitorId] = useState<number | null>(null);
   const [recallingVisitorId, setRecallingVisitorId] = useState<number | null>(null);
+  const [cancellingAssignmentVisitorId, setCancellingAssignmentVisitorId] = useState<number | null>(null);
+
+  // Calendar-wise records view (Visitors tab only) — 'YYYY-MM-DD', or null
+  // for the normal live view. Selecting a date fetches that day's visitors
+  // fresh from the unbounded ?date= endpoint rather than filtering the live
+  // `visitors` array, which is deliberately capped to the last 24h.
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [dateVisitors, setDateVisitors] = useState<Visitor[] | null>(null);
+  const [dateLoading, setDateLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedDate) { setDateVisitors(null); return; }
+    let cancelled = false;
+    setDateLoading(true);
+    visitorsApi.byDate(selectedDate)
+      .then((rows: any[]) => { if (!cancelled) setDateVisitors(rows.map(mapVisitor)); })
+      .catch(() => { if (!cancelled) setDateVisitors([]); })
+      .finally(() => { if (!cancelled) setDateLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedDate]);
+
+  const todayKey = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+  const calendarDateLabel = (key: string) => key === todayKey
+    ? 'Today'
+    : new Date(`${key}T00:00:00`).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'});
   const [confirmingTaskId, setConfirmingTaskId] = useState<number | null>(null);
   // Detail sheet — shared by both tabs, holds whichever ticket was tapped.
   const [detailVisitor, setDetailVisitor] = useState<Visitor | null>(null);
@@ -185,8 +213,16 @@ export function ValetRecordsScreen() {
     return t.driverId != null ? 'transitToHospital' : 'atHospital';
   };
 
-  const visitorsFiltered = activeVisitors
-    .filter(v => statusFilter === 'all' || (statusFilter === 'completed' ? v.status === 'retrieved' : v.status !== 'retrieved'))
+  // Completed/All need retrieved (and cancelled, for All) visitors too —
+  // activeVisitors is deliberately pre-stripped of both (see useValetActions),
+  // which is exactly why "Completed" here used to always come up empty: every
+  // visitor the completed check could ever match had already been filtered
+  // out one step earlier, before this check ever ran.
+  // A selected calendar date overrides all of that — it's its own fetched
+  // snapshot of one specific day, live-bounding doesn't apply to it.
+  const visitorsSource = selectedDate ? (dateVisitors ?? []) : statusFilter === 'active' ? activeVisitors : visitors;
+  const visitorsFiltered = visitorsSource
+    .filter(v => selectedDate || statusFilter === 'all' || (statusFilter === 'completed' ? v.status === 'retrieved' : v.status !== 'retrieved'))
     .filter(v => statusFilter !== 'active' || stageFilter === 'all' || visitorStage(v) === stageFilter)
     .filter(v => !q || v.name?.toLowerCase().includes(q) || v.carNumber?.toLowerCase().includes(q) || v.token.toLowerCase().includes(q));
 
@@ -228,7 +264,7 @@ export function ValetRecordsScreen() {
     .filter(t => statusFilter !== 'active' || stageFilter === 'all' || staffStage(t) === stageFilter)
     .filter(t => !q || t.doctorName?.toLowerCase().includes(q) || t.carNumber?.toLowerCase().includes(q));
 
-  const pendingVisitor = pendingVisitorId ? activeVisitors.find(v => v.id === pendingVisitorId) ?? null : null;
+  const pendingVisitor = pendingVisitorId ? visitors.find(v => v.id === pendingVisitorId) ?? null : null;
   const pendingDoctorTask = pendingDoctorTaskId ? staffHistory.find(t => t.id === pendingDoctorTaskId) ?? null : null;
 
   const handleAssign = async (driverId: number) => {
@@ -284,6 +320,21 @@ export function ValetRecordsScreen() {
     });
     if (ok) {
       cancelVisitor(visitorId, 'valet_cancelled').catch(err => dialog.alert(err.message || 'Something went wrong'));
+    }
+  };
+
+  // Driver's assigned but hasn't accepted (or has, but hasn't collected the
+  // key) yet — give up on them now instead of waiting out the accept-timeout
+  // window. Mirrors the staff/task flow's "Cancel Assign".
+  const handleCancelAssignment = async (visitorId: number) => {
+    if (cancellingAssignmentVisitorId != null) return;
+    setCancellingAssignmentVisitorId(visitorId);
+    try {
+      await cancelVisitorAssignment(visitorId);
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not cancel the assignment');
+    } finally {
+      setCancellingAssignmentVisitorId(null);
     }
   };
 
@@ -360,7 +411,14 @@ export function ValetRecordsScreen() {
     // yet" (Cancel/No-Show is still valid) and "a driver already has the
     // key" (only a recall makes sense from here on).
     const linkedTask = tasks.find(t => t.visitorId === v.id && t.type === 'park' && t.status !== 'completed' && t.status !== 'cancelled');
-    const keyWithDriver = v.status === 'pending' && !!v.driverId;
+    // A driver being assigned isn't the same as a driver having the key —
+    // the backend's recall guard only accepts a recall once the linked task
+    // is actually past key handover (key_collected/in_transit; see backend
+    // recallVisitor → taskService().recallTask). pickedUpAt is the moment
+    // the driver confirms they've collected the vehicle from the counter,
+    // so it's the real gate here (see mobile app's identical fix).
+    const keyWithDriver = v.status === 'pending' && !!v.driverId && !!v.pickedUpAt;
+    const awaitingAccept = v.status === 'pending' && !!v.driverId && !v.pickedUpAt;
     const awaitingDriver = v.status === 'pending' && !v.driverId;
     const recalled = !!linkedTask?.recalledAt;
     const chipTone = parkedIdle ? colors.success : colors.warning;
@@ -440,6 +498,29 @@ export function ValetRecordsScreen() {
               <Icon name="close" size={14} color={colors.textSecondary} />
               <span style={{fontSize: 14, fontWeight: 700, color: colors.textSecondary}}>Cancel</span>
             </PressableScale>
+          )}
+          {/* Driver assigned but hasn't collected the key yet — recall isn't
+              valid until they do (see keyWithDriver above), so the only real
+              action here is giving up on this driver and re-assigning. */}
+          {awaitingAccept && (
+            <div style={{display: 'flex', gap: 8, marginTop: 14}}>
+              <div style={{...actionBtnStyle('transparent'), flex: 1, marginTop: 0, border: `1.5px solid ${colors.border}`}}>
+                <Icon name="timer" size={13} color={colors.textMuted} />
+                <span style={{fontSize: 13, fontWeight: 700, color: colors.textMuted, whiteSpace: 'nowrap'}}>
+                  {v.acceptedAt ? 'Collecting key…' : 'Waiting to accept…'}
+                </span>
+              </div>
+              {!v.acceptedAt && (
+                <PressableScale
+                  style={{...actionBtnStyle('transparent'), marginTop: 0, border: `1.5px solid ${colors.border}`, padding: '0 14px', width: 'auto'}}
+                  disabled={cancellingAssignmentVisitorId === v.id}
+                  onClick={() => handleCancelAssignment(v.id)}>
+                  <span style={{fontSize: 13, fontWeight: 700, color: colors.textSecondary}}>
+                    {cancellingAssignmentVisitorId === v.id ? 'Cancelling…' : 'Cancel Assign'}
+                  </span>
+                </PressableScale>
+              )}
+            </div>
           )}
           {/* A driver already has the key — the car is physically gone, so
               cancelling/no-showing it no longer makes sense. The only real
@@ -581,7 +662,7 @@ export function ValetRecordsScreen() {
   };
 
   const filtered = tab === 'visitors' ? visitorsFiltered : tab === 'staff' ? staffFiltered : [];
-  const totalCount = tab === 'visitors' ? activeVisitors.length : tab === 'staff' ? staffHistory.length : 0;
+  const totalCount = tab === 'visitors' ? visitorsSource.length : tab === 'staff' ? staffHistory.length : 0;
 
   const detailRows: [string, string][] | null = detailVisitor ? [
     ['Token', `#${detailVisitor.token}`],
@@ -643,8 +724,8 @@ export function ValetRecordsScreen() {
         <AdminMapScreen />
       ) : (
       <>
-      <div style={{padding: '14px 20px 4px'}}>
-        <div style={{display: 'flex', alignItems: 'center', gap: 10, borderRadius: 16, padding: '0 15px', height: 48, backgroundColor: colors.surface, boxShadow: '0 1px 2px rgba(0,0,0,0.04)'}}>
+      <div style={{padding: '14px 20px 4px', display: 'flex', gap: 10}}>
+        <div style={{flex: 1, display: 'flex', alignItems: 'center', gap: 10, borderRadius: 16, padding: '0 15px', height: 48, backgroundColor: colors.surface, boxShadow: '0 1px 2px rgba(0,0,0,0.04)'}}>
           <Icon name="search" size={17} color={colors.textMuted} />
           <input
             style={{flex: 1, fontSize: 15, fontWeight: 500, padding: 0, border: 'none', outline: 'none', background: 'transparent', color: colors.textPrimary}}
@@ -658,7 +739,34 @@ export function ValetRecordsScreen() {
             </PressableScale>
           )}
         </div>
+        {tab === 'visitors' && (
+          <PressableScale
+            style={{
+              width: 48, height: 48, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              border: `1px solid ${selectedDate ? colors.primary : colors.border}`,
+              backgroundColor: selectedDate ? colors.primary : colors.surface,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+            }}
+            onClick={() => setCalendarOpen(true)}>
+            <Icon name="calendar" size={17} color={selectedDate ? colors.textOnPrimary : colors.textSecondary} />
+          </PressableScale>
+        )}
       </div>
+
+      {/* Selected-date banner — this IS the view (not a filter layered on
+          top of the live one), so it reads as a distinct mode rather than
+          just another chip in the row above. */}
+      {tab === 'visitors' && selectedDate && (
+        <div style={{display: 'flex', alignItems: 'center', gap: 8, margin: '10px 20px 0', padding: '10px 14px', borderRadius: 14, backgroundColor: colors.cardAlt}}>
+          <Icon name="calendar" size={14} color={colors.textSecondary} />
+          <span style={{fontSize: 13, fontWeight: 800, color: colors.textPrimary}}>{calendarDateLabel(selectedDate)}</span>
+          {dateLoading && <span className="spinner" style={{width: 13, height: 13, marginLeft: 4, borderColor: colors.border, borderTopColor: colors.textMuted}} />}
+          <div style={{flex: 1}} />
+          <PressableScale onClick={() => setSelectedDate(null)} style={{background: 'transparent', border: 'none', padding: 0}}>
+            <Icon name="close" size={16} color={colors.textSecondary} />
+          </PressableScale>
+        </div>
+      )}
 
       <div style={{display: 'flex', gap: 8, padding: '10px 20px 0'}}>
         {(['active', 'completed', 'all'] as StatusFilter[]).map(f => {
@@ -666,8 +774,9 @@ export function ValetRecordsScreen() {
           return (
             <PressableScale
               key={f}
+              disabled={!!selectedDate}
               onClick={() => { setStatusFilter(f); if (f !== 'active') setStageFilter('all'); }}
-              style={{flex: 1, textAlign: 'center', borderRadius: 99, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '9px 14px', backgroundColor: on ? colors.primary : colors.surface}}
+              style={{flex: 1, textAlign: 'center', borderRadius: 99, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '9px 14px', backgroundColor: on ? colors.primary : colors.surface, opacity: selectedDate ? 0.4 : 1}}
             >
               <span style={{fontSize: 12, fontWeight: 900, fontFamily: 'Arial', color: on ? colors.textOnPrimary : colors.textSecondary}}>
                 {f === 'all' ? 'All' : f === 'active' ? 'Active' : 'Completed'}
@@ -676,6 +785,13 @@ export function ValetRecordsScreen() {
           );
         })}
       </div>
+
+      <CalendarPicker
+        visible={calendarOpen}
+        value={selectedDate ?? undefined}
+        onClose={() => setCalendarOpen(false)}
+        onSelect={(date) => { setSelectedDate(date); setCalendarOpen(false); }}
+      />
 
       {/* Second-level stage row — only meaningful once "Active" narrows the
           list to still-in-flight tickets; a completed/all list mixes every
