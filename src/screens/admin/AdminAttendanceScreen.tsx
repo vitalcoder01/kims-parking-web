@@ -1,12 +1,16 @@
 import React, {useState, useEffect, useCallback} from 'react';
 import {PressableScale} from '../../components/PressableScale';
 import {useTheme} from '../../context/ThemeContext';
+import {useIsDesktop} from '../../hooks/useIsDesktop';
 import {adminApi} from '../../services/api';
 import {Badge} from '../../components/Badge';
 import {Icon, IconName} from '../../components/Icon';
 import {spacing, radius, typography} from '../../theme';
 
-// Direct port of the mobile app's AdminAttendanceScreen.
+// Mobile branch is a direct port of the mobile app's AdminAttendanceScreen.
+// Desktop branch (>=900px) arranges the same per-user calendars into a
+// multi-column grid and turns the "Today" list into a real table — same
+// data/handlers either way.
 interface TodayRow {
   id: number; userId: number; name: string; role: string; employeeId: string;
   checkIn: string | null; checkOut: string | null; vehiclesHandled: number; gate?: string | null;
@@ -101,6 +105,7 @@ function UserCalendar({user, monthStr, colors}: {user: MonthlyUser; monthStr: st
 
 export function AdminAttendanceScreen() {
   const {colors} = useTheme();
+  const isDesktop = useIsDesktop();
   const [todayRows, setTodayRows] = useState<TodayRow[]>([]);
   const [monthUsers, setMonthUsers] = useState<MonthlyUser[]>([]);
   const [monthStr, setMonthStr] = useState(currentMonthStr());
@@ -142,60 +147,126 @@ export function AdminAttendanceScreen() {
     );
   }
 
+  const monthNav = (
+    <div style={{display: 'flex', alignItems: 'center', gap: 16}}>
+      <PressableScale style={{width: 34, height: 34, borderRadius: radius.sm, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card}} onClick={() => setMonthStr(m => shiftMonth(m, -1))}>
+        <span style={{fontSize: 18, fontWeight: 900, color: colors.textPrimary}}>‹</span>
+      </PressableScale>
+      <span style={{fontSize: 15, fontWeight: 800, minWidth: 140, textAlign: 'center', color: colors.textPrimary}}>{monthLabel(monthStr)}</span>
+      <PressableScale
+        style={{width: 34, height: 34, borderRadius: radius.sm, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, opacity: isCurrentMonth ? 0.35 : 1}}
+        onClick={() => !isCurrentMonth && setMonthStr(m => shiftMonth(m, 1))} disabled={isCurrentMonth}>
+        <span style={{fontSize: 18, fontWeight: 900, color: colors.textPrimary}}>›</span>
+      </PressableScale>
+    </div>
+  );
+
+  const categoryPills = (
+    <div style={{display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2}}>
+      {visibleCategories.map(c => {
+        const on = category === c.key;
+        return (
+          <PressableScale key={c.key} onClick={() => setCategory(c.key)}
+            style={{flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, borderRadius: radius.full, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '9px 14px', backgroundColor: on ? colors.primary : colors.card}}>
+            <Icon name={c.icon} size={14} color={on ? colors.textOnPrimary : colors.textPrimary} />
+            <span style={{fontSize: 12, fontWeight: 800, color: on ? colors.textOnPrimary : colors.textPrimary}}>{c.label}</span>
+            <span style={{borderRadius: 10, padding: '1px 6px', minWidth: 18, textAlign: 'center', backgroundColor: on ? colors.textOnPrimary + '40' : colors.cardAlt}}>
+              <span style={{fontSize: 10, fontWeight: 800, color: on ? colors.textOnPrimary : colors.textMuted}}>{categoryCounts[c.key] ?? 0}</span>
+            </span>
+          </PressableScale>
+        );
+      })}
+    </div>
+  );
+
+  const presentCard = (
+    <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, textAlign: 'center', padding: '22px 0', backgroundColor: colors.card, boxShadow: `0 2px 8px ${colors.shadow}`}}>
+      <div style={{width: 44, height: 44, borderRadius: radius.full, margin: '0 auto', marginBottom: spacing.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.successLight}}>
+        <Icon name="checkBold" size={20} color={colors.success} />
+      </div>
+      <div style={{fontSize: typography.sizes['4xl'], fontWeight: typography.weights.black, color: colors.success, lineHeight: 1.1}}>{present}</div>
+      <div style={{fontSize: 11, fontWeight: 700, marginTop: 4, color: colors.textMuted}}>Present right now</div>
+    </div>
+  );
+
+  const emptyUsers = (
+    <div style={{borderRadius: radius.lg, border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center', marginBottom: spacing.sm}}>
+      <Icon name="calendar" size={22} color={colors.textMuted} />
+      <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>No one in this category yet</div>
+    </div>
+  );
+
+  const emptyToday = (
+    <div style={{borderRadius: radius.lg, border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center'}}>
+      <Icon name="clock" size={22} color={colors.textMuted} />
+      <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>Nobody has been marked present yet today</div>
+    </div>
+  );
+
+  if (isDesktop) {
+    const th: React.CSSProperties = {textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textMuted};
+    return (
+      <div style={{padding: '28px 0 40px'}}>
+        <div style={{display: 'flex', gap: spacing.xl, marginBottom: spacing.xl, alignItems: 'stretch'}}>
+          <div style={{width: 220, flexShrink: 0}}>{presentCard}</div>
+          <div style={{flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: spacing.md}}>
+            {monthNav}
+            {categoryPills}
+          </div>
+        </div>
+
+        <div style={sec}>PER-USER CALENDAR</div>
+        {filteredUsers.length === 0 ? emptyUsers : (
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: spacing.md, marginBottom: spacing.xl}}>
+            {filteredUsers.map(u => <UserCalendar key={u.userId} user={u} monthStr={monthStr} colors={colors} />)}
+          </div>
+        )}
+
+        <div style={sec}>TODAY — MARKED AUTOMATICALLY</div>
+        {todayRows.length === 0 ? emptyToday : (
+          <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card}}>
+            <div style={{display: 'flex', borderBottom: `1px solid ${colors.border}`, backgroundColor: colors.cardAlt}}>
+              <span style={{...th, flex: '1 1 220px'}}>Person</span>
+              <span style={{...th, width: 140}}>Checked in</span>
+              <span style={{...th, width: 130}}>Vehicles</span>
+              <span style={{...th, width: 100}}>Status</span>
+            </div>
+            {todayRows.map((r, i) => (
+              <div key={r.id} style={{display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: i === todayRows.length - 1 ? 'none' : `1px solid ${colors.divider}`}}>
+                <span style={{flex: '1 1 220px', display: 'flex', alignItems: 'center', gap: spacing.sm, minWidth: 0}}>
+                  <span style={{width: 32, height: 32, borderRadius: radius.sm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: r.checkOut ? colors.cardAlt : colors.successLight}}>
+                    <span style={{fontSize: 12, fontWeight: 900, color: r.checkOut ? colors.textSecondary : colors.success}}>{r.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+                  </span>
+                  <span style={{minWidth: 0}}>
+                    <span style={{display: 'block', fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>{r.name}</span>
+                    <span style={{display: 'block', fontSize: 11, marginTop: 1, color: colors.textMuted}}>{roleLabel[r.role] ?? r.role} · {r.employeeId}</span>
+                  </span>
+                </span>
+                <span style={{width: 140, fontSize: 12, color: colors.textSecondary}}>{formatTime(r.checkIn)}</span>
+                <span style={{width: 130, fontSize: 12, fontWeight: 700, color: r.vehiclesHandled > 0 ? colors.primary : colors.textMuted}}>{r.vehiclesHandled > 0 ? `${r.vehiclesHandled} vehicles` : '—'}</span>
+                <span style={{width: 100}}><Badge label={r.checkOut ? 'Done' : 'Present'} variant={r.checkOut ? 'muted' : 'success'} dot={!r.checkOut} /></span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background, padding: 16, paddingBottom: 40}}>
-      <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, textAlign: 'center', padding: '22px 0', marginBottom: spacing.base, backgroundColor: colors.card, boxShadow: `0 2px 8px ${colors.shadow}`}}>
-        <div style={{width: 44, height: 44, borderRadius: radius.full, margin: '0 auto', marginBottom: spacing.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.successLight}}>
-          <Icon name="checkBold" size={20} color={colors.success} />
-        </div>
-        <div style={{fontSize: typography.sizes['4xl'], fontWeight: typography.weights.black, color: colors.success, lineHeight: 1.1}}>{present}</div>
-        <div style={{fontSize: 11, fontWeight: 700, marginTop: 4, color: colors.textMuted}}>Present right now</div>
-      </div>
+      <div style={{marginBottom: spacing.base}}>{presentCard}</div>
 
-      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: spacing.base}}>
-        <PressableScale style={{width: 34, height: 34, borderRadius: radius.sm, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card}} onClick={() => setMonthStr(m => shiftMonth(m, -1))}>
-          <span style={{fontSize: 18, fontWeight: 900, color: colors.textPrimary}}>‹</span>
-        </PressableScale>
-        <span style={{fontSize: 15, fontWeight: 800, minWidth: 140, textAlign: 'center', color: colors.textPrimary}}>{monthLabel(monthStr)}</span>
-        <PressableScale
-          style={{width: 34, height: 34, borderRadius: radius.sm, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, opacity: isCurrentMonth ? 0.35 : 1}}
-          onClick={() => !isCurrentMonth && setMonthStr(m => shiftMonth(m, 1))} disabled={isCurrentMonth}>
-          <span style={{fontSize: 18, fontWeight: 900, color: colors.textPrimary}}>›</span>
-        </PressableScale>
-      </div>
+      <div style={{display: 'flex', justifyContent: 'center', marginBottom: spacing.base}}>{monthNav}</div>
 
       <div style={sec}>CATEGORY</div>
-      <div style={{display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 14, paddingBottom: 2}}>
-        {visibleCategories.map(c => {
-          const on = category === c.key;
-          return (
-            <PressableScale key={c.key} onClick={() => setCategory(c.key)}
-              style={{flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, borderRadius: radius.full, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '9px 14px', backgroundColor: on ? colors.primary : colors.card}}>
-              <Icon name={c.icon} size={14} color={on ? colors.textOnPrimary : colors.textPrimary} />
-              <span style={{fontSize: 12, fontWeight: 800, color: on ? colors.textOnPrimary : colors.textPrimary}}>{c.label}</span>
-              <span style={{borderRadius: 10, padding: '1px 6px', minWidth: 18, textAlign: 'center', backgroundColor: on ? colors.textOnPrimary + '40' : colors.cardAlt}}>
-                <span style={{fontSize: 10, fontWeight: 800, color: on ? colors.textOnPrimary : colors.textMuted}}>{categoryCounts[c.key] ?? 0}</span>
-              </span>
-            </PressableScale>
-          );
-        })}
-      </div>
+      <div style={{marginBottom: 14}}>{categoryPills}</div>
 
       <div style={{...sec, marginTop: 4}}>PER-USER CALENDAR</div>
-      {filteredUsers.length === 0 ? (
-        <div style={{borderRadius: radius.lg, border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center', marginBottom: spacing.sm}}>
-          <Icon name="calendar" size={22} color={colors.textMuted} />
-          <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>No one in this category yet</div>
-        </div>
-      ) : filteredUsers.map(u => <UserCalendar key={u.userId} user={u} monthStr={monthStr} colors={colors} />)}
+      {filteredUsers.length === 0 ? emptyUsers : filteredUsers.map(u => <UserCalendar key={u.userId} user={u} monthStr={monthStr} colors={colors} />)}
 
       <div style={{...sec, marginTop: spacing.sm}}>TODAY — MARKED AUTOMATICALLY</div>
-      {todayRows.length === 0 ? (
-        <div style={{borderRadius: radius.lg, border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center'}}>
-          <Icon name="clock" size={22} color={colors.textMuted} />
-          <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>Nobody has been marked present yet today</div>
-        </div>
-      ) : (
+      {todayRows.length === 0 ? emptyToday : (
         <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card, boxShadow: `0 2px 8px ${colors.shadow}`}}>
           {todayRows.map((r, i) => (
             <div key={r.id} style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '13px 14px', borderBottom: i === todayRows.length - 1 ? 'none' : `1px solid ${colors.divider}`}}>
