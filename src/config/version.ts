@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 29;
-export const APP_VERSION_NAME = '1.8.17';
+export const APP_VERSION_CODE = 30;
+export const APP_VERSION_NAME = '1.8.18';
 export const RELEASE_NOTES =
-  'Admin accounts now get a redesigned desktop layout (sidebar navigation, wider dashboard, staff table, attendance and live map views) on screens 900px and wider. Mobile view is unchanged for everyone.';
+  'Admin accounts get one consistent console layout (sidebar navigation, real data tables, live map) at every screen size now, phone included — the sidebar becomes a slide-out menu on narrower screens. Other roles are unchanged.';
