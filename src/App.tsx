@@ -192,13 +192,17 @@ function AppInner() {
     );
   }
 
+  // /admin is its own dedicated sign-in (see AdminLoginScreen), checked
+  // before the `user` branch below — otherwise anyone who already had ANY
+  // saved session on this browser (doctor, valet, driver, whatever) got
+  // dropped straight into their existing dashboard on visiting /admin,
+  // never seeing this screen at all, no matter how many times they
+  // reloaded. Only an already-signed-in ADMIN skips past it, straight to
+  // their normal console — re-authenticating on every visit would be
+  // pointless friction for the one role /admin actually belongs to.
+  if (window.location.pathname === '/admin' && user?.role !== 'admin') return <AdminLoginScreen />;
+
   if (user) return needsDesignation ? <DesignationScreen /> : <RoleRouter />;
-  // /admin is its own dedicated sign-in (see AdminLoginScreen) — entirely
-  // separate screen, checked before the regular login/signup branch so it
-  // takes over the whole page rather than being reachable as a state inside
-  // the normal flow. No router library in this app, so a plain pathname
-  // check is genuinely the simplest correct thing here.
-  if (window.location.pathname === '/admin') return <AdminLoginScreen />;
   return showSignUp
     ? <SignUpScreen onBackToLogin={() => setShowSignUp(false)} />
     : <LoginScreen onSignUp={() => setShowSignUp(true)} />;
