@@ -9,6 +9,7 @@ import {AlarmBanner} from './components/AlarmBanner';
 import {InstallBanner} from './components/InstallBanner';
 import {UpdateBanner} from './components/UpdateBanner';
 import {LoginScreen} from './screens/LoginScreen';
+import {AdminLoginScreen} from './screens/AdminLoginScreen';
 import {SignUpScreen} from './screens/SignUpScreen';
 import {DesignationScreen} from './screens/DesignationScreen';
 import {DoctorHomeScreen} from './screens/DoctorHomeScreen';
@@ -192,6 +193,12 @@ function AppInner() {
   }
 
   if (user) return needsDesignation ? <DesignationScreen /> : <RoleRouter />;
+  // /admin is its own dedicated sign-in (see AdminLoginScreen) — entirely
+  // separate screen, checked before the regular login/signup branch so it
+  // takes over the whole page rather than being reachable as a state inside
+  // the normal flow. No router library in this app, so a plain pathname
+  // check is genuinely the simplest correct thing here.
+  if (window.location.pathname === '/admin') return <AdminLoginScreen />;
   return showSignUp
     ? <SignUpScreen onBackToLogin={() => setShowSignUp(false)} />
     : <LoginScreen onSignUp={() => setShowSignUp(true)} />;

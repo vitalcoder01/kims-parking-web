@@ -1,6 +1,9 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/admin", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/",

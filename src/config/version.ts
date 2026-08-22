@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 31;
-export const APP_VERSION_NAME = '1.8.19';
+export const APP_VERSION_CODE = 32;
+export const APP_VERSION_NAME = '1.8.20';
 export const RELEASE_NOTES =
-  'Reverted an in-progress admin console redesign back to the previous stable layout. No other changes.';
+  'New dedicated admin sign-in console at /admin.';
