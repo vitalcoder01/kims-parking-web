@@ -92,6 +92,7 @@ export function AnalyticsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
+  const [trendIndex, setTrendIndex] = useState<number | null>(null);
   const [expandedDriverId, setExpandedDriverId] = useState<number | null>(null);
   const [idleExpanded, setIdleExpanded] = useState(false);
   const [period, setPeriod] = useState<AnalyticsPeriod>('all');
@@ -106,7 +107,7 @@ export function AnalyticsScreen() {
 
   // Switching periods re-fetches fresh (not silent — the old period's
   // numbers would otherwise sit on screen, wrong, while the new ones load).
-  useEffect(() => { load(period); }, [period, load]);
+  useEffect(() => { load(period); setTrendIndex(null); }, [period, load]);
 
   const visitorTotal = (data?.visitorJobs ?? 0) + (data?.staffJobs ?? 0);
   const visitorPct = visitorTotal > 0 ? Math.round(((data?.visitorJobs ?? 0) / visitorTotal) * 100) : 0;
@@ -299,13 +300,17 @@ export function AnalyticsScreen() {
             </div>
           </div>
 
-          {/* Park vs Retrieve trend — bucketed at whatever resolution suits
-              the selected period (hourly/daily/monthly, see backend
-              trendBuckets). Absent for All-time, where a calendar trend
-              can't usefully answer "when" over a multi-year span. */}
+          {/* Park vs Retrieve — the SAME jobs Activity by Hour counts above,
+              split by type instead of combined, at whatever bucket
+              resolution suits the selected period (hourly/daily/monthly,
+              see backend trendBuckets). Absent for All-time, where a
+              calendar trend can't usefully answer "when" over a multi-year
+              span. Tap any bar to inspect it, same interaction Activity by
+              Hour already uses — that's the "self-exploratory" part: no
+              reading required, tap and the numbers are right there. */}
           {data?.trend && (
             <div style={{...cardStyle, padding: 14, marginBottom: 14}}>
-              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12}}>
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2}}>
                 <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
                   <Icon name="carKey" size={15} color={colors.primary} />
                   <span style={{fontSize: 13.5, fontWeight: 800, color: colors.textPrimary}}>Park vs Retrieve</span>
@@ -321,28 +326,46 @@ export function AnalyticsScreen() {
                   </span>
                 </div>
               </div>
+              <div style={{fontSize: 11, color: colors.textMuted, marginBottom: 10}}>
+                Same activity as above, broken down by job type — tap a bar for that {period === 'daily' ? 'hour' : period === 'yearly' ? 'month' : 'day'}.
+              </div>
               {(() => {
                 const {labels, park, retrieve} = data.trend;
                 const maxVal = Math.max(1, ...park, ...retrieve);
-                // Weekly/monthly buckets are few enough to label every bar;
-                // hourly (24) and yearly-in-months (12) still fit, so the
-                // only real crowding case would be a long month — thin those
-                // labels out rather than let them overlap illegibly.
-                const showEveryLabel = labels.length <= 14;
+                const n = labels.length;
+                // Hourly (24 buckets) reuses the exact tick set Activity by
+                // Hour uses above, so the two charts visibly read as the
+                // same time axis. Everything else (7 weekdays, 12 months,
+                // a month's days) is few enough / already meaningful enough
+                // to label directly; only a long month's 28-31 raw day
+                // numbers gets thinned to first/mid/last.
+                const isHourly = n === 24;
+                const tickAt = isHourly ? [0, 6, 12, 18, 23] : n > 14 ? [0, Math.floor(n / 2), n - 1] : labels.map((_, i) => i);
+                const selected = trendIndex != null && trendIndex < n ? trendIndex : null;
+                const dispIndex = selected ?? (maxVal > 0 ? [...park.keys()].reduce((best, i) => (park[i] + retrieve[i]) > (park[best] + retrieve[best]) ? i : best) : null);
                 return (
                   <>
-                    <div style={{display: 'flex', alignItems: 'flex-end', height: 58, marginBottom: 6, gap: labels.length > 20 ? 1 : 2}}>
+                    {dispIndex != null && (park[dispIndex] + retrieve[dispIndex]) > 0 && (
+                      <div style={{fontSize: 11, fontWeight: 700, color: colors.textPrimary, marginBottom: 8}}>
+                        {isHourly ? hourLabel(dispIndex) : labels[dispIndex]}: {park[dispIndex]} parked, {retrieve[dispIndex]} retrieved
+                      </div>
+                    )}
+                    <div style={{display: 'flex', alignItems: 'flex-end', height: 58, marginBottom: 6, gap: n > 20 ? 1 : 2}}>
                       {labels.map((_, i) => (
-                        <div key={i} style={{flex: 1, height: 58, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 1}}>
-                          <div style={{width: '45%', minHeight: park[i] ? 3 : 0, borderRadius: 1, height: 4 + (park[i] / maxVal) * 50, backgroundColor: colors.primary}} />
-                          <div style={{width: '45%', minHeight: retrieve[i] ? 3 : 0, borderRadius: 1, height: 4 + (retrieve[i] / maxVal) * 50, backgroundColor: colors.info}} />
-                        </div>
+                        <button key={i} type="button" className="pressable"
+                          onClick={() => setTrendIndex(i === trendIndex ? null : i)}
+                          style={{flex: 1, height: 58, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer'}}>
+                          <div style={{width: '45%', borderRadius: 1, height: park[i] ? 4 + (park[i] / maxVal) * 50 : 2, backgroundColor: colors.primary, opacity: selected == null || selected === i ? 1 : 0.35}} />
+                          <div style={{width: '45%', borderRadius: 1, height: retrieve[i] ? 4 + (retrieve[i] / maxVal) * 50 : 2, backgroundColor: colors.info, opacity: selected == null || selected === i ? 1 : 0.35}} />
+                        </button>
                       ))}
                     </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between'}}>
-                      {labels.map((l, i) => (showEveryLabel || i === 0 || i === labels.length - 1) ? (
-                        <span key={i} style={{fontSize: 9.5, fontWeight: 700, color: colors.textMuted, flex: showEveryLabel ? 1 : undefined, textAlign: 'center'}}>{l}</span>
-                      ) : <span key={i} style={{flex: 1}} />)}
+                    <div style={{display: 'flex'}}>
+                      {labels.map((l, i) => (
+                        <span key={i} style={{flex: 1, textAlign: 'center', fontSize: 9.5, fontWeight: 700, color: colors.textMuted}}>
+                          {tickAt.includes(i) ? (isHourly ? ['12AM', '6AM', '12PM', '6PM', '11PM'][tickAt.indexOf(i)] : l) : ''}
+                        </span>
+                      ))}
                     </div>
                   </>
                 );

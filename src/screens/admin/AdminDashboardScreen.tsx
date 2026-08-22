@@ -17,15 +17,42 @@ import {spacing, radius, typography} from '../../theme';
 // (Map for the full slot grid, Staff for the full driver list).
 type StatusTone = 'success' | 'info' | 'warning' | 'muted';
 
-function taskStatusLabel(t: {type: string; status: string}): {label: string; tone: StatusTone} {
+function taskStatusLabel(t: {type: string; status: string}): {label: string; tone: StatusTone; isLive: boolean} {
   if (t.status === 'requested' || t.status === 'accepted' || t.status === 'assigned') {
-    return {label: 'Awaiting driver', tone: 'warning'};
+    return {label: 'Awaiting driver', tone: 'warning', isLive: true};
   }
-  if (t.status === 'key_collected') return {label: 'Key collected', tone: 'info'};
-  if (t.status === 'in_transit') return {label: t.type === 'park' ? 'Parking' : 'Retrieving', tone: 'info'};
-  if (t.status === 'delivered') return {label: 'Delivered', tone: 'success'};
-  return {label: t.type === 'park' ? 'Parked' : 'Retrieved', tone: 'success'};
+  if (t.status === 'key_collected') return {label: 'Key collected', tone: 'info', isLive: true};
+  if (t.status === 'in_transit') return {label: t.type === 'park' ? 'Parking' : 'Retrieving', tone: 'info', isLive: true};
+  if (t.status === 'delivered') return {label: 'Delivered', tone: 'success', isLive: true};
+  // Terminal, but still worth showing for a while — a car that just got
+  // parked or handed back is exactly what "PARKED"/"RETRIEVAL" meant in the
+  // reference examples this section was designed against. Not pulsing:
+  // isLive false is what tells the row apart from something still moving.
+  return {label: t.type === 'park' ? 'Parked' : 'Retrieved', tone: 'success', isLive: false};
 }
+
+// A job's most recent moment of activity, whichever field that actually is
+// for its current status — this is what "Live Operations" sorts by, so a
+// job that just moved (even a terminal one, like just having been parked)
+// always outranks one that's been sitting untouched.
+function taskActivityTime(t: {completedAt?: number; startedAt?: number; keyCollectedAt?: number; assignedAt?: number; requestedAt?: number}): number {
+  return t.completedAt ?? t.startedAt ?? t.keyCollectedAt ?? t.assignedAt ?? t.requestedAt ?? 0;
+}
+
+function relativeAgo(ms: number): string {
+  if (!ms) return '';
+  const mins = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs}h ago`;
+}
+
+// How long a completed job still counts as "live" — long enough that a
+// valet glancing at the dashboard sees what just happened, short enough
+// that the section stays a snapshot of right-now instead of turning into
+// a history log (that's what Analytics is for).
+const RECENT_COMPLETION_MS = 2 * 60 * 60 * 1000;
 
 // Admin is oversight, not dispatch: parking/retrieving a car and picking a
 // driver is the VALET's job (ValetHomeScreen/ValetRecordsScreen already do
@@ -39,7 +66,16 @@ export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (bl
 
   const [showAllOps, setShowAllOps] = useState(false);
 
-  const liveTasks = tasks.filter(t => t.status !== 'completed' && t.status !== 'cancelled');
+  // Was `status !== 'completed'` — excluded the exact "PARKED"/"RETRIEVAL"
+  // snapshot this section is supposed to show (a completed job IS the
+  // live-operations moment right after it happens), so the list read empty
+  // almost all the time even with real activity going on. Now: anything
+  // still in progress, plus anything completed within the last couple
+  // hours, newest first.
+  const liveTasks = tasks
+    .filter(t => t.status !== 'cancelled')
+    .filter(t => t.status !== 'completed' || (t.completedAt != null && Date.now() - t.completedAt < RECENT_COMPLETION_MS))
+    .sort((a, b) => taskActivityTime(b) - taskActivityTime(a));
   const occupied = slots.filter(s => s.status === 'occupied').length;
   const total = slots.length;
   const free = total - occupied;
@@ -139,18 +175,39 @@ export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (bl
           ) : (showAllOps ? liveTasks : liveTasks.slice(0, 3)).map((t, i, arr) => {
             const st = taskStatusLabel(t);
             const toneColor = st.tone === 'success' ? colors.success : st.tone === 'info' ? colors.info : st.tone === 'warning' ? colors.warning : colors.textMuted;
+            const ago = relativeAgo(taskActivityTime(t));
             return (
-              <div key={t.id} style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '13px 16px', borderBottom: i === arr.length - 1 ? 'none' : `1px solid ${colors.divider}`}}>
-                <div style={{width: 34, height: 34, borderRadius: radius.full, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.cardAlt}}>
+              <div key={t.id} style={{display: 'flex', alignItems: 'stretch', gap: spacing.md, padding: '13px 16px', borderBottom: i === arr.length - 1 ? 'none' : `1px solid ${colors.divider}`}}>
+                {/* Left accent bar, colored by status tone — the same
+                    "scan the color, not the words" pattern Analytics'
+                    stat cards already use, so a valet can read the state
+                    of the whole list at a glance before reading any text. */}
+                <span style={{width: 3, borderRadius: 2, backgroundColor: toneColor, flexShrink: 0}} />
+                <div style={{width: 34, height: 34, borderRadius: radius.full, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.cardAlt, alignSelf: 'center'}}>
                   <Icon name={t.type === 'park' ? 'car' : 'refresh'} size={15} color={colors.textPrimary} />
                 </div>
-                <div style={{flex: 1, minWidth: 0}}>
+                <div style={{flex: 1, minWidth: 0, alignSelf: 'center'}}>
                   <div style={{fontSize: 13, fontWeight: 800, color: colors.textPrimary, letterSpacing: 0.3}}>{t.carNumber}</div>
                   <div style={{fontSize: 11, marginTop: 2, color: colors.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
                     {t.doctorName}{t.slotId ? ` · ${t.slotId}` : ''}{t.driverName ? ` · ${t.driverName}` : ''}
                   </div>
                 </div>
-                <span style={{flexShrink: 0, fontSize: 10.5, fontWeight: 800, color: toneColor}}>{st.label.toUpperCase()}</span>
+                <div style={{flexShrink: 0, alignSelf: 'center', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3}}>
+                  <span style={{display: 'flex', alignItems: 'center', gap: 5}}>
+                    {/* A genuinely still-moving job gets a pulsing dot — the
+                        one thing in this list that should feel "live", as
+                        opposed to a completed job sitting here as a recent
+                        snapshot. */}
+                    {st.isLive && (
+                      <span style={{position: 'relative', width: 6, height: 6}}>
+                        <span className="ping-dot" style={{position: 'absolute', inset: 0, borderRadius: 3, backgroundColor: toneColor}} />
+                        <span style={{position: 'absolute', inset: 0, borderRadius: 3, backgroundColor: toneColor}} />
+                      </span>
+                    )}
+                    <span style={{fontSize: 10.5, fontWeight: 800, color: toneColor}}>{st.label.toUpperCase()}</span>
+                  </span>
+                  {!!ago && <span style={{fontSize: 10, fontWeight: 600, color: colors.textMuted}}>{ago}</span>}
+                </div>
               </div>
             );
           })}
