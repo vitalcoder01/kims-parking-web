@@ -3,6 +3,7 @@ import {useAuth} from '../../context/AuthContext';
 import {useMyDriverId, isMyJob} from '../../hooks/useMyDriverId';
 import {useAppState} from '../../context/AppStateContext';
 import {useTheme} from '../../context/ThemeContext';
+import {useDialog} from '../../components/AppDialog';
 import {Icon} from '../../components/Icon';
 import {PressableScale} from '../../components/PressableScale';
 
@@ -62,12 +63,38 @@ function SkeletonBlock({height, width = '100%', radius = 10, style}: {height: nu
 
 export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = {}) {
   const {user} = useAuth();
-  const {tasks, visitors, fetchTaskHistory, hydrated} = useAppState();
+  const {tasks, visitors, drivers, setDriverStatus, fetchTaskHistory, hydrated} = useAppState();
   const {colors: c} = useTheme();
+  const dialog = useDialog();
   const g = greeting();
   const days = weekStrip();
 
   const myDriverId = useMyDriverId();
+  const me = drivers.find(d => d.id === myDriverId);
+  const [togglingShift, setTogglingShift] = useState(false);
+
+  // On/off is the only thing a toggle here should control — 'busy' is set
+  // automatically by taking a job, never chosen. The backend already
+  // refuses to take a driver off-duty while they're on a live job (see
+  // driver.service.js setStatus's ACTIVE_TASK_STATUSES guard), so a driver
+  // physically mid-job can't shift off mid-drive.
+  const onShift = me?.status === 'available';
+  const handleToggleShift = async () => {
+    if (!myDriverId || !me || togglingShift) return;
+    if (me.status === 'busy') {
+      dialog.alert("You're still out on a job — finish or hand it off before going off-duty.", {title: 'Still on a job'});
+      return;
+    }
+    setTogglingShift(true);
+    try {
+      await setDriverStatus(myDriverId, onShift ? 'off' : 'available');
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not change your shift status');
+    } finally {
+      setTogglingShift(false);
+    }
+  };
+
   const myTasks = tasks.filter(t => isMyJob(t.driverId, myDriverId));
   // 'delivered' is already off this driver's plate — awaiting valet
   // confirmation only, not something to keep showing as their active job.
@@ -107,6 +134,53 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
           <span style={{fontSize: 14, fontWeight: 800, color: c.textOnPrimary}}>{(user?.name ?? 'D').charAt(0).toUpperCase()}</span>
         </div>
       </div>
+
+      {/* Shift toggle — the driver's own on/off control, not something a
+          valet/admin has to set for them. Busy (on a live job) shows as a
+          locked, distinct state rather than a toggle that would just fail
+          on tap — the backend already refuses this move mid-job. */}
+      <PressableScale
+        onClick={handleToggleShift}
+        disabled={togglingShift || me?.status === 'busy'}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
+          borderRadius: 18, padding: 14, marginBottom: 18,
+          border: `1px solid ${onShift ? c.success + '40' : c.border}`,
+          backgroundColor: onShift ? c.successLight : c.surface,
+          opacity: me?.status === 'busy' ? 0.75 : 1,
+        }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: me?.status === 'busy' ? c.warningLight : onShift ? c.success : c.cardAlt,
+        }}>
+          <Icon name={me?.status === 'busy' ? 'bolt' : 'key'} size={17} color={me?.status === 'busy' ? c.warning : onShift ? '#fff' : c.textMuted} />
+        </div>
+        <div style={{flex: 1, minWidth: 0}}>
+          <div style={{fontSize: 14, fontWeight: 800, color: c.textPrimary}}>
+            {me?.status === 'busy' ? 'On a job' : onShift ? 'On shift' : 'Off shift'}
+          </div>
+          <div style={{fontSize: 11.5, marginTop: 2, color: c.textSecondary}}>
+            {me?.status === 'busy' ? 'Finish your current job to go off-duty' : onShift ? 'Visible to valets for new jobs' : "Tap to start — you won't be assigned jobs"}
+          </div>
+        </div>
+        {/* Pill switch — purely a visual reflection of onShift, the whole
+            card is the tap target. */}
+        <div style={{
+          width: 46, height: 27, borderRadius: 14, flexShrink: 0, padding: 3, boxSizing: 'border-box',
+          backgroundColor: onShift ? c.success : c.border, transition: 'background-color 0.15s ease',
+        }}>
+          {togglingShift ? (
+            <div style={{width: 21, height: 21, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+              <span className="spinner" style={{width: 14, height: 14, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} />
+            </div>
+          ) : (
+            <div style={{
+              width: 21, height: 21, borderRadius: 11, backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+              transform: onShift ? 'translateX(19px)' : 'translateX(0)', transition: 'transform 0.15s ease',
+            }} />
+          )}
+        </div>
+      </PressableScale>
 
       {/* Week strip */}
       <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 20}}>
