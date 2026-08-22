@@ -106,15 +106,24 @@ function RoleRouter() {
   const isCard = tab === 'Card';
   const isHistory = tab === 'History';
 
+  // Cross-tab focus — Dashboard's "View all" / occupancy-card taps land on
+  // Map/Staff already pointed at what was tapped, instead of a blank list
+  // the admin has to re-filter by hand every time.
+  const [mapFocusBlock, setMapFocusBlock] = useState<string | undefined>(undefined);
+  const [staffInitialFilter, setStaffInitialFilter] = useState<'all' | 'driver'>('all');
+
   const screen =
     isCard                ? <VirtualCardScreen onBack={() => setTab('Home')} />
     : isHistory            ? <HistoryScreen onBack={() => setTab('Home')} />
     : tab === 'Home'        ? <DoctorHomeScreen onOpenCard={() => setTab('Card')} onOpenHistory={() => setTab('History')} />
     : tab === 'Setup'       ? <VehicleSetupScreen onBack={() => setTab('Home')} />
-    : tab === 'Dashboard'   ? <AdminDashboardScreen />
-    : tab === 'Staff'       ? <AdminStaffScreen />
+    : tab === 'Dashboard'   ? <AdminDashboardScreen
+        onOpenMap={(block) => { setMapFocusBlock(block); setTab('Map'); }}
+        onOpenDrivers={() => { setStaffInitialFilter('driver'); setTab('Staff'); }}
+      />
+    : tab === 'Staff'       ? <AdminStaffScreen initialFilter={staffInitialFilter} />
     : tab === 'Attendance'  ? <AdminAttendanceScreen />
-    : tab === 'Map'         ? <AdminMapScreen />
+    : tab === 'Map'         ? <AdminMapScreen focusBlock={mapFocusBlock} />
     : tab === 'Analytics'   ? <AnalyticsScreen />
     : tab === 'Queue'       ? <ValetHomeScreen />
     : tab === 'Records'     ? <ValetRecordsScreen />

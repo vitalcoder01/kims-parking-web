@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 34;
-export const APP_VERSION_NAME = '1.8.22';
+export const APP_VERSION_CODE = 35;
+export const APP_VERSION_NAME = '1.8.23';
 export const RELEASE_NOTES =
-  'Admin console (Dashboard, Staff, Attendance, Map) restyled — Uber-inspired: circular avatars, flatter cards, pill-shaped buttons and filters, restrained color used as small accents instead of big tinted blocks. Same layout width as the rest of the app, no desktop-only chrome.';
+  'Admin Dashboard and Map redesigned around "understand the operation in 5 seconds": compact occupancy overview with tappable block chips, Park/Retrieve quick actions, live operations (top 3 + view all), a compact driver strip. Parking Map now shows one block at a time with a real slot-detail sheet (including a working Retrieve Vehicle + driver picker) instead of every block stacked in one long scroll.';

@@ -50,10 +50,10 @@ function genPassword() {
 
 const roleLabel = (r: Role) => ({doctor: 'Doctor', staff: 'Staff', valet: 'Valet', driver: 'Driver', admin: 'Admin'}[r]);
 
-export function AdminStaffScreen() {
+export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filter} = {}) {
   const {colors} = useTheme();
   const dialog = useDialog();
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>(initialFilter);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);

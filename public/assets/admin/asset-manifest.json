@@ -1,0 +1,29 @@
+{
+  "icons": [
+    "analytics.svg",
+    "car.svg",
+    "check.svg",
+    "filter.svg",
+    "key.svg",
+    "location.svg",
+    "notification.svg",
+    "park.svg",
+    "retrieve.svg",
+    "search.svg",
+    "settings.svg",
+    "valet.svg",
+    "warning.svg"
+  ],
+  "illustrations": [
+    "empty_parking.svg",
+    "parking_garage.svg",
+    "valet_operation.svg"
+  ],
+  "parking_states": [
+    "free.svg",
+    "occupied.svg",
+    "reserved.svg",
+    "retrieval.svg",
+    "selected.svg"
+  ]
+}
