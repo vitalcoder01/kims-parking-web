@@ -7,6 +7,7 @@ import {computeTrip} from '../../utils/geo';
 import {Icon, IconName} from '../../components/Icon';
 import {PressableScale} from '../../components/PressableScale';
 import {useDialog} from '../../components/AppDialog';
+import {isJobGone} from '../../services/api';
 
 // Direct port of the mobile app's driver DriverJobsScreen — the driver's
 // current assigned job (accept/reject, key-collected, in-transit, parked,
@@ -77,20 +78,37 @@ export function DriverJobsScreen() {
   // The live `tasks` array is bounded to "at most one row per doctor" now —
   // a completed job vanishes from it the moment that doctor's next car comes
   // in, so "completed today" needs the real history, not this list.
+  //
+  // Depends on `tasks` itself, not `tasks.length` (see DriverDashboardScreen
+  // for the full explanation) — completing a job replaces a row in place,
+  // so the array's length never changes when this effect needs to refire.
   const [history, setHistory] = useState<typeof tasks>([]);
   useEffect(() => {
     if (!myDriverId) return;
     fetchTaskHistory({driverId: myDriverId}).then(setHistory).catch(() => {});
-  }, [myDriverId, fetchTaskHistory, tasks.length]);
+  }, [myDriverId, fetchTaskHistory, tasks]);
   const today = new Date().toDateString();
   const completedToday = history.filter(t => t.status === 'completed' && t.completedAt && new Date(t.completedAt).toDateString() === today);
 
-  // Visitor pickups/retrievals assigned to this driver — same filter the
-  // dashboard uses. Informational only: the actual accept/park/retrieve
-  // actions live on the Active Job card above (same underlying task), this
-  // just surfaces the visitor contact details that card can't show.
-  const myVisitorJobs = visitors.filter(v => isMyJob(v.driverId, myDriverId)
-    && (v.status === 'pending' || (v.status === 'parked' && v.retrievalRequested)));
+  // Visitor pickups/retrievals assigned to this driver. Informational only:
+  // the actual accept/park/retrieve actions live on the Active Job card
+  // above (same underlying task), this just surfaces the visitor contact
+  // details that card can't show.
+  //
+  // The retrieval half used to match on `v.driverId` alone, but that field
+  // is reused from the park leg and isn't cleared once it completes (see
+  // visitor.service.js's assignRetrievalDriver comment) — so the original
+  // parking driver kept seeing (and could see the phone number for) a
+  // retrieval the valet hadn't actually dispatched to them, or had
+  // dispatched to someone else entirely. Fixed by requiring an actual live
+  // retrieve-type task assigned to this driver, the same source of truth
+  // `tasks`/`activeTask` above already use, instead of trusting the visitor
+  // row's own driverId for that case.
+  const myVisitorJobs = visitors.filter(v =>
+    (isMyJob(v.driverId, myDriverId) && v.status === 'pending')
+    || (v.status === 'parked' && v.retrievalRequested
+      && tasks.some(t => t.visitorId === v.id && t.type === 'retrieve'
+        && isMyJob(t.driverId, myDriverId) && t.status !== 'completed' && t.status !== 'cancelled')));
 
   const trip = computeTrip({
     startLat: activeTask?.driverStartLat, startLng: activeTask?.driverStartLng,
@@ -103,12 +121,16 @@ export function DriverJobsScreen() {
   // A driver tapping Accept on a card the server has already invalidated is
   // the normal end of a stalled assignment, not an error they did anything
   // wrong about: the watchdog rolled it back, or the valet gave it to someone
-  // else. The mobile app tells the two cases apart via a JOB_GONE error code
-  // (services/api.ts's isJobGone) and shows a softer "reassigned" message for
-  // it; the web client's api.ts collapses every failure to a plain Error
-  // with just a message, so that distinction isn't available here — every
-  // failure gets the same alert, with the server's own message.
+  // else. web's api.ts DOES carry the same JOB_GONE error code as mobile
+  // (isJobGone, exported right alongside ApiCallError) — this used to ignore
+  // it and show the server's raw message for every failure alike, which
+  // reads as something having gone wrong when nothing actually did. Now
+  // mirrors mobile's softer "reassigned" copy for that one case.
   const handleActionError = (err: any, fallback: string) => {
+    if (isJobGone(err)) {
+      dialog.alert('This job was reassigned while you were deciding.', {title: 'Job no longer yours'});
+      return;
+    }
     dialog.alert(err?.message || fallback);
   };
 

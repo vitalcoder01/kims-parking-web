@@ -315,13 +315,30 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
       needsVisitors ? visitorsApi.list() : Promise.resolve(null),
       needsOpsData ? arrivalsApi.list() : Promise.resolve(null),
     ]);
-    setTasks(t.map(mapTask));
+    const tasks: ParkingTask[] = t.map(mapTask);
+    const visitorRows: Visitor[] | null = v ? v.map(mapVisitor) : null;
+    setTasks(tasks);
     setSlots(s);
     setNotifs(n.map(mapNotification));
     if (d) setDrivers(d);
-    if (v) setVisitors(v.map(mapVisitor));
+    if (visitorRows) setVisitors(visitorRows);
     if (a) setArrivals(a.map(mapArrival));
     setHydrated(true);
+
+    // Kill a stale alarm that no socket event could ever have reached us —
+    // mirrors mobile's identical sweep in AppStateContext.tsx. If the tab was
+    // backgrounded/offline when the assignment was rolled back elsewhere,
+    // nothing ever told this alarm to stop. This full fetch is the
+    // authoritative answer: we just asked the server for everything, so if
+    // nothing is actually waiting on this driver's acceptance, nothing
+    // should be ringing.
+    const me = userRef.current;
+    const myDrvId = me?.role === 'driver' ? me.linkedDriverId ?? null : null;
+    if (myDrvId != null) {
+      const awaitingMe = tasks.some(x => x.driverId === myDrvId && x.status === 'assigned' && !x.acceptedAt)
+        || (visitorRows ?? []).some(x => x.driverId === myDrvId && x.status === 'pending' && !x.acceptedAt);
+      if (!awaitingMe) stopAlarm();
+    }
   }, [needsOpsData, needsVisitors]);
 
   const userRef = useRef(user);
@@ -407,6 +424,14 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
         (me?.linkedDriverId != null && n.targetId === me.linkedDriverId) ||
         n.targetRole === me?.role ||
         n.targetRole === `driver:${me?.linkedDriverId}` ||
+        // Owner-scoped valet pushes (e.g. "car parked at the counter" —
+        // see backend task.service.js's markParked notify, `valet:${parkOwner}`)
+        // use this exact shape, matching driver:<id> above. Missing this
+        // meant the one valet the notification was addressed to never
+        // matched any branch and the alarm/tray entry silently never fired
+        // for them — same bug ported from mobile's identical omission,
+        // fixed there too (kims-parking-frontend AppStateContext.tsx).
+        n.targetRole === `valet:${me?.id}` ||
         n.targetRole === 'all';
       if (!isForMe) return;
       // A reassign alert arrives twice: once as task:needs-reassign (the
@@ -503,6 +528,37 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
       disconnectSocket();
     };
   }, [user?.id, fetchAll]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The socket reconnecting is the only refetch trigger otherwise — so a
+  // socket that drops without ever reconnecting (laptop sleep, wifi drop,
+  // backgrounded tab) leaves the UI frozen indefinitely. Coming back to the
+  // tab is the moment the user is about to act on what they see, so it's
+  // exactly when this must be true. Mirrors mobile's identical
+  // RNAppState-based effect, using the DOM equivalent.
+  useEffect(() => {
+    if (!user) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchAll().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [user?.id, fetchAll]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sweep stale GPS markers (socket still open but no pings — e.g. a driver's
+  // GPS/tab backgrounded on their end). Mirrors mobile's identical sweep;
+  // LOCATION_STALE_MS was declared up top but never actually applied here,
+  // so a driver's marker on the live map just froze in place forever once
+  // their pings stopped instead of disappearing.
+  useEffect(() => {
+    const sweep = setInterval(() => {
+      setDriverLocations(p => {
+        const cutoff = Date.now() - LOCATION_STALE_MS;
+        const entries = Object.entries(p).filter(([, loc]) => loc.at >= cutoff);
+        return entries.length === Object.keys(p).length ? p : Object.fromEntries(entries);
+      });
+    }, 15000);
+    return () => clearInterval(sweep);
+  }, []);
 
   // A reassign prompt says "this job needs a driver" — derived state, not a
   // one-shot event, so it clears itself the instant that's no longer true.
