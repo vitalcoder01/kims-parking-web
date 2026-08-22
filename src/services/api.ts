@@ -299,6 +299,7 @@ export type DriverAnalytics = {
   parksCompleted: number; retrievesCompleted: number; totalCompleted: number;
   avgParkMinutes: number | null; avgRetrieveMinutes: number | null;
 };
+export type AnalyticsPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'all';
 export type AnalyticsOverview = {
   totalCarsParked: number; totalCarsRetrieved: number; totalJobsCompleted: number;
   avgParkMinutes: number | null; avgRetrieveMinutes: number | null;
@@ -307,9 +308,14 @@ export type AnalyticsOverview = {
   visitorJobs: number; staffJobs: number;
   drivers: DriverAnalytics[];
   generatedAt: string;
+  period: AnalyticsPeriod;
 };
 export const analyticsApi = {
-  overview: (): Promise<AnalyticsOverview> => client.get('/analytics/overview').then(r => r.data),
+  // period omitted (or 'all') is the original all-time overview — same
+  // response shape either way, just scoped to completedAt falling in the
+  // period when one is given (see backend analytics.controller.js).
+  overview: (period?: AnalyticsPeriod): Promise<AnalyticsOverview> =>
+    client.get('/analytics/overview', {params: period && period !== 'all' ? {period} : undefined}).then(r => r.data),
 };
 
 export default client;

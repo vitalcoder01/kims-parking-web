@@ -2,8 +2,6 @@ import React, {useState, useMemo, useEffect} from 'react';
 import {PressableScale} from '../../components/PressableScale';
 import {useTheme} from '../../context/ThemeContext';
 import {useAppState} from '../../context/AppStateContext';
-import {useDialog} from '../../components/AppDialog';
-import {Icon} from '../../components/Icon';
 import {Badge} from '../../components/Badge';
 import {spacing, radius, typography} from '../../theme';
 
@@ -22,25 +20,24 @@ function agoLabel(ms?: number): string | null {
 // on one endlessly scrolling page. This shows ONE block at a time (a
 // horizontal block selector switches between them, same pattern as an
 // airline seat map's cabin selector), so the whole grid fits without
-// scrolling on a phone. Slot detail moved from an inline swapped card into
-// a real bottom sheet, and it now has an actual action (Retrieve Vehicle,
-// via an inline driver picker) instead of being read-only.
+// scrolling on a phone.
+//
+// Read-only, deliberately: admin is oversight, not dispatch — parking/
+// retrieving a car and picking a driver is the valet's job
+// (ValetHomeScreen/ValetRecordsScreen already do that). An earlier version
+// put a working Retrieve Vehicle + driver-picker in the slot sheet; removed
+// at the user's explicit correction. This just answers "what's in that
+// slot, whose car is it, who's driving it" — nothing to tap into action.
 export function AdminMapScreen({focusBlock}: {focusBlock?: string} = {}) {
   const {colors} = useTheme();
-  const dialog = useDialog();
-  const {slots, tasks, drivers, assignRetrievalDriver, assignStaffRetrievalDriver} = useAppState();
+  const {slots, tasks} = useAppState();
   const [picked, setPicked] = useState<string | undefined>(undefined);
   const [activeBlock, setActiveBlock] = useState<string | undefined>(focusBlock);
-  const [pickingDriver, setPickingDriver] = useState(false);
-  const [assigning, setAssigning] = useState<number | null>(null);
 
   useEffect(() => { if (focusBlock) setActiveBlock(focusBlock); }, [focusBlock]);
 
   const pickedSlot = picked ? slots.find(sl => sl.id === picked) : undefined;
   const pickedOwnerTask = pickedSlot?.taskId ? tasks.find(t => t.id === pickedSlot.taskId) : undefined;
-  const alreadyRetrieving = !!pickedOwnerTask && tasks.some(t =>
-    t.type === 'retrieve' && t.status !== 'completed' && t.status !== 'cancelled'
-    && (pickedOwnerTask.isVisitor ? t.visitorId === pickedOwnerTask.visitorId : t.doctorId === pickedOwnerTask.doctorId));
 
   const blocks = useMemo(() => {
     const byBlock = new Map<string, typeof slots>();
@@ -63,27 +60,6 @@ export function AdminMapScreen({focusBlock}: {focusBlock?: string} = {}) {
   const total = slots.length;
   const available = total - occupied;
   const occupancyPct = total ? Math.round((occupied / total) * 100) : 0;
-
-  const closeSheet = () => { setPicked(undefined); setPickingDriver(false); };
-
-  const handlePickDriver = async (driverId: number) => {
-    if (!pickedOwnerTask || assigning != null) return;
-    setAssigning(driverId);
-    try {
-      if (pickedOwnerTask.isVisitor && pickedOwnerTask.visitorId != null) {
-        await assignRetrievalDriver(pickedOwnerTask.visitorId, driverId);
-      } else if (pickedOwnerTask.doctorId != null) {
-        await assignStaffRetrievalDriver(pickedOwnerTask.doctorId, driverId);
-      }
-      closeSheet();
-    } catch (err: any) {
-      dialog.alert(err.message || 'Could not assign a driver');
-    } finally {
-      setAssigning(null);
-    }
-  };
-
-  const availableDrivers = drivers.filter(d => d.status === 'available');
 
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background, padding: 16, paddingBottom: 40}}>
@@ -160,11 +136,9 @@ export function AdminMapScreen({focusBlock}: {focusBlock?: string} = {}) {
         </div>
       )}
 
-      {/* Slot detail — a real bottom sheet, not an inline swapped card, with
-          an actual Retrieve Vehicle action (opens an inline driver picker;
-          same assign calls the Jobs queue's driver-picker uses). */}
+      {/* Slot detail — read-only info sheet, no actions. */}
       {pickedSlot && (
-        <div style={{position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)'}} onClick={closeSheet}>
+        <div style={{position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)'}} onClick={() => setPicked(undefined)}>
           <div onClick={e => e.stopPropagation()} style={{width: '100%', maxWidth: 480, margin: '0 auto', backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 28, maxHeight: '75vh', overflowY: 'auto'}}>
             <div style={{width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, margin: '0 auto 18px'}} />
             <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18}}>
@@ -177,8 +151,8 @@ export function AdminMapScreen({focusBlock}: {focusBlock?: string} = {}) {
               <Badge label={pickedSlot.status === 'occupied' ? 'Occupied' : 'Free'} variant={pickedSlot.status === 'occupied' ? 'muted' : 'success'} dot />
             </div>
 
-            {pickedSlot.status === 'occupied' && (
-              <div style={{display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20}}>
+            {pickedSlot.status === 'occupied' ? (
+              <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
                 {([
                   ['Vehicle', pickedSlot.carNumber || pickedOwnerTask?.carNumber || '—'],
                   ...(pickedOwnerTask?.isVisitor ? [['Type', 'Visitor']] as [string, string][] : []),
@@ -192,39 +166,8 @@ export function AdminMapScreen({focusBlock}: {focusBlock?: string} = {}) {
                   </div>
                 ))}
               </div>
-            )}
-
-            {pickedSlot.status === 'occupied' && pickedOwnerTask && (
-              alreadyRetrieving ? (
-                <div style={{width: '100%', borderRadius: radius.full, height: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt}}>
-                  <span style={{fontSize: 14, fontWeight: 700, color: colors.textMuted}}>Retrieval already in progress</span>
-                </div>
-              ) : !pickingDriver ? (
-                <PressableScale onClick={() => setPickingDriver(true)} style={{width: '100%', borderRadius: radius.full, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary}}>
-                  <Icon name="refresh" size={16} color={colors.textOnPrimary} />
-                  <span style={{color: colors.textOnPrimary, fontSize: 15, fontWeight: 700}}>Retrieve Vehicle</span>
-                </PressableScale>
-              ) : (
-                <div>
-                  <div style={{fontSize: 12, fontWeight: 700, color: colors.textMuted, marginBottom: 10}}>Assign a driver</div>
-                  {availableDrivers.length === 0 ? (
-                    <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted, textAlign: 'center', padding: '16px 0'}}>No drivers available right now</div>
-                  ) : (
-                    <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
-                      {availableDrivers.map(d => (
-                        <PressableScale key={d.id} onClick={() => handlePickDriver(d.id)} disabled={assigning != null}
-                          style={{width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: 12, borderRadius: 14, border: `1px solid ${colors.border}`, backgroundColor: colors.card, opacity: assigning != null && assigning !== d.id ? 0.5 : 1}}>
-                          <div style={{width: 34, height: 34, borderRadius: radius.full, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt, flexShrink: 0}}>
-                            <span style={{fontSize: 12, fontWeight: 800, color: colors.textPrimary}}>{d.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
-                          </div>
-                          <span style={{flex: 1, fontSize: 13.5, fontWeight: 700, color: colors.textPrimary, textAlign: 'left'}}>{d.name}</span>
-                          {assigning === d.id ? <span className="spinner" style={{width: 16, height: 16, borderColor: colors.border, borderTopColor: colors.primary}} /> : <Icon name="arrowRight" size={14} color={colors.textMuted} />}
-                        </PressableScale>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
+            ) : (
+              <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted, textAlign: 'center', padding: '12px 0'}}>This slot is free.</div>
             )}
           </div>
         </div>

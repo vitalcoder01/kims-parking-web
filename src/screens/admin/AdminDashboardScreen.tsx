@@ -1,9 +1,8 @@
-import React, {useEffect, useState} from 'react';
+import React, {useState} from 'react';
 import {useTheme} from '../../context/ThemeContext';
 import {useAuth} from '../../context/AuthContext';
 import {useAppState} from '../../context/AppStateContext';
 import {PressableScale} from '../../components/PressableScale';
-import {useDialog} from '../../components/AppDialog';
 import {Icon, IconName} from '../../components/Icon';
 import {spacing, radius, typography} from '../../theme';
 
@@ -28,17 +27,16 @@ function taskStatusLabel(t: {type: string; status: string}): {label: string; ton
   return {label: t.type === 'park' ? 'Parked' : 'Retrieved', tone: 'success'};
 }
 
+// Admin is oversight, not dispatch: parking/retrieving a car and picking a
+// driver is the VALET's job (ValetHomeScreen/ValetRecordsScreen already do
+// this) — this screen shows what's happening, it doesn't do it. An earlier
+// version put Park/Retrieve action cards and a driver-assignment picker
+// here; removed at the user's explicit correction.
 export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (block?: string) => void; onOpenDrivers: () => void}) {
   const {colors} = useTheme();
   const {user} = useAuth();
-  const dialog = useDialog();
-  const {tasks, drivers, slots, addVisitor} = useAppState();
+  const {tasks, drivers, slots} = useAppState();
 
-  const [quickPark, setQuickPark] = useState(false);
-  const [pName, setPName] = useState('');
-  const [pCar, setPCar] = useState('');
-  const [pMobile, setPMobile] = useState('');
-  const [parking, setParking] = useState(false);
   const [showAllOps, setShowAllOps] = useState(false);
 
   const liveTasks = tasks.filter(t => t.status !== 'completed' && t.status !== 'cancelled');
@@ -61,21 +59,6 @@ export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (bl
 
   const availableDrivers = drivers.filter(d => d.status === 'available');
   const today = new Date().toLocaleDateString(undefined, {weekday: 'long', month: 'long', day: 'numeric'});
-
-  const closeQuickPark = () => { setQuickPark(false); setPName(''); setPCar(''); setPMobile(''); };
-  const handleQuickPark = async () => {
-    if (!pCar.trim() || !pMobile.trim() || parking) return;
-    setParking(true);
-    try {
-      await addVisitor({name: pName.trim() || 'Visitor', carNumber: pCar.trim().toUpperCase(), mobile: pMobile.trim()});
-      dialog.alert('Check-in created — assign a driver from the Jobs queue.', {tone: 'success', title: 'Vehicle logged'});
-      closeQuickPark();
-    } catch (err: any) {
-      dialog.alert(err.message || 'Could not log this vehicle');
-    } finally {
-      setParking(false);
-    }
-  };
 
   const sec: React.CSSProperties = {fontSize: typography.sizes.base, fontWeight: typography.weights.black, letterSpacing: -0.2, color: colors.textPrimary, display: 'flex', alignItems: 'center', justifyContent: 'space-between'};
   const card: React.CSSProperties = {borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, backgroundColor: colors.card};
@@ -140,18 +123,6 @@ export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (bl
             </div>
           )}
         </PressableScale>
-
-        {/* Primary actions — the two things an admin does most, one tap away. */}
-        <div style={{display: 'flex', gap: 10, marginBottom: spacing.lg}}>
-          <PressableScale onClick={() => setQuickPark(true)} style={{flex: 1, ...card, padding: '16px 14px', textAlign: 'left', display: 'block'}}>
-            <img src="/assets/admin/icons/park.svg" width={34} height={34} alt="" style={{marginBottom: 10, display: 'block'}} />
-            <div style={{fontSize: 13.5, fontWeight: 800, color: colors.textPrimary}}>Park Vehicle</div>
-          </PressableScale>
-          <PressableScale onClick={() => onOpenMap()} style={{flex: 1, ...card, padding: '16px 14px', textAlign: 'left', display: 'block'}}>
-            <img src="/assets/admin/icons/retrieve.svg" width={34} height={34} alt="" style={{marginBottom: 10, display: 'block'}} />
-            <div style={{fontSize: 13.5, fontWeight: 800, color: colors.textPrimary}}>Retrieve Vehicle</div>
-          </PressableScale>
-        </div>
 
         {/* Live operations — 2-3 active jobs, not an endless activity feed. */}
         <div style={{...sec, marginBottom: spacing.sm}}>
@@ -220,31 +191,6 @@ export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (bl
           )}
         </div>
       </div>
-
-      {/* Quick Park — minimal intake (name/car/mobile), same call the public
-          visitor check-in flow already uses. Assigning a driver still
-          happens from the Jobs queue, same as every other check-in. */}
-      {quickPark && (
-        <div style={{position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)'}} onClick={closeQuickPark}>
-          <div onClick={e => e.stopPropagation()} style={{width: '100%', maxWidth: 480, margin: '0 auto', backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 28}}>
-            <div style={{width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border, margin: '0 auto 18px'}} />
-            <div style={{fontSize: 17, fontWeight: 900, color: colors.textPrimary, marginBottom: 4}}>Park a Vehicle</div>
-            <div style={{fontSize: 12, color: colors.textMuted, marginBottom: 18}}>Logs a new check-in — a driver is assigned next from the Jobs queue.</div>
-            {[
-              {v: pName, set: setPName, ph: 'Visitor name (optional)', type: 'text'},
-              {v: pCar, set: setPCar, ph: 'Car number', type: 'text'},
-              {v: pMobile, set: setPMobile, ph: 'Mobile number', type: 'tel'},
-            ].map((f, i) => (
-              <input key={i} value={f.v} onChange={e => f.set(e.target.value)} placeholder={f.ph} type={f.type}
-                style={{width: '100%', boxSizing: 'border-box', border: `1.5px solid ${colors.border}`, borderRadius: 12, padding: '0 14px', height: 50, fontSize: 15, fontWeight: 600, backgroundColor: colors.card, color: colors.textPrimary, marginBottom: 10}} />
-            ))}
-            <PressableScale onClick={handleQuickPark} disabled={!pCar.trim() || !pMobile.trim() || parking}
-              style={{width: '100%', borderRadius: radius.full, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 8, backgroundColor: colors.primary, opacity: (!pCar.trim() || !pMobile.trim()) ? 0.4 : 1}}>
-              {parking ? <span className="spinner" style={{width: 18, height: 18, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} /> : <span style={{color: colors.textOnPrimary, fontSize: 15, fontWeight: 700}}>Log Check-in</span>}
-            </PressableScale>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

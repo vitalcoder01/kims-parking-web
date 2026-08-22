@@ -4,7 +4,15 @@ import {BRAND_GRADIENT, BRAND_GRADIENT_DARK, gradientCss} from '../theme/colors'
 import {Icon} from '../components/Icon';
 import {PressableScale} from '../components/PressableScale';
 import {useDialog} from '../components/AppDialog';
-import {analyticsApi, AnalyticsOverview} from '../services/api';
+import {analyticsApi, AnalyticsOverview, AnalyticsPeriod} from '../services/api';
+
+const PERIODS: {key: AnalyticsPeriod; label: string}[] = [
+  {key: 'daily', label: 'Today'},
+  {key: 'weekly', label: 'This Week'},
+  {key: 'monthly', label: 'This Month'},
+  {key: 'yearly', label: 'This Year'},
+  {key: 'all', label: 'All-time'},
+];
 
 // Shared by both the valet and admin tabs — the data isn't role-scoped (see
 // backend analytics.service.js: it's the whole operation's all-time
@@ -50,11 +58,15 @@ function retrieveRating(m: number | null): {label: string; tone: 'good' | 'ok' |
   return {label: 'Needs attention', tone: 'bad'};
 }
 
+const PERIOD_TITLES: Record<AnalyticsPeriod, string> = {
+  daily: 'Today', weekly: 'This Week', monthly: 'This Month', yearly: 'This Year', all: 'All-Time',
+};
+
 function buildShareText(data: AnalyticsOverview): string {
   const visitorTotal = data.visitorJobs + data.staffJobs;
   const visitorPct = visitorTotal > 0 ? Math.round((data.visitorJobs / visitorTotal) * 100) : 0;
   const lines = [
-    `📊 KIMS Parking — All-Time Analytics`,
+    `📊 KIMS Parking — ${PERIOD_TITLES[data.period]} Analytics`,
     ``,
     `🚗 ${data.totalCarsParked} parked · ${data.totalCarsRetrieved} retrieved · ${data.totalJobsCompleted} total jobs`,
     `⏱ Avg park ${minutesLabel(data.avgParkMinutes)} · Avg retrieve ${minutesLabel(data.avgRetrieveMinutes)}`,
@@ -82,16 +94,19 @@ export function AnalyticsScreen() {
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [expandedDriverId, setExpandedDriverId] = useState<number | null>(null);
   const [idleExpanded, setIdleExpanded] = useState(false);
+  const [period, setPeriod] = useState<AnalyticsPeriod>('all');
 
-  const load = useCallback((silent?: boolean) => {
+  const load = useCallback((p: AnalyticsPeriod, silent?: boolean) => {
     if (!silent) setLoading(true);
-    analyticsApi.overview()
+    analyticsApi.overview(p)
       .then(d => { setData(d); setErr(null); })
       .catch(() => setErr('Could not load analytics'))
       .finally(() => { setLoading(false); setRefreshing(false); });
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // Switching periods re-fetches fresh (not silent — the old period's
+  // numbers would otherwise sit on screen, wrong, while the new ones load).
+  useEffect(() => { load(period); }, [period, load]);
 
   const visitorTotal = (data?.visitorJobs ?? 0) + (data?.staffJobs ?? 0);
   const visitorPct = visitorTotal > 0 ? Math.round(((data?.visitorJobs ?? 0) / visitorTotal) * 100) : 0;
@@ -151,7 +166,7 @@ export function AnalyticsScreen() {
           <div>
             <div style={{display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4}}>
               <Icon name="sparkle" size={12} color="rgba(255,255,255,0.75)" />
-              <span style={{color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 800, letterSpacing: 1.2}}>ALL-TIME · LIVE</span>
+              <span style={{color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 800, letterSpacing: 1.2}}>{PERIODS.find(p => p.key === period)?.label.toUpperCase()} · LIVE</span>
             </div>
             <div style={{color: '#fff', fontSize: 24, fontWeight: 900}}>Analytics</div>
           </div>
@@ -165,7 +180,7 @@ export function AnalyticsScreen() {
             <PressableScale
               disabled={refreshing}
               style={{width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: refreshing ? 0.6 : 1}}
-              onClick={() => { setRefreshing(true); load(true); }}>
+              onClick={() => { setRefreshing(true); load(period, true); }}>
               <Icon name="refresh" size={18} color="#fff" />
             </PressableScale>
           </div>
@@ -191,6 +206,21 @@ export function AnalyticsScreen() {
         {data && <div style={{color: 'rgba(255,255,255,0.5)', fontSize: 10.5, fontWeight: 600, textAlign: 'center', marginTop: 14, position: 'relative'}}>{relativeTime(data.generatedAt)}</div>}
       </div>
 
+      {/* Period selector — switches the whole overview (stats, hourly
+          histogram, leaderboard) to a real, database-scoped answer for that
+          window, not an all-time number relabeled. */}
+      <div className="hscroll" style={{gap: 8, padding: '14px 20px 4px'}}>
+        {PERIODS.map(p => {
+          const on = p.key === period;
+          return (
+            <PressableScale key={p.key} disabled={loading} onClick={() => setPeriod(p.key)}
+              style={{flexShrink: 0, padding: '8px 14px', borderRadius: 999, backgroundColor: on ? colors.primary : colors.surface, border: `1px solid ${on ? colors.primary : colors.border}`, opacity: loading ? 0.6 : 1}}>
+              <span style={{fontSize: 12.5, fontWeight: 800, color: on ? colors.textOnPrimary : colors.textSecondary}}>{p.label}</span>
+            </PressableScale>
+          );
+        })}
+      </div>
+
       {loading && !data ? (
         <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 30px'}}>
           <div className="spinner" style={{width: 28, height: 28, borderColor: colors.primary}} />
@@ -199,7 +229,7 @@ export function AnalyticsScreen() {
         <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 30px'}}>
           <Icon name="alert" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
           <span style={{color: colors.textMuted, marginBottom: 12}}>{err}</span>
-          <PressableScale disabled={loading} onClick={() => load()} style={{padding: '10px 20px', borderRadius: 12, backgroundColor: colors.primary, opacity: loading ? 0.6 : 1}}>
+          <PressableScale disabled={loading} onClick={() => load(period)} style={{padding: '10px 20px', borderRadius: 12, backgroundColor: colors.primary, opacity: loading ? 0.6 : 1}}>
             {loading
               ? <span className="spinner" style={{width: 14, height: 14, borderColor: 'rgba(0,0,0,0.2)', borderTopColor: colors.background}} />
               : <span style={{color: colors.background, fontWeight: 800}}>Retry</span>}
