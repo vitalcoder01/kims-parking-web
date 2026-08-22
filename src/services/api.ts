@@ -300,11 +300,16 @@ export type DriverAnalytics = {
   avgParkMinutes: number | null; avgRetrieveMinutes: number | null;
 };
 export type AnalyticsPeriod = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'all';
+export type BlockUtilization = {block: string; count: number};
+export type AnalyticsTrend = {labels: string[]; park: number[]; retrieve: number[]};
 export type AnalyticsOverview = {
   totalCarsParked: number; totalCarsRetrieved: number; totalJobsCompleted: number;
   avgParkMinutes: number | null; avgRetrieveMinutes: number | null;
   busiestHour: number | null;
   hourlyDistribution: number[];
+  blockUtilization: BlockUtilization[];
+  // null only for period 'all' — see backend analytics.service.js trendBuckets.
+  trend: AnalyticsTrend | null;
   visitorJobs: number; staffJobs: number;
   drivers: DriverAnalytics[];
   generatedAt: string;

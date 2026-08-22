@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 36;
-export const APP_VERSION_NAME = '1.8.24';
+export const APP_VERSION_CODE = 37;
+export const APP_VERSION_NAME = '1.8.25';
 export const RELEASE_NOTES =
-  'Admin is oversight, not dispatch — removed the Park/Retrieve actions and driver-assignment picker from the Dashboard and Map (that\'s the valet\'s job); Map is now read-only. Analytics gained a real Daily/Weekly/Monthly/Yearly/All-time selector, database-scoped (not computed from a capped recent-task list).';
+  'Analytics: added a Park vs Retrieve trend chart (bucketed hourly/daily/monthly to match the selected period) and Block Utilization — which block actually got used, both computed from real completed-job data, never invented.';

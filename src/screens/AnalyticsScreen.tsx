@@ -299,6 +299,83 @@ export function AnalyticsScreen() {
             </div>
           </div>
 
+          {/* Park vs Retrieve trend — bucketed at whatever resolution suits
+              the selected period (hourly/daily/monthly, see backend
+              trendBuckets). Absent for All-time, where a calendar trend
+              can't usefully answer "when" over a multi-year span. */}
+          {data?.trend && (
+            <div style={{...cardStyle, padding: 14, marginBottom: 14}}>
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12}}>
+                <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                  <Icon name="carKey" size={15} color={colors.primary} />
+                  <span style={{fontSize: 13.5, fontWeight: 800, color: colors.textPrimary}}>Park vs Retrieve</span>
+                </div>
+                <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
+                  <span style={{display: 'flex', alignItems: 'center', gap: 4}}>
+                    <span style={{width: 7, height: 7, borderRadius: 2, backgroundColor: colors.primary}} />
+                    <span style={{fontSize: 10.5, fontWeight: 700, color: colors.textMuted}}>Park</span>
+                  </span>
+                  <span style={{display: 'flex', alignItems: 'center', gap: 4}}>
+                    <span style={{width: 7, height: 7, borderRadius: 2, backgroundColor: colors.info}} />
+                    <span style={{fontSize: 10.5, fontWeight: 700, color: colors.textMuted}}>Retrieve</span>
+                  </span>
+                </div>
+              </div>
+              {(() => {
+                const {labels, park, retrieve} = data.trend;
+                const maxVal = Math.max(1, ...park, ...retrieve);
+                // Weekly/monthly buckets are few enough to label every bar;
+                // hourly (24) and yearly-in-months (12) still fit, so the
+                // only real crowding case would be a long month — thin those
+                // labels out rather than let them overlap illegibly.
+                const showEveryLabel = labels.length <= 14;
+                return (
+                  <>
+                    <div style={{display: 'flex', alignItems: 'flex-end', height: 58, marginBottom: 6, gap: labels.length > 20 ? 1 : 2}}>
+                      {labels.map((_, i) => (
+                        <div key={i} style={{flex: 1, height: 58, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 1}}>
+                          <div style={{width: '45%', minHeight: park[i] ? 3 : 0, borderRadius: 1, height: 4 + (park[i] / maxVal) * 50, backgroundColor: colors.primary}} />
+                          <div style={{width: '45%', minHeight: retrieve[i] ? 3 : 0, borderRadius: 1, height: 4 + (retrieve[i] / maxVal) * 50, backgroundColor: colors.info}} />
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{display: 'flex', justifyContent: 'space-between'}}>
+                      {labels.map((l, i) => (showEveryLabel || i === 0 || i === labels.length - 1) ? (
+                        <span key={i} style={{fontSize: 9.5, fontWeight: 700, color: colors.textMuted, flex: showEveryLabel ? 1 : undefined, textAlign: 'center'}}>{l}</span>
+                      ) : <span key={i} style={{flex: 1}} />)}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Block utilization — which block actually got used this period,
+              computed from completed park jobs (real slot ids), never
+              invented. */}
+          {!!data?.blockUtilization.length && (
+            <div style={{...cardStyle, padding: 14, marginBottom: 14}}>
+              <div style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12}}>
+                <Icon name="parking" size={15} color={colors.primary} />
+                <span style={{fontSize: 13.5, fontWeight: 800, color: colors.textPrimary}}>Block Utilization</span>
+              </div>
+              <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
+                {(() => {
+                  const maxCount = Math.max(...data.blockUtilization.map(b => b.count));
+                  return data.blockUtilization.map(b => (
+                    <div key={b.block} style={{display: 'flex', alignItems: 'center', gap: 10}}>
+                      <span style={{width: 56, fontSize: 12, fontWeight: 700, color: colors.textSecondary}}>Block {b.block}</span>
+                      <div style={{flex: 1, height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: colors.border}}>
+                        <div style={{height: 8, borderRadius: 4, width: `${(b.count / maxCount) * 100}%`, backgroundColor: colors.primary}} />
+                      </div>
+                      <span style={{width: 28, fontSize: 12, fontWeight: 800, textAlign: 'right', color: colors.textPrimary, fontVariantNumeric: 'tabular-nums'}}>{b.count}</span>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
+
           {/* Visitor vs staff */}
           <div style={{...cardStyle, padding: 14, marginBottom: 22}}>
             <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
