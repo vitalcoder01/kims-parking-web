@@ -10,17 +10,18 @@ interface Props {
   subtitle?: string;
   user: CurrentUser | null;
   onLogout: () => void;
+  onMenuClick: () => void;
 }
 
 const roleLabel: Record<string, string> = {
   admin: 'Administrator', doctor: 'Doctor', staff: 'Staff', valet: 'Valet', driver: 'Driver',
 };
 
-// Desktop-only top bar for the Admin console: page title on the left, the
-// account menu (name, role, Logout) on the right — matching where every
-// other role's Settings screen already puts Logout, just relocated to the
-// header the way an admin console does it.
-export function AdminTopBar({title, subtitle, user, onLogout}: Props) {
+// Top bar for the Admin console: page title on the left (plus a hamburger
+// below 900px to open the sidebar drawer — see .admin-hamburger in
+// index.css), the account menu (name, role, Logout) on the right, matching
+// where every other role's Settings screen already puts Logout.
+export function AdminTopBar({title, subtitle, user, onLogout, onMenuClick}: Props) {
   const {colors} = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const initials = (user?.name ?? 'Admin').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -28,15 +29,20 @@ export function AdminTopBar({title, subtitle, user, onLogout}: Props) {
   return (
     <header style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      flexShrink: 0, height: 64, padding: '0 28px',
+      flexShrink: 0, height: 64, padding: '0 16px', gap: spacing.sm,
       borderBottom: `1px solid ${colors.border}`, backgroundColor: colors.surface,
     }}>
-      <div style={{minWidth: 0}}>
-        <div style={{fontSize: typography.sizes.lg, fontWeight: typography.weights.bold, color: colors.textPrimary}}>{title}</div>
-        {subtitle && <div style={{fontSize: typography.sizes.xs, color: colors.textMuted, marginTop: 1}}>{subtitle}</div>}
+      <div style={{display: 'flex', alignItems: 'center', gap: spacing.sm, minWidth: 0}}>
+        <PressableScale onClick={onMenuClick} className="admin-hamburger" style={{padding: 6, borderRadius: radius.sm, flexShrink: 0}}>
+          <Icon name="menu" size={22} color={colors.textPrimary} />
+        </PressableScale>
+        <div style={{minWidth: 0}}>
+          <div style={{fontSize: typography.sizes.lg, fontWeight: typography.weights.bold, color: colors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{title}</div>
+          {subtitle && <div style={{fontSize: typography.sizes.xs, color: colors.textMuted, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{subtitle}</div>}
+        </div>
       </div>
 
-      <div style={{position: 'relative'}}>
+      <div style={{position: 'relative', flexShrink: 0}}>
         <PressableScale
           onClick={() => setMenuOpen(o => !o)}
           style={{display: 'flex', alignItems: 'center', gap: spacing.sm, padding: '6px 10px 6px 6px', borderRadius: radius.md, border: `1px solid ${colors.border}`}}>
@@ -47,7 +53,7 @@ export function AdminTopBar({title, subtitle, user, onLogout}: Props) {
           }}>
             <span style={{fontSize: 11, fontWeight: typography.weights.bold, color: colors.textPrimary}}>{initials}</span>
           </span>
-          <span style={{fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold, color: colors.textPrimary}}>{user?.name ?? 'Admin'}</span>
+          <span className="admin-account-name" style={{fontSize: typography.sizes.sm, fontWeight: typography.weights.semibold, color: colors.textPrimary}}>{user?.name ?? 'Admin'}</span>
           <Icon name="chevronDown" size={16} color={colors.textMuted} />
         </PressableScale>
 

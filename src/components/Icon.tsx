@@ -87,6 +87,7 @@ export const ICONS = {
   help:        'help',
   edit:        'pencil-outline',
   save:        'content-save-outline',
+  menu:        'menu',
 } as const;
 
 export type IconName = keyof typeof ICONS;

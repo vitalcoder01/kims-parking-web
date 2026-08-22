@@ -1,23 +1,18 @@
 import React, {useEffect, useState} from 'react';
 import {useTheme} from '../../context/ThemeContext';
-import {useAuth} from '../../context/AuthContext';
 import {useAppState} from '../../context/AppStateContext';
-import {useIsDesktop} from '../../hooks/useIsDesktop';
 import {Badge} from '../../components/Badge';
 import {Icon, IconName} from '../../components/Icon';
 import {spacing, radius, typography} from '../../theme';
 
-// Mobile branch is a direct port of the mobile app's AdminDashboardScreen.
-// Desktop branch (>=900px, see useIsDesktop) rearranges the exact same
-// cards into the wide layout the AdminDesktopShell sidebar/top bar expect —
-// same data, same card styling, just laid out in columns instead of stacked.
+// The Admin console's Dashboard tab — one responsive layout (see
+// AdminDesktopShell for the sidebar/top bar around it, which carries the
+// page title/date so this screen doesn't repeat its own header).
 type ActivityType = 'success' | 'info' | 'primary' | 'warning';
 
 export function AdminDashboardScreen() {
   const {colors, isDark} = useTheme();
-  const {user} = useAuth();
   const {tasks, drivers, slots, fetchTaskHistory} = useAppState();
-  const isDesktop = useIsDesktop();
 
   // The live `tasks` array is bounded to "at most one row per doctor" now,
   // so a completed job disappears from it the moment that doctor's next car
@@ -60,8 +55,6 @@ export function AdminDashboardScreen() {
     sub: `${t.doctorName} · ${t.driverName ?? 'Unassigned'}`,
     type: (t.status === 'completed' ? 'success' : t.type === 'park' ? 'primary' : 'info') as ActivityType,
   }));
-
-  const today = new Date().toLocaleDateString(undefined, {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
 
   const sec: React.CSSProperties = {fontSize: typography.sizes.xs, fontWeight: typography.weights.bold, letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: spacing.sm, marginTop: spacing.xs, color: colors.textMuted};
   const sheet: React.CSSProperties = {borderRadius: radius.xl, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card, marginBottom: spacing.xl, boxShadow: `0 2px 8px ${colors.shadow}`};
@@ -173,65 +166,25 @@ export function AdminDashboardScreen() {
     </div>
   );
 
-  // ── Desktop: wide sidebar-shell layout — title/date already live in the
-  // shell's top bar, so no repeated header here. ─────────────────────────
-  if (isDesktop) {
-    return (
-      <div style={{padding: '28px 32px 40px'}}>
-        <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: spacing.base, marginBottom: spacing.xl}}>
-          {statDefs.map(statCard)}
-        </div>
-
-        <div style={{display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: spacing.xl, alignItems: 'start'}}>
-          <div>
-            <div style={sec}>PARKING OCCUPANCY</div>
-            {occupancyBody}
-          </div>
-          <div>
-            <div style={sec}>DRIVERS ON DUTY</div>
-            {driversBody}
-          </div>
-        </div>
-
-        <div style={sec}>LIVE ACTIVITY</div>
-        {activityBody}
-      </div>
-    );
-  }
-
-  // ── Mobile: phone-frame shell, own header (avatar/name/date). ──────────
   return (
-    <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 40}}>
-      <div style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '18px 16px', borderBottom: `1px solid ${colors.border}`, backgroundColor: colors.surface}}>
-        <div style={{
-          width: 46, height: 46, borderRadius: radius.lg, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backgroundColor: colors.primary, boxShadow: `0 4px 10px ${colors.shadow}`,
-        }}>
-          <span style={{fontSize: typography.sizes.md, fontWeight: typography.weights.black, color: colors.textOnPrimary}}>
-            {(user?.name ?? 'Admin').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-          </span>
-        </div>
-        <div style={{flex: 1, minWidth: 0}}>
-          <div style={{fontSize: typography.sizes.xs, fontWeight: typography.weights.semibold, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.textSecondary}}>Admin Panel</div>
-          <div style={{fontSize: typography.sizes.xl, fontWeight: typography.weights.black, letterSpacing: -0.4, marginTop: 2, color: colors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{user?.name ?? 'Admin'}</div>
-          <div style={{fontSize: typography.sizes.xs, marginTop: 3, color: colors.textMuted}}>{today}</div>
-        </div>
-      </div>
-
-      <div style={{padding: `${spacing.base}px ${spacing.base}px 0`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.md}}>
+    <div className="admin-content-pad">
+      <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: spacing.base, marginBottom: spacing.xl}}>
         {statDefs.map(statCard)}
       </div>
 
-      <div style={{padding: 16}}>
-        <div style={sec}>PARKING OCCUPANCY</div>
-        {occupancyBody}
-
-        <div style={sec}>DRIVERS ON DUTY</div>
-        {driversBody}
-
-        <div style={sec}>LIVE ACTIVITY</div>
-        {activityBody}
+      <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: spacing.xl, alignItems: 'start'}}>
+        <div>
+          <div style={sec}>PARKING OCCUPANCY</div>
+          {occupancyBody}
+        </div>
+        <div>
+          <div style={sec}>DRIVERS ON DUTY</div>
+          {driversBody}
+        </div>
       </div>
+
+      <div style={sec}>LIVE ACTIVITY</div>
+      {activityBody}
     </div>
   );
 }

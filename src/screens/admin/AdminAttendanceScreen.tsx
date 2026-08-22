@@ -1,16 +1,15 @@
 import React, {useState, useEffect, useCallback} from 'react';
 import {PressableScale} from '../../components/PressableScale';
 import {useTheme} from '../../context/ThemeContext';
-import {useIsDesktop} from '../../hooks/useIsDesktop';
 import {adminApi} from '../../services/api';
 import {Badge} from '../../components/Badge';
 import {Icon, IconName} from '../../components/Icon';
 import {spacing, radius, typography} from '../../theme';
 
-// Mobile branch is a direct port of the mobile app's AdminAttendanceScreen.
-// Desktop branch (>=900px) arranges the same per-user calendars into a
-// multi-column grid and turns the "Today" list into a real table — same
-// data/handlers either way.
+// The Admin console's Attendance tab — per-user calendars in a responsive
+// grid (1 column on a phone, more as the screen widens) and a "Today"
+// table that scrolls horizontally below its natural width instead of
+// switching to a different mobile design.
 interface TodayRow {
   id: number; userId: number; name: string; role: string; employeeId: string;
   checkIn: string | null; checkOut: string | null; vehiclesHandled: number; gate?: string | null;
@@ -105,7 +104,6 @@ function UserCalendar({user, monthStr, colors}: {user: MonthlyUser; monthStr: st
 
 export function AdminAttendanceScreen() {
   const {colors} = useTheme();
-  const isDesktop = useIsDesktop();
   const [todayRows, setTodayRows] = useState<TodayRow[]>([]);
   const [monthUsers, setMonthUsers] = useState<MonthlyUser[]>([]);
   const [monthStr, setMonthStr] = useState(currentMonthStr());
@@ -203,28 +201,29 @@ export function AdminAttendanceScreen() {
     </div>
   );
 
-  if (isDesktop) {
-    const th: React.CSSProperties = {textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textMuted};
-    return (
-      <div style={{padding: '28px 0 40px'}}>
-        <div style={{display: 'flex', gap: spacing.xl, marginBottom: spacing.xl, alignItems: 'stretch'}}>
-          <div style={{width: 220, flexShrink: 0}}>{presentCard}</div>
-          <div style={{flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: spacing.md}}>
-            {monthNav}
-            {categoryPills}
-          </div>
+  const th: React.CSSProperties = {textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textMuted};
+
+  return (
+    <div className="admin-content-pad">
+      <div style={{display: 'flex', flexWrap: 'wrap', gap: spacing.xl, marginBottom: spacing.xl, alignItems: 'stretch'}}>
+        <div style={{flex: '1 1 220px'}}>{presentCard}</div>
+        <div style={{flex: '3 1 320px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: spacing.md}}>
+          {monthNav}
+          {categoryPills}
         </div>
+      </div>
 
-        <div style={sec}>PER-USER CALENDAR</div>
-        {filteredUsers.length === 0 ? emptyUsers : (
-          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: spacing.md, marginBottom: spacing.xl}}>
-            {filteredUsers.map(u => <UserCalendar key={u.userId} user={u} monthStr={monthStr} colors={colors} />)}
-          </div>
-        )}
+      <div style={sec}>PER-USER CALENDAR</div>
+      {filteredUsers.length === 0 ? emptyUsers : (
+        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: spacing.md, marginBottom: spacing.xl}}>
+          {filteredUsers.map(u => <UserCalendar key={u.userId} user={u} monthStr={monthStr} colors={colors} />)}
+        </div>
+      )}
 
-        <div style={sec}>TODAY — MARKED AUTOMATICALLY</div>
-        {todayRows.length === 0 ? emptyToday : (
-          <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card}}>
+      <div style={sec}>TODAY — MARKED AUTOMATICALLY</div>
+      {todayRows.length === 0 ? emptyToday : (
+        <div className="admin-table-scroll" style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, backgroundColor: colors.card}}>
+          <div style={{minWidth: 580}}>
             <div style={{display: 'flex', borderBottom: `1px solid ${colors.border}`, backgroundColor: colors.cardAlt}}>
               <span style={{...th, flex: '1 1 220px'}}>Person</span>
               <span style={{...th, width: 140}}>Checked in</span>
@@ -248,39 +247,6 @@ export function AdminAttendanceScreen() {
               </div>
             ))}
           </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="screen-scroll" style={{backgroundColor: colors.background, padding: 16, paddingBottom: 40}}>
-      <div style={{marginBottom: spacing.base}}>{presentCard}</div>
-
-      <div style={{display: 'flex', justifyContent: 'center', marginBottom: spacing.base}}>{monthNav}</div>
-
-      <div style={sec}>CATEGORY</div>
-      <div style={{marginBottom: 14}}>{categoryPills}</div>
-
-      <div style={{...sec, marginTop: 4}}>PER-USER CALENDAR</div>
-      {filteredUsers.length === 0 ? emptyUsers : filteredUsers.map(u => <UserCalendar key={u.userId} user={u} monthStr={monthStr} colors={colors} />)}
-
-      <div style={{...sec, marginTop: spacing.sm}}>TODAY — MARKED AUTOMATICALLY</div>
-      {todayRows.length === 0 ? emptyToday : (
-        <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card, boxShadow: `0 2px 8px ${colors.shadow}`}}>
-          {todayRows.map((r, i) => (
-            <div key={r.id} style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '13px 14px', borderBottom: i === todayRows.length - 1 ? 'none' : `1px solid ${colors.divider}`}}>
-              <div style={{width: 34, height: 34, borderRadius: radius.sm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: r.checkOut ? colors.cardAlt : colors.successLight}}>
-                <span style={{fontSize: 12, fontWeight: 900, color: r.checkOut ? colors.textSecondary : colors.success}}>{r.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
-              </div>
-              <div style={{flex: 1, minWidth: 0}}>
-                <div style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>{r.name}</div>
-                <div style={{fontSize: 11, marginTop: 2, color: colors.textMuted}}>{roleLabel[r.role] ?? r.role} · {r.employeeId} · In {formatTime(r.checkIn)}</div>
-              </div>
-              {r.vehiclesHandled > 0 && <span style={{fontSize: 11, fontWeight: 700, color: colors.primary}}>{r.vehiclesHandled} vehicles</span>}
-              <Badge label={r.checkOut ? 'Done' : 'Present'} variant={r.checkOut ? 'muted' : 'success'} dot={!r.checkOut} />
-            </div>
-          ))}
         </div>
       )}
     </div>

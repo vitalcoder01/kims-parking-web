@@ -21,7 +21,6 @@ import {AdminStaffScreen} from './screens/admin/AdminStaffScreen';
 import {AdminAttendanceScreen} from './screens/admin/AdminAttendanceScreen';
 import {AdminMapScreen} from './screens/admin/AdminMapScreen';
 import {AdminDesktopShell} from './components/admin/AdminDesktopShell';
-import {useIsDesktop} from './hooks/useIsDesktop';
 import {ValetHomeScreen} from './screens/valet/ValetHomeScreen';
 import {ValetRecordsScreen} from './screens/valet/ValetRecordsScreen';
 import {ValetMapScreen} from './screens/valet/ValetMapScreen';
@@ -101,7 +100,6 @@ const ADMIN_DESKTOP_TITLE: Record<string, string> = {
 function RoleRouter() {
   const {colors} = useTheme();
   const {user, logout} = useAuth();
-  const isDesktop = useIsDesktop();
   const [tab, setTab] = useTabHistory<TabKey>(
     user?.role === 'admin' ? 'Dashboard'
     : user?.role === 'valet' ? 'Queue'
@@ -133,10 +131,10 @@ function RoleRouter() {
     : tab === 'Jobs'        ? <DriverJobsScreen />
     : <SettingsScreen />;
 
-  // Admin gets a real desktop layout (sidebar + top bar) once the viewport
-  // clears the tablet breakpoint; every other role, and admin itself on a
-  // narrow viewport, keeps the phone-frame shell below untouched.
-  if (user?.role === 'admin' && isDesktop) {
+  // Admin always gets the sidebar + top bar console shell now (responsive
+  // down to phone width via its own drawer/hamburger); every other role
+  // keeps the phone-frame + bottom-tab shell below, untouched.
+  if (user?.role === 'admin') {
     const today = new Date().toLocaleDateString(undefined, {weekday: 'long', month: 'long', day: 'numeric'});
     return (
       <AdminDesktopShell

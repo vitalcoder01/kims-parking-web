@@ -177,3 +177,66 @@ input:focus {
 .screen-enter {
   animation: kims-fade-in 0.18s ease-out;
 }
+
+/* Admin console shell — one layout at every width now. Below 900px the
+   sidebar becomes an off-canvas drawer (toggled by the top bar's hamburger)
+   instead of the old bottom-tab phone view. */
+.admin-content-pad {
+  padding: 20px 16px 40px;
+}
+@media (min-width: 900px) {
+  .admin-content-pad { padding: 28px 32px 40px; }
+}
+
+.admin-sidebar {
+  width: 228px;
+}
+@media (max-width: 899px) {
+  .admin-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 70;
+    height: 100dvh;
+    width: 260px;
+    max-width: 82vw;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+  }
+  .admin-sidebar.is-open {
+    transform: translateX(0);
+  }
+}
+
+.admin-sidebar-backdrop {
+  display: none;
+}
+@media (max-width: 899px) {
+  .admin-sidebar-backdrop.is-open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: rgba(0, 0, 0, 0.4);
+  }
+}
+
+.admin-hamburger {
+  display: none;
+}
+@media (max-width: 899px) {
+  .admin-hamburger { display: inline-flex; }
+}
+
+/* Data tables in the admin console scroll horizontally on narrow screens
+   instead of squeezing columns unreadably. */
+.admin-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Account chip in the admin top bar drops the name text on very narrow
+   screens — avatar + chevron is enough to open the menu. */
+@media (max-width: 480px) {
+  .admin-account-name { display: none; }
+}

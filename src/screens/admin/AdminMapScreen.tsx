@@ -2,7 +2,6 @@ import React, {useState, useMemo} from 'react';
 import {PressableScale} from '../../components/PressableScale';
 import {useTheme} from '../../context/ThemeContext';
 import {useAppState} from '../../context/AppStateContext';
-import {useIsDesktop} from '../../hooks/useIsDesktop';
 import {Icon} from '../../components/Icon';
 import {Badge} from '../../components/Badge';
 import {spacing, radius, typography} from '../../theme';
@@ -20,14 +19,12 @@ function agoLabel(ms?: number): string | null {
   return rem ? `${hrs} hr ${rem} min ago` : `${hrs} hr ago`;
 }
 
-// Mobile branch is a direct port of the mobile app's ParkingMapScreen
-// (admin's "Live Map" tab — actually a slot occupancy grid, not a GPS map).
-// Desktop branch (>=900px) moves the occupancy/owner-detail summary and
-// legend into a sticky side panel next to a wider block grid — same
-// selection state and data either way.
+// The Admin console's Map tab (a slot occupancy grid, not a GPS map). The
+// occupancy/owner-detail summary and legend sit in a side panel that's
+// sticky next to the block grid on a wide screen, and simply stacks above
+// it on a narrow one (see the responsive grid below).
 export function AdminMapScreen() {
   const {colors} = useTheme();
-  const isDesktop = useIsDesktop();
   const {slots, tasks} = useAppState();
   const [picked, setPicked] = useState<string | undefined>(undefined);
   const pickedSlot = picked ? slots.find(sl => sl.id === picked) : undefined;
@@ -152,58 +149,29 @@ export function AdminMapScreen() {
     </div>
   ));
 
-  if (isDesktop) {
-    return (
-      <div style={{padding: '28px 0 40px', display: 'grid', gridTemplateColumns: '1fr 300px', gap: spacing.xl, alignItems: 'start'}}>
-        <div>{blockGrid}</div>
-        <div style={{position: 'sticky', top: 0, display: 'flex', flexDirection: 'column', gap: spacing.md}}>
-          {summaryCard}
-          <div style={{borderRadius: radius.lg, border: `1px solid ${colors.border}`, backgroundColor: colors.surface, padding: 14}}>
-            <div style={{fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textMuted, marginBottom: 10}}>Legend</div>
-            <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
-              {legendItems.map(i => (
-                <div key={i.lbl} style={{display: 'flex', alignItems: 'center', gap: 8}}>
-                  <span style={{width: 14, height: 14, borderRadius: 5, border: `1px solid ${i.br}`, backgroundColor: i.bg, display: 'inline-block'}} />
-                  <span style={{fontSize: 12, fontWeight: 600, color: colors.textSecondary}}>{i.lbl}</span>
-                </div>
-              ))}
-            </div>
-            {pickedSlot && !showingOwnerDetail && (
-              <div style={{display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${colors.divider}`}}>
-                <Icon name="pin" size={14} color={colors.textPrimary} />
-                <span style={{fontSize: 12, fontWeight: 800, color: colors.textPrimary}}>{pickedSlot.id}{pickedSlot.carNumber ? ` · ${pickedSlot.carNumber}` : ''}</span>
+  return (
+    <div className="admin-content-pad" style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: spacing.xl, alignItems: 'start'}}>
+      <div style={{minWidth: 0}}>{blockGrid}</div>
+      <div style={{position: 'sticky', top: 0, display: 'flex', flexDirection: 'column', gap: spacing.md}}>
+        {summaryCard}
+        <div style={{borderRadius: radius.lg, border: `1px solid ${colors.border}`, backgroundColor: colors.surface, padding: 14}}>
+          <div style={{fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textMuted, marginBottom: 10}}>Legend</div>
+          <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
+            {legendItems.map(i => (
+              <div key={i.lbl} style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                <span style={{width: 14, height: 14, borderRadius: 5, border: `1px solid ${i.br}`, backgroundColor: i.bg, display: 'inline-block'}} />
+                <span style={{fontSize: 12, fontWeight: 600, color: colors.textSecondary}}>{i.lbl}</span>
               </div>
-            )}
+            ))}
           </div>
+          {pickedSlot && !showingOwnerDetail && (
+            <div style={{display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${colors.divider}`}}>
+              <Icon name="pin" size={14} color={colors.textPrimary} />
+              <span style={{fontSize: 12, fontWeight: 800, color: colors.textPrimary}}>{pickedSlot.id}{pickedSlot.carNumber ? ` · ${pickedSlot.carNumber}` : ''}</span>
+            </div>
+          )}
         </div>
       </div>
-    );
-  }
-
-  return (
-    <div className="screen-scroll" style={{backgroundColor: colors.background, padding: 16, paddingBottom: 40}}>
-      <div style={{marginBottom: spacing.base}}>{summaryCard}</div>
-
-      {/* Legend */}
-      <div style={{display: 'flex', alignItems: 'center', gap: 12, marginBottom: spacing.base, padding: '10px 12px', borderRadius: radius.md, backgroundColor: colors.surface, border: `1px solid ${colors.border}`}}>
-        {legendItems.map(i => (
-          <div key={i.lbl} style={{display: 'flex', alignItems: 'center', gap: 5}}>
-            <span style={{width: 14, height: 14, borderRadius: 5, border: `1px solid ${i.br}`, backgroundColor: i.bg, display: 'inline-block'}} />
-            <span style={{fontSize: 11, fontWeight: 600, color: colors.textSecondary}}>{i.lbl}</span>
-          </div>
-        ))}
-        <div style={{flex: 1}} />
-        {/* Free-slot selection only — an occupied one already shows its full
-            detail in the swapped summary card above. */}
-        {pickedSlot && !showingOwnerDetail && (
-          <div style={{display: 'flex', alignItems: 'center', gap: 4, borderRadius: radius.sm, border: `1.5px solid ${colors.textPrimary}`, padding: '5px 10px', backgroundColor: colors.card}}>
-            <Icon name="pin" size={12} color={colors.textPrimary} />
-            <span style={{fontSize: 11, fontWeight: 800, color: colors.textPrimary}}>{pickedSlot.id}{pickedSlot.carNumber ? ` · ${pickedSlot.carNumber}` : ''}</span>
-          </div>
-        )}
-      </div>
-
-      {blockGrid}
     </div>
   );
 }

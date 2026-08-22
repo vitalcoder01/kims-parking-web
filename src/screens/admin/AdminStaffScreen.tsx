@@ -3,16 +3,15 @@ import {PressableScale} from '../../components/PressableScale';
 import {useDialog} from '../../components/AppDialog';
 import {useBackStep} from '../../hooks/useBackStep';
 import {useTheme} from '../../context/ThemeContext';
-import {useIsDesktop} from '../../hooks/useIsDesktop';
 import {adminApi} from '../../services/api';
 import {Badge} from '../../components/Badge';
 import {Icon, IconName} from '../../components/Icon';
 import {spacing, radius, typography} from '../../theme';
 
-// Mobile branch is a direct port of the mobile app's AdminStaffScreen.
-// Desktop branch (>=900px) turns the same list into a real data table with
-// a search/filter toolbar, and narrows the Add/Edit form into a centered
-// panel instead of a full-bleed stack — same fields, same handlers.
+// The Admin console's Staff tab — a real data table with a search/filter
+// toolbar at every width (scrolls horizontally below the table's natural
+// width instead of switching to a different mobile design), and a
+// centered panel for the Add/Edit form.
 type Filter = 'all' | 'doctor' | 'staff' | 'valet' | 'driver' | 'admin';
 type Role = 'doctor' | 'staff' | 'valet' | 'driver' | 'admin';
 
@@ -57,7 +56,6 @@ const roleLabel = (r: Role) => ({doctor: 'Doctor', staff: 'Staff', valet: 'Valet
 export function AdminStaffScreen() {
   const {colors} = useTheme();
   const dialog = useDialog();
-  const isDesktop = useIsDesktop();
   const [filter, setFilter] = useState<Filter>('all');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -334,33 +332,16 @@ export function AdminStaffScreen() {
       </>
     );
 
-    if (isDesktop) {
-      return (
-        <div style={{padding: '28px 0 40px', maxWidth: 520, margin: '0 auto'}}>
-          <PressableScale onClick={closeForm} style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: spacing.lg}}>
-            <Icon name="back" size={16} color={colors.textSecondary} />
-            <span style={{fontSize: 13, fontWeight: 700, color: colors.textSecondary}}>Back to staff</span>
-          </PressableScale>
-          <div style={{fontSize: typography.sizes.xl, fontWeight: typography.weights.bold, color: colors.textPrimary, marginBottom: spacing.lg}}>
-            {isEdit ? 'Edit Staff' : 'Add Staff'}
-          </div>
-          <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, backgroundColor: colors.card, padding: 24}}>
-            {formFields}
-          </div>
-        </div>
-      );
-    }
-
     return (
-      <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 40}}>
-        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 0'}}>
-          <PressableScale onClick={closeForm} style={{borderRadius: 10, border: `1px solid ${colors.border}`, padding: '8px 12px', backgroundColor: colors.surface}}>
-            <span style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>← Back</span>
-          </PressableScale>
-          <span style={{fontSize: 17, fontWeight: 900, color: colors.textPrimary}}>{isEdit ? 'Edit Staff' : 'Add Staff'}</span>
-          <div style={{width: 70}} />
+      <div className="admin-content-pad" style={{maxWidth: 520, margin: '0 auto'}}>
+        <PressableScale onClick={closeForm} style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: spacing.lg}}>
+          <Icon name="back" size={16} color={colors.textSecondary} />
+          <span style={{fontSize: 13, fontWeight: 700, color: colors.textSecondary}}>Back to staff</span>
+        </PressableScale>
+        <div style={{fontSize: typography.sizes.xl, fontWeight: typography.weights.bold, color: colors.textPrimary, marginBottom: spacing.lg}}>
+          {isEdit ? 'Edit Staff' : 'Add Staff'}
         </div>
-        <div style={{padding: 20, paddingBottom: 40}}>
+        <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, backgroundColor: colors.card, padding: 24}}>
           {formFields}
         </div>
       </div>
@@ -405,29 +386,30 @@ export function AdminStaffScreen() {
     </div>
   );
 
-  if (isDesktop) {
-    const th: React.CSSProperties = {textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textMuted};
-    return (
-      <div style={{padding: '28px 0 40px'}}>
-        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg}}>
-          {filterPills}
-          <PressableScale
-            onClick={() => setShowAdd(true)}
-            style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: radius.md, padding: '10px 18px', backgroundColor: colors.primary, flexShrink: 0}}>
-            <Icon name="plus" size={16} color={colors.textOnPrimary} />
-            <span style={{color: colors.textOnPrimary, fontSize: 13, fontWeight: 700}}>Add Staff</span>
-          </PressableScale>
+  const th: React.CSSProperties = {textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textMuted};
+
+  return (
+    <div className="admin-content-pad">
+      <div style={{display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.lg}}>
+        {filterPills}
+        <PressableScale
+          onClick={() => setShowAdd(true)}
+          style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: radius.md, padding: '10px 18px', backgroundColor: colors.primary, flexShrink: 0}}>
+          <Icon name="plus" size={16} color={colors.textOnPrimary} />
+          <span style={{color: colors.textOnPrimary, fontSize: 13, fontWeight: 700}}>Add Staff</span>
+        </PressableScale>
+      </div>
+
+      <div style={{marginBottom: spacing.lg, maxWidth: 480}}>{statRow}</div>
+
+      {loading ? (
+        <div style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '40px 0'}}>
+          <span className="spinner" style={{borderColor: colors.border, borderTopColor: colors.primary}} />
+          <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Loading staff…</span>
         </div>
-
-        <div style={{marginBottom: spacing.lg, maxWidth: 480}}>{statRow}</div>
-
-        {loading ? (
-          <div style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '40px 0'}}>
-            <span className="spinner" style={{borderColor: colors.border, borderTopColor: colors.primary}} />
-            <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Loading staff…</span>
-          </div>
-        ) : filtered.length === 0 ? emptyState : (
-          <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card}}>
+      ) : filtered.length === 0 ? emptyState : (
+        <div className="admin-table-scroll" style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, backgroundColor: colors.card}}>
+          <div style={{minWidth: 640}}>
             <div style={{display: 'flex', borderBottom: `1px solid ${colors.border}`, backgroundColor: colors.cardAlt}}>
               <span style={{...th, flex: '1 1 240px'}}>Member</span>
               <span style={{...th, width: 120}}>Role</span>
@@ -452,46 +434,6 @@ export function AdminStaffScreen() {
               </PressableScale>
             ))}
           </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="screen-scroll" style={{backgroundColor: colors.background, padding: 16, paddingBottom: 40}}>
-      <PressableScale style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radius.lg, padding: '15px 0', marginBottom: spacing.base, backgroundColor: colors.primary, boxShadow: `0 4px 10px ${colors.shadow}`}} onClick={() => setShowAdd(true)}>
-        <Icon name="plus" size={18} color={colors.textOnPrimary} />
-        <span style={{color: colors.textOnPrimary, fontSize: 14, fontWeight: 800}}>Add Staff</span>
-      </PressableScale>
-
-      <div style={{marginBottom: spacing.md}}>{statRow}</div>
-
-      <div style={{marginBottom: spacing.md, paddingBottom: 2}}>{filterPills}</div>
-
-      {loading ? (
-        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: spacing.md, padding: '40px 0'}}>
-          <span className="spinner" style={{borderColor: colors.border, borderTopColor: colors.primary}} />
-          <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Loading staff…</span>
-        </div>
-      ) : filtered.length === 0 ? emptyState : (
-        <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.surface, boxShadow: `0 2px 8px ${colors.shadow}`}}>
-          {filtered.map((u, i) => (
-            <PressableScale key={u.id} onClick={() => openEdit(u)}
-              style={{width: '100%', display: 'flex', alignItems: 'center', gap: spacing.md, padding: 14, borderBottom: i === filtered.length - 1 ? 'none' : `1px solid ${colors.border}`}}>
-              <div style={{width: 40, height: 40, borderRadius: radius.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.primary + '15'}}>
-                <span style={{fontSize: 13, fontWeight: 900, color: colors.primary}}>{u.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
-              </div>
-              <div style={{flex: 1, textAlign: 'left', minWidth: 0}}>
-                <div style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>{u.username}</div>
-                <div style={{fontSize: 11, marginTop: 2, color: colors.textSecondary}}>{roleLabel(u.role)} · ID {u.employeeId}</div>
-                {!!(u.department || u.phone) && <div style={{fontSize: 11, marginTop: 1, color: colors.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{u.department || u.phone}</div>}
-              </div>
-              <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0}}>
-                {statusBadge(u)}
-                <Icon name="arrowRight" size={14} color={colors.textMuted} />
-              </div>
-            </PressableScale>
-          ))}
         </div>
       )}
     </div>
