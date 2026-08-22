@@ -20,7 +20,6 @@ import {AdminDashboardScreen} from './screens/admin/AdminDashboardScreen';
 import {AdminStaffScreen} from './screens/admin/AdminStaffScreen';
 import {AdminAttendanceScreen} from './screens/admin/AdminAttendanceScreen';
 import {AdminMapScreen} from './screens/admin/AdminMapScreen';
-import {AdminDesktopShell} from './components/admin/AdminDesktopShell';
 import {ValetHomeScreen} from './screens/valet/ValetHomeScreen';
 import {ValetRecordsScreen} from './screens/valet/ValetRecordsScreen';
 import {ValetMapScreen} from './screens/valet/ValetMapScreen';
@@ -89,17 +88,9 @@ function tabsForRole(role: string | undefined): TabDef[] {
   return [home, setup, settings];
 }
 
-// Desktop-only page titles for the admin sidebar layout — separate from
-// tabsForRole's headerTitle above, which was tuned for the mobile centered
-// nav bar (terse, some null). The desktop top bar always shows something.
-const ADMIN_DESKTOP_TITLE: Record<string, string> = {
-  Dashboard: 'Operations Dashboard', Staff: 'Staff', Attendance: 'Attendance',
-  Map: 'Live Map', Analytics: 'Analytics', Settings: 'Settings',
-};
-
 function RoleRouter() {
   const {colors} = useTheme();
-  const {user, logout} = useAuth();
+  const {user} = useAuth();
   const [tab, setTab] = useTabHistory<TabKey>(
     user?.role === 'admin' ? 'Dashboard'
     : user?.role === 'valet' ? 'Queue'
@@ -130,29 +121,6 @@ function RoleRouter() {
     : tab === 'DriverDashboard' ? <DriverDashboardScreen onOpenJobs={() => setTab('Jobs')} />
     : tab === 'Jobs'        ? <DriverJobsScreen />
     : <SettingsScreen />;
-
-  // Admin always gets the sidebar + top bar console shell now (responsive
-  // down to phone width via its own drawer/hamburger); every other role
-  // keeps the phone-frame + bottom-tab shell below, untouched.
-  if (user?.role === 'admin') {
-    const today = new Date().toLocaleDateString(undefined, {weekday: 'long', month: 'long', day: 'numeric'});
-    return (
-      <AdminDesktopShell
-        navItems={tabs}
-        activeKey={tab}
-        onSelect={key => setTab(key as TabKey)}
-        title={ADMIN_DESKTOP_TITLE[tab] ?? activeTab?.label ?? 'Admin'}
-        subtitle={today}
-        user={user}
-        onLogout={logout}
-      >
-        <AlarmBanner />
-        <UpdateBanner />
-        <InstallBanner />
-        <div key={tab} className="screen-enter">{screen}</div>
-      </AdminDesktopShell>
-    );
-  }
 
   return (
     <div className="phone-frame" style={{backgroundColor: colors.background}}>

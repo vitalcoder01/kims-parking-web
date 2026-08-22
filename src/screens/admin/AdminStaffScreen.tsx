@@ -8,10 +8,7 @@ import {Badge} from '../../components/Badge';
 import {Icon, IconName} from '../../components/Icon';
 import {spacing, radius, typography} from '../../theme';
 
-// The Admin console's Staff tab — a real data table with a search/filter
-// toolbar at every width (scrolls horizontally below the table's natural
-// width instead of switching to a different mobile design), and a
-// centered panel for the Add/Edit form.
+// Direct port of the mobile app's AdminStaffScreen.
 type Filter = 'all' | 'doctor' | 'staff' | 'valet' | 'driver' | 'admin';
 type Role = 'doctor' | 'staff' | 'valet' | 'driver' | 'admin';
 
@@ -219,8 +216,7 @@ export function AdminStaffScreen() {
   };
   const fieldLabel: React.CSSProperties = {fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 8, marginTop: 16, color: colors.textMuted};
 
-  // ── Add/Edit Staff form — identical fields/handlers on both layouts,
-  // only the surrounding width/heading differs. ──────────────────────────
+  // ── Add/Edit Staff form ──────────────────────────────────────────────
   if (showAdd) {
     const isEdit = !!editingUser;
     const usernamePrefix: Record<Role, string> = {doctor: 'dr_', staff: '', valet: 'valet_', driver: 'driver_', admin: ''};
@@ -228,212 +224,183 @@ export function AdminStaffScreen() {
     const previewUsername = `${usernamePrefix[role]}${slug || 'full_name'}`;
     const canSubmit = name.trim() && employeeId.trim() && (isEdit || password.trim()) && !submitting;
 
-    const formFields = (
-      <>
-        <div style={fieldLabel}>ROLE {isEdit ? '(TRANSFER)' : ''}</div>
-        <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
-          {ROLE_OPTIONS.map(r => {
-            const on = role === r.key;
-            return (
-              <PressableScale key={r.key} onClick={() => setRole(r.key)}
-                style={{display: 'flex', alignItems: 'center', gap: 6, border: `1.5px solid ${on ? colors.primary : colors.border}`, borderRadius: 12, padding: '10px 12px', backgroundColor: on ? colors.primary + '15' : colors.surface}}>
-                <Icon name={r.icon} size={18} color={on ? colors.primary : colors.textMuted} />
-                <span style={{fontSize: 12, fontWeight: 700, color: on ? colors.primary : colors.textSecondary}}>{r.label}</span>
-              </PressableScale>
-            );
-          })}
-        </div>
-
-        <div style={fieldLabel}>FULL NAME</div>
-        <input style={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Kavita Reddy" />
-
-        {isEdit && editingUser && (
-          <div style={{borderRadius: 12, border: `1px solid ${colors.primary}30`, padding: 12, marginTop: 14, backgroundColor: colors.primary + '10'}}>
-            <div style={{fontSize: 9, fontWeight: 800, letterSpacing: 1, color: colors.textMuted}}>LOGS IN AS</div>
-            <div style={{fontSize: 15, fontWeight: 900, marginTop: 3, color: colors.primary}}>{editingUser.username}</div>
-          </div>
-        )}
-        {!isEdit && (
-          <div style={{fontSize: 11, marginTop: 10, lineHeight: '16px', color: colors.textMuted}}>
-            Their username is generated automatically — they'll sign in as "{previewUsername}".
-          </div>
-        )}
-
-        <div style={fieldLabel}>EMPLOYEE ID{isEdit ? ' (FIXED)' : ''} — internal reference only</div>
-        <input
-          style={{...inputStyle, backgroundColor: isEdit ? colors.background : colors.surface, color: isEdit ? colors.textMuted : colors.textPrimary}}
-          value={employeeId} onChange={e => setEmployeeId(e.target.value.toUpperCase())} placeholder="e.g. DOC010"
-          disabled={isEdit}
-        />
-
-        {(role === 'doctor' || role === 'staff') && (
-          <>
-            <div style={fieldLabel}>DEPARTMENT (OPTIONAL)</div>
-            <input style={inputStyle} value={department} onChange={e => setDepartment(e.target.value)} placeholder="e.g. Cardiology" />
-
-            <div style={fieldLabel}>VALET CARD CODE (OPTIONAL, 3 DIGITS)</div>
-            <input style={inputStyle} value={cardCode} onChange={e => setCardCode(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder="e.g. 472" inputMode="numeric" />
-          </>
-        )}
-
-        {role === 'driver' && (
-          <>
-            <div style={fieldLabel}>PHONE (OPTIONAL)</div>
-            <input style={inputStyle} value={phone} onChange={e => setPhone(e.target.value)} placeholder="10-digit number" inputMode="numeric" />
-          </>
-        )}
-
-        {!isEdit && (
-          <>
-            <div style={fieldLabel}>PASSWORD</div>
-            <div style={{display: 'flex', alignItems: 'center', border: `1.5px solid ${colors.border}`, borderRadius: 12, padding: '0 14px', height: 50, backgroundColor: colors.surface}}>
-              <input style={{flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 15, fontWeight: 700, color: colors.textPrimary}}
-                value={password} onChange={e => setPassword(e.target.value)} />
-              <PressableScale onClick={() => setPassword(genPassword())} style={{paddingLeft: 10}}>
-                <span style={{fontSize: 12, fontWeight: 700, color: colors.primary}}>Regenerate</span>
-              </PressableScale>
-            </div>
-            <div style={{fontSize: 11, marginTop: 8, lineHeight: '16px', color: colors.textMuted}}>
-              {password.length > 0 && password.length < 8
-                ? 'Password must be at least 8 characters.'
-                : "Share this with the new hire directly — it won't be shown again after creating the account."}
-            </div>
-          </>
-        )}
-
-        <PressableScale
-          style={{width: '100%', borderRadius: 14, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 28, backgroundColor: colors.primary, opacity: canSubmit ? 1 : 0.4}}
-          onClick={isEdit ? handleSaveEdit : handleCreate}
-          disabled={!canSubmit}
-        >
-          {submitting ? <span className="spinner" style={{width: 18, height: 18, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} /> : <span style={{color: '#fff', fontSize: 15, fontWeight: 800}}>{isEdit ? 'Save Changes' : 'Create Account'}</span>}
-        </PressableScale>
-
-        {isEdit && (
-          <>
-            <PressableScale
-              style={{width: '100%', borderRadius: 14, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1px solid ${colors.warning}50`, backgroundColor: colors.warning + '10', opacity: resettingPassword ? 0.6 : 1}}
-              disabled={resettingPassword || deleting}
-              onClick={handleResetPassword}>
-              {resettingPassword
-                ? <span className="spinner" style={{width: 16, height: 16, borderColor: colors.warning + '40', borderTopColor: colors.warning}} />
-                : <span style={{fontSize: 14, fontWeight: 800, color: colors.warning}}>Reset Password</span>}
-            </PressableScale>
-            <PressableScale
-              style={{width: '100%', borderRadius: 14, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1px solid ${colors.error}50`, backgroundColor: colors.error + '10', opacity: deleting ? 0.6 : 1}}
-              disabled={deleting || resettingPassword}
-              onClick={handleDelete}>
-              {deleting
-                ? <span className="spinner" style={{width: 16, height: 16, borderColor: colors.error + '40', borderTopColor: colors.error}} />
-                : <span style={{fontSize: 14, fontWeight: 800, color: colors.error}}>Delete Account</span>}
-            </PressableScale>
-          </>
-        )}
-      </>
-    );
-
     return (
-      <div className="admin-content-pad" style={{maxWidth: 520, margin: '0 auto'}}>
-        <PressableScale onClick={closeForm} style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: spacing.lg}}>
-          <Icon name="back" size={16} color={colors.textSecondary} />
-          <span style={{fontSize: 13, fontWeight: 700, color: colors.textSecondary}}>Back to staff</span>
-        </PressableScale>
-        <div style={{fontSize: typography.sizes.xl, fontWeight: typography.weights.bold, color: colors.textPrimary, marginBottom: spacing.lg}}>
-          {isEdit ? 'Edit Staff' : 'Add Staff'}
+      <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 40}}>
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 0'}}>
+          <PressableScale onClick={closeForm} style={{borderRadius: 10, border: `1px solid ${colors.border}`, padding: '8px 12px', backgroundColor: colors.surface}}>
+            <span style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>← Back</span>
+          </PressableScale>
+          <span style={{fontSize: 17, fontWeight: 900, color: colors.textPrimary}}>{isEdit ? 'Edit Staff' : 'Add Staff'}</span>
+          <div style={{width: 70}} />
         </div>
-        <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, backgroundColor: colors.card, padding: 24}}>
-          {formFields}
+
+        <div style={{padding: 20, paddingBottom: 40}}>
+          <div style={fieldLabel}>ROLE {isEdit ? '(TRANSFER)' : ''}</div>
+          <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
+            {ROLE_OPTIONS.map(r => {
+              const on = role === r.key;
+              return (
+                <PressableScale key={r.key} onClick={() => setRole(r.key)}
+                  style={{display: 'flex', alignItems: 'center', gap: 6, border: `1.5px solid ${on ? colors.primary : colors.border}`, borderRadius: 12, padding: '10px 12px', backgroundColor: on ? colors.primary + '15' : colors.surface}}>
+                  <Icon name={r.icon} size={18} color={on ? colors.primary : colors.textMuted} />
+                  <span style={{fontSize: 12, fontWeight: 700, color: on ? colors.primary : colors.textSecondary}}>{r.label}</span>
+                </PressableScale>
+              );
+            })}
+          </div>
+
+          <div style={fieldLabel}>FULL NAME</div>
+          <input style={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Kavita Reddy" />
+
+          {isEdit && editingUser && (
+            <div style={{borderRadius: 12, border: `1px solid ${colors.primary}30`, padding: 12, marginTop: 14, backgroundColor: colors.primary + '10'}}>
+              <div style={{fontSize: 9, fontWeight: 800, letterSpacing: 1, color: colors.textMuted}}>LOGS IN AS</div>
+              <div style={{fontSize: 15, fontWeight: 900, marginTop: 3, color: colors.primary}}>{editingUser.username}</div>
+            </div>
+          )}
+          {!isEdit && (
+            <div style={{fontSize: 11, marginTop: 10, lineHeight: '16px', color: colors.textMuted}}>
+              Their username is generated automatically — they'll sign in as "{previewUsername}".
+            </div>
+          )}
+
+          <div style={fieldLabel}>EMPLOYEE ID{isEdit ? ' (FIXED)' : ''} — internal reference only</div>
+          <input
+            style={{...inputStyle, backgroundColor: isEdit ? colors.background : colors.surface, color: isEdit ? colors.textMuted : colors.textPrimary}}
+            value={employeeId} onChange={e => setEmployeeId(e.target.value.toUpperCase())} placeholder="e.g. DOC010"
+            disabled={isEdit}
+          />
+
+          {(role === 'doctor' || role === 'staff') && (
+            <>
+              <div style={fieldLabel}>DEPARTMENT (OPTIONAL)</div>
+              <input style={inputStyle} value={department} onChange={e => setDepartment(e.target.value)} placeholder="e.g. Cardiology" />
+
+              <div style={fieldLabel}>VALET CARD CODE (OPTIONAL, 3 DIGITS)</div>
+              <input style={inputStyle} value={cardCode} onChange={e => setCardCode(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder="e.g. 472" inputMode="numeric" />
+            </>
+          )}
+
+          {role === 'driver' && (
+            <>
+              <div style={fieldLabel}>PHONE (OPTIONAL)</div>
+              <input style={inputStyle} value={phone} onChange={e => setPhone(e.target.value)} placeholder="10-digit number" inputMode="numeric" />
+            </>
+          )}
+
+          {!isEdit && (
+            <>
+              <div style={fieldLabel}>PASSWORD</div>
+              <div style={{display: 'flex', alignItems: 'center', border: `1.5px solid ${colors.border}`, borderRadius: 12, padding: '0 14px', height: 50, backgroundColor: colors.surface}}>
+                <input style={{flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 15, fontWeight: 700, color: colors.textPrimary}}
+                  value={password} onChange={e => setPassword(e.target.value)} />
+                <PressableScale onClick={() => setPassword(genPassword())} style={{paddingLeft: 10}}>
+                  <span style={{fontSize: 12, fontWeight: 700, color: colors.primary}}>Regenerate</span>
+                </PressableScale>
+              </div>
+              <div style={{fontSize: 11, marginTop: 8, lineHeight: '16px', color: colors.textMuted}}>
+                {password.length > 0 && password.length < 8
+                  ? '⚠ Password must be at least 8 characters.'
+                  : "Share this with the new hire directly — it won't be shown again after creating the account."}
+              </div>
+            </>
+          )}
+
+          <PressableScale
+            style={{width: '100%', borderRadius: 14, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 28, backgroundColor: colors.primary, opacity: canSubmit ? 1 : 0.4}}
+            onClick={isEdit ? handleSaveEdit : handleCreate}
+            disabled={!canSubmit}
+          >
+            {submitting ? <span className="spinner" style={{width: 18, height: 18, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} /> : <span style={{color: '#fff', fontSize: 15, fontWeight: 800}}>{isEdit ? 'Save Changes' : 'Create Account'}</span>}
+          </PressableScale>
+
+          {isEdit && (
+            <>
+              <PressableScale
+                style={{width: '100%', borderRadius: 14, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1px solid ${colors.warning}50`, backgroundColor: colors.warning + '10', opacity: resettingPassword ? 0.6 : 1}}
+                disabled={resettingPassword || deleting}
+                onClick={handleResetPassword}>
+                {resettingPassword
+                  ? <span className="spinner" style={{width: 16, height: 16, borderColor: colors.warning + '40', borderTopColor: colors.warning}} />
+                  : <span style={{fontSize: 14, fontWeight: 800, color: colors.warning}}>Reset Password</span>}
+              </PressableScale>
+              <PressableScale
+                style={{width: '100%', borderRadius: 14, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1px solid ${colors.error}50`, backgroundColor: colors.error + '10', opacity: deleting ? 0.6 : 1}}
+                disabled={deleting || resettingPassword}
+                onClick={handleDelete}>
+                {deleting
+                  ? <span className="spinner" style={{width: 16, height: 16, borderColor: colors.error + '40', borderTopColor: colors.error}} />
+                  : <span style={{fontSize: 14, fontWeight: 800, color: colors.error}}>Delete Account</span>}
+              </PressableScale>
+            </>
+          )}
         </div>
       </div>
     );
   }
 
-  // ── Staff list — desktop gets a filter/search toolbar + a real table;
-  // mobile keeps the original stacked-card list. ─────────────────────────
-  const filterPills = (
-    <div style={{display: 'flex', gap: 8, overflowX: 'auto'}}>
-      {FILTER_TABS.map(tab => {
-        const on = filter === tab.key;
-        return (
-          <PressableScale key={tab.key} onClick={() => setFilter(tab.key)}
-            style={{flexShrink: 0, padding: '9px 16px', borderRadius: radius.full, border: `1.5px solid ${on ? colors.primary : colors.border}`, backgroundColor: on ? colors.primary : colors.surface}}>
-            <span style={{fontSize: 13, fontWeight: 700, color: on ? colors.textOnPrimary : colors.textSecondary}}>{tab.label}</span>
-          </PressableScale>
-        );
-      })}
-    </div>
-  );
-
-  const statRow = (
-    <div style={{display: 'flex', gap: 10}}>
-      {[
-        {n: String(onDuty), l: 'Drivers Ready', c: colors.success},
-        {n: String(onTask), l: 'On Task', c: colors.warning},
-        {n: String(offDuty), l: 'Off Duty', c: colors.textMuted},
-      ].map(st => (
-        <div key={st.l} style={{flex: 1, textAlign: 'center', padding: '16px 0', borderRadius: radius.lg, border: `1px solid ${colors.border}`, backgroundColor: colors.surface}}>
-          <div style={{fontSize: typography.sizes['2xl'], fontWeight: typography.weights.black, color: st.c}}>{st.n}</div>
-          <div style={{fontSize: 11, fontWeight: 600, marginTop: 2, color: colors.textMuted}}>{st.l}</div>
-        </div>
-      ))}
-    </div>
-  );
-
-  const emptyState = (
-    <div style={{borderRadius: radius.lg, border: `1px dashed ${colors.border}`, padding: 32, textAlign: 'center', backgroundColor: colors.surface}}>
-      <Icon name="people" size={26} color={colors.textMuted} />
-      <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>No staff in this category yet</div>
-    </div>
-  );
-
-  const th: React.CSSProperties = {textAlign: 'left', padding: '10px 16px', fontSize: 11, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase', color: colors.textMuted};
-
+  // ── Staff list ─────────────────────────────────────────────────────────
   return (
-    <div className="admin-content-pad">
-      <div style={{display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.lg}}>
-        {filterPills}
-        <PressableScale
-          onClick={() => setShowAdd(true)}
-          style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: radius.md, padding: '10px 18px', backgroundColor: colors.primary, flexShrink: 0}}>
-          <Icon name="plus" size={16} color={colors.textOnPrimary} />
-          <span style={{color: colors.textOnPrimary, fontSize: 13, fontWeight: 700}}>Add Staff</span>
-        </PressableScale>
+    <div className="screen-scroll" style={{backgroundColor: colors.background, padding: 16, paddingBottom: 40}}>
+      <PressableScale style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radius.lg, padding: '15px 0', marginBottom: spacing.base, backgroundColor: colors.primary, boxShadow: `0 4px 10px ${colors.shadow}`}} onClick={() => setShowAdd(true)}>
+        <Icon name="plus" size={18} color={colors.textOnPrimary} />
+        <span style={{color: colors.textOnPrimary, fontSize: 14, fontWeight: 800}}>Add Staff</span>
+      </PressableScale>
+
+      <div style={{display: 'flex', gap: 10, marginBottom: spacing.md}}>
+        {[
+          {n: String(onDuty), l: 'Drivers Ready', c: colors.success},
+          {n: String(onTask), l: 'On Task', c: colors.warning},
+          {n: String(offDuty), l: 'Off Duty', c: colors.textMuted},
+        ].map(st => (
+          <div key={st.l} style={{flex: 1, textAlign: 'center', padding: '16px 0', borderRadius: radius.lg, border: `1px solid ${colors.border}`, backgroundColor: colors.surface}}>
+            <div style={{fontSize: typography.sizes['2xl'], fontWeight: typography.weights.black, color: st.c}}>{st.n}</div>
+            <div style={{fontSize: 11, fontWeight: 600, marginTop: 2, color: colors.textMuted}}>{st.l}</div>
+          </div>
+        ))}
       </div>
 
-      <div style={{marginBottom: spacing.lg, maxWidth: 480}}>{statRow}</div>
+      <div style={{display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: spacing.md}}>
+        {FILTER_TABS.map(tab => {
+          const on = filter === tab.key;
+          return (
+            <PressableScale key={tab.key} onClick={() => setFilter(tab.key)}
+              style={{flexShrink: 0, padding: '9px 16px', borderRadius: radius.full, border: `1.5px solid ${on ? colors.primary : colors.border}`, backgroundColor: on ? colors.primary : colors.surface}}>
+              <span style={{fontSize: 13, fontWeight: 700, color: on ? colors.textOnPrimary : colors.textSecondary}}>{tab.label}</span>
+            </PressableScale>
+          );
+        })}
+      </div>
 
       {loading ? (
-        <div style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '40px 0'}}>
+        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: spacing.md, padding: '40px 0'}}>
           <span className="spinner" style={{borderColor: colors.border, borderTopColor: colors.primary}} />
           <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Loading staff…</span>
         </div>
-      ) : filtered.length === 0 ? emptyState : (
-        <div className="admin-table-scroll" style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, backgroundColor: colors.card}}>
-          <div style={{minWidth: 640}}>
-            <div style={{display: 'flex', borderBottom: `1px solid ${colors.border}`, backgroundColor: colors.cardAlt}}>
-              <span style={{...th, flex: '1 1 240px'}}>Member</span>
-              <span style={{...th, width: 120}}>Role</span>
-              <span style={{...th, flex: '1 1 160px'}}>Department / Phone</span>
-              <span style={{...th, width: 120}}>Status</span>
-            </div>
-            {filtered.map((u, i) => (
-              <PressableScale key={u.id} onClick={() => openEdit(u)}
-                style={{width: '100%', display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: i === filtered.length - 1 ? 'none' : `1px solid ${colors.divider}`, textAlign: 'left'}}>
-                <span style={{flex: '1 1 240px', display: 'flex', alignItems: 'center', gap: spacing.sm, minWidth: 0}}>
-                  <span style={{width: 32, height: 32, borderRadius: radius.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.primary + '15'}}>
-                    <span style={{fontSize: 12, fontWeight: 900, color: colors.primary}}>{u.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
-                  </span>
-                  <span style={{minWidth: 0}}>
-                    <span style={{display: 'block', fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>{u.username}</span>
-                    <span style={{display: 'block', fontSize: 11, marginTop: 1, color: colors.textMuted}}>ID {u.employeeId}</span>
-                  </span>
-                </span>
-                <span style={{width: 120, fontSize: 12, fontWeight: 600, color: colors.textSecondary}}>{roleLabel(u.role)}</span>
-                <span style={{flex: '1 1 160px', fontSize: 12, color: colors.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{u.department || u.phone || '—'}</span>
-                <span style={{width: 120}}>{statusBadge(u) ?? <span style={{fontSize: 12, color: colors.textMuted}}>—</span>}</span>
-              </PressableScale>
-            ))}
-          </div>
+      ) : filtered.length === 0 ? (
+        <div style={{borderRadius: radius.lg, border: `1px dashed ${colors.border}`, padding: 32, textAlign: 'center', backgroundColor: colors.surface}}>
+          <Icon name="people" size={26} color={colors.textMuted} />
+          <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>No staff in this category yet</div>
+        </div>
+      ) : (
+        <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.surface, boxShadow: `0 2px 8px ${colors.shadow}`}}>
+          {filtered.map((u, i) => (
+            <PressableScale key={u.id} onClick={() => openEdit(u)}
+              style={{width: '100%', display: 'flex', alignItems: 'center', gap: spacing.md, padding: 14, borderBottom: i === filtered.length - 1 ? 'none' : `1px solid ${colors.border}`}}>
+              <div style={{width: 40, height: 40, borderRadius: radius.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.primary + '15'}}>
+                <span style={{fontSize: 13, fontWeight: 900, color: colors.primary}}>{u.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
+              </div>
+              <div style={{flex: 1, textAlign: 'left', minWidth: 0}}>
+                <div style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>{u.username}</div>
+                <div style={{fontSize: 11, marginTop: 2, color: colors.textSecondary}}>{roleLabel(u.role)} · ID {u.employeeId}</div>
+                {!!(u.department || u.phone) && <div style={{fontSize: 11, marginTop: 1, color: colors.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{u.department || u.phone}</div>}
+              </div>
+              <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0}}>
+                {statusBadge(u)}
+                <Icon name="arrowRight" size={14} color={colors.textMuted} />
+              </div>
+            </PressableScale>
+          ))}
         </div>
       )}
     </div>
