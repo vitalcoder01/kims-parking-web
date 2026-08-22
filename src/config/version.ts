@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 39;
-export const APP_VERSION_NAME = '1.8.27';
+export const APP_VERSION_CODE = 40;
+export const APP_VERSION_NAME = '1.8.28';
 export const RELEASE_NOTES =
-  'Drivers can now set their own On Shift / Off Shift status from the dashboard — previously only a valet or admin could change it. Locked while you\'re on a live job (finish it first).';
+  'Fixed the shift toggle doing nothing on tap — it was reading driver status from a roster that\'s only ever fetched for valet/admin sessions, so it was always empty for a driver. Now reads/updates the driver\'s own status directly.';

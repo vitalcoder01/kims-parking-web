@@ -62,15 +62,23 @@ function SkeletonBlock({height, width = '100%', radius = 10, style}: {height: nu
 }
 
 export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = {}) {
-  const {user} = useAuth();
-  const {tasks, visitors, drivers, setDriverStatus, fetchTaskHistory, hydrated} = useAppState();
+  const {user, updateProfile} = useAuth();
+  const {tasks, visitors, setDriverStatus, fetchTaskHistory, hydrated} = useAppState();
   const {colors: c} = useTheme();
   const dialog = useDialog();
   const g = greeting();
   const days = weekStrip();
 
   const myDriverId = useMyDriverId();
-  const me = drivers.find(d => d.id === myDriverId);
+  // NOT from the `drivers` array in AppStateContext — that's only ever
+  // fetched for valet/admin sessions (see fetchAll's needsOpsData gate), so
+  // for a driver it's permanently empty and `.find()` here always came back
+  // undefined, silently no-opping every tap (the actual bug reported: the
+  // toggle rendered fine but did nothing). user.driverStatus is sent by the
+  // backend's serializeUser on login/refresh specifically so a driver's own
+  // app can know their own status without fetching (and thereby exposing)
+  // the whole roster's phone numbers just to find themselves in it.
+  const myStatus = user?.driverStatus;
   const [togglingShift, setTogglingShift] = useState(false);
 
   // On/off is the only thing a toggle here should control — 'busy' is set
@@ -78,16 +86,21 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
   // refuses to take a driver off-duty while they're on a live job (see
   // driver.service.js setStatus's ACTIVE_TASK_STATUSES guard), so a driver
   // physically mid-job can't shift off mid-drive.
-  const onShift = me?.status === 'available';
+  const onShift = myStatus === 'available';
   const handleToggleShift = async () => {
-    if (!myDriverId || !me || togglingShift) return;
-    if (me.status === 'busy') {
+    if (!myDriverId || togglingShift) return;
+    if (myStatus === 'busy') {
       dialog.alert("You're still out on a job — finish or hand it off before going off-duty.", {title: 'Still on a job'});
       return;
     }
+    const next = onShift ? 'off' : 'available';
     setTogglingShift(true);
     try {
-      await setDriverStatus(myDriverId, onShift ? 'off' : 'available');
+      await setDriverStatus(myDriverId, next);
+      // AppStateContext's setDriverStatus only patches the (unpopulated,
+      // for a driver) `drivers` array — this is what actually keeps
+      // user.driverStatus, the thing this screen reads, current.
+      updateProfile({driverStatus: next});
     } catch (err: any) {
       dialog.alert(err.message || 'Could not change your shift status');
     } finally {
@@ -141,26 +154,26 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
           on tap — the backend already refuses this move mid-job. */}
       <PressableScale
         onClick={handleToggleShift}
-        disabled={togglingShift || me?.status === 'busy'}
+        disabled={togglingShift || myStatus === 'busy'}
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
           borderRadius: 18, padding: 14, marginBottom: 18,
           border: `1px solid ${onShift ? c.success + '40' : c.border}`,
           backgroundColor: onShift ? c.successLight : c.surface,
-          opacity: me?.status === 'busy' ? 0.75 : 1,
+          opacity: myStatus === 'busy' ? 0.75 : 1,
         }}>
         <div style={{
           width: 40, height: 40, borderRadius: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backgroundColor: me?.status === 'busy' ? c.warningLight : onShift ? c.success : c.cardAlt,
+          backgroundColor: myStatus === 'busy' ? c.warningLight : onShift ? c.success : c.cardAlt,
         }}>
-          <Icon name={me?.status === 'busy' ? 'bolt' : 'key'} size={17} color={me?.status === 'busy' ? c.warning : onShift ? '#fff' : c.textMuted} />
+          <Icon name={myStatus === 'busy' ? 'bolt' : 'key'} size={17} color={myStatus === 'busy' ? c.warning : onShift ? '#fff' : c.textMuted} />
         </div>
         <div style={{flex: 1, minWidth: 0}}>
           <div style={{fontSize: 14, fontWeight: 800, color: c.textPrimary}}>
-            {me?.status === 'busy' ? 'On a job' : onShift ? 'On shift' : 'Off shift'}
+            {myStatus === 'busy' ? 'On a job' : onShift ? 'On shift' : 'Off shift'}
           </div>
           <div style={{fontSize: 11.5, marginTop: 2, color: c.textSecondary}}>
-            {me?.status === 'busy' ? 'Finish your current job to go off-duty' : onShift ? 'Visible to valets for new jobs' : "Tap to start — you won't be assigned jobs"}
+            {myStatus === 'busy' ? 'Finish your current job to go off-duty' : onShift ? 'Visible to valets for new jobs' : "Tap to start — you won't be assigned jobs"}
           </div>
         </div>
         {/* Pill switch — purely a visual reflection of onShift, the whole
