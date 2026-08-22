@@ -241,9 +241,9 @@ export function AdminStaffScreen() {
               const on = role === r.key;
               return (
                 <PressableScale key={r.key} onClick={() => setRole(r.key)}
-                  style={{display: 'flex', alignItems: 'center', gap: 6, border: `1.5px solid ${on ? colors.primary : colors.border}`, borderRadius: 12, padding: '10px 12px', backgroundColor: on ? colors.primary + '15' : colors.surface}}>
-                  <Icon name={r.icon} size={18} color={on ? colors.primary : colors.textMuted} />
-                  <span style={{fontSize: 12, fontWeight: 700, color: on ? colors.primary : colors.textSecondary}}>{r.label}</span>
+                  style={{display: 'flex', alignItems: 'center', gap: 6, border: `1.5px solid ${on ? colors.primary : colors.border}`, borderRadius: radius.full, padding: '10px 14px', backgroundColor: on ? colors.primary : colors.surface}}>
+                  <Icon name={r.icon} size={18} color={on ? colors.textOnPrimary : colors.textMuted} />
+                  <span style={{fontSize: 12, fontWeight: 700, color: on ? colors.textOnPrimary : colors.textSecondary}}>{r.label}</span>
                 </PressableScale>
               );
             })}
@@ -307,30 +307,30 @@ export function AdminStaffScreen() {
           )}
 
           <PressableScale
-            style={{width: '100%', borderRadius: 14, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 28, backgroundColor: colors.primary, opacity: canSubmit ? 1 : 0.4}}
+            style={{width: '100%', borderRadius: radius.full, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 28, backgroundColor: colors.primary, opacity: canSubmit ? 1 : 0.4}}
             onClick={isEdit ? handleSaveEdit : handleCreate}
             disabled={!canSubmit}
           >
-            {submitting ? <span className="spinner" style={{width: 18, height: 18, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} /> : <span style={{color: '#fff', fontSize: 15, fontWeight: 800}}>{isEdit ? 'Save Changes' : 'Create Account'}</span>}
+            {submitting ? <span className="spinner" style={{width: 18, height: 18, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} /> : <span style={{color: '#fff', fontSize: 15, fontWeight: 700}}>{isEdit ? 'Save Changes' : 'Create Account'}</span>}
           </PressableScale>
 
           {isEdit && (
             <>
               <PressableScale
-                style={{width: '100%', borderRadius: 14, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1px solid ${colors.warning}50`, backgroundColor: colors.warning + '10', opacity: resettingPassword ? 0.6 : 1}}
+                style={{width: '100%', borderRadius: radius.full, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1.5px solid ${colors.border}`, backgroundColor: 'transparent', opacity: resettingPassword ? 0.6 : 1}}
                 disabled={resettingPassword || deleting}
                 onClick={handleResetPassword}>
                 {resettingPassword
-                  ? <span className="spinner" style={{width: 16, height: 16, borderColor: colors.warning + '40', borderTopColor: colors.warning}} />
-                  : <span style={{fontSize: 14, fontWeight: 800, color: colors.warning}}>Reset Password</span>}
+                  ? <span className="spinner" style={{width: 16, height: 16, borderColor: colors.border, borderTopColor: colors.textPrimary}} />
+                  : <span style={{fontSize: 14, fontWeight: 700, color: colors.textPrimary}}>Reset Password</span>}
               </PressableScale>
               <PressableScale
-                style={{width: '100%', borderRadius: 14, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1px solid ${colors.error}50`, backgroundColor: colors.error + '10', opacity: deleting ? 0.6 : 1}}
+                style={{width: '100%', borderRadius: radius.full, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1.5px solid ${colors.error}40`, backgroundColor: 'transparent', opacity: deleting ? 0.6 : 1}}
                 disabled={deleting || resettingPassword}
                 onClick={handleDelete}>
                 {deleting
                   ? <span className="spinner" style={{width: 16, height: 16, borderColor: colors.error + '40', borderTopColor: colors.error}} />
-                  : <span style={{fontSize: 14, fontWeight: 800, color: colors.error}}>Delete Account</span>}
+                  : <span style={{fontSize: 14, fontWeight: 700, color: colors.error}}>Delete Account</span>}
               </PressableScale>
             </>
           )}
@@ -342,9 +342,9 @@ export function AdminStaffScreen() {
   // ── Staff list ─────────────────────────────────────────────────────────
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background, padding: 16, paddingBottom: 40}}>
-      <PressableScale style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radius.lg, padding: '15px 0', marginBottom: spacing.base, backgroundColor: colors.primary, boxShadow: `0 4px 10px ${colors.shadow}`}} onClick={() => setShowAdd(true)}>
+      <PressableScale style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radius.full, padding: '16px 0', marginBottom: spacing.base, backgroundColor: colors.primary}} onClick={() => setShowAdd(true)}>
         <Icon name="plus" size={18} color={colors.textOnPrimary} />
-        <span style={{color: colors.textOnPrimary, fontSize: 14, fontWeight: 800}}>Add Staff</span>
+        <span style={{color: colors.textOnPrimary, fontSize: 14, fontWeight: 700}}>Add Staff</span>
       </PressableScale>
 
       <div style={{display: 'flex', gap: 10, marginBottom: spacing.md}}>
@@ -353,9 +353,12 @@ export function AdminStaffScreen() {
           {n: String(onTask), l: 'On Task', c: colors.warning},
           {n: String(offDuty), l: 'Off Duty', c: colors.textMuted},
         ].map(st => (
-          <div key={st.l} style={{flex: 1, textAlign: 'center', padding: '16px 0', borderRadius: radius.lg, border: `1px solid ${colors.border}`, backgroundColor: colors.surface}}>
-            <div style={{fontSize: typography.sizes['2xl'], fontWeight: typography.weights.black, color: st.c}}>{st.n}</div>
-            <div style={{fontSize: 11, fontWeight: 600, marginTop: 2, color: colors.textMuted}}>{st.l}</div>
+          <div key={st.l} style={{flex: 1, textAlign: 'center', padding: '18px 0', borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, backgroundColor: colors.card}}>
+            <div style={{fontSize: typography.sizes['2xl'], fontWeight: typography.weights.black, color: colors.textPrimary}}>{st.n}</div>
+            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 3}}>
+              <span style={{width: 6, height: 6, borderRadius: 3, backgroundColor: st.c}} />
+              <span style={{fontSize: 11, fontWeight: 600, color: colors.textMuted}}>{st.l}</span>
+            </div>
           </div>
         ))}
       </div>
@@ -378,17 +381,17 @@ export function AdminStaffScreen() {
           <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Loading staff…</span>
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{borderRadius: radius.lg, border: `1px dashed ${colors.border}`, padding: 32, textAlign: 'center', backgroundColor: colors.surface}}>
+        <div style={{borderRadius: radius['2xl'], border: `1px dashed ${colors.border}`, padding: 32, textAlign: 'center', backgroundColor: colors.card}}>
           <Icon name="people" size={26} color={colors.textMuted} />
           <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>No staff in this category yet</div>
         </div>
       ) : (
-        <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.surface, boxShadow: `0 2px 8px ${colors.shadow}`}}>
+        <div style={{borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card}}>
           {filtered.map((u, i) => (
             <PressableScale key={u.id} onClick={() => openEdit(u)}
-              style={{width: '100%', display: 'flex', alignItems: 'center', gap: spacing.md, padding: 14, borderBottom: i === filtered.length - 1 ? 'none' : `1px solid ${colors.border}`}}>
-              <div style={{width: 40, height: 40, borderRadius: radius.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.primary + '15'}}>
-                <span style={{fontSize: 13, fontWeight: 900, color: colors.primary}}>{u.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
+              style={{width: '100%', display: 'flex', alignItems: 'center', gap: spacing.md, padding: 14, borderBottom: i === filtered.length - 1 ? 'none' : `1px solid ${colors.divider}`}}>
+              <div style={{width: 42, height: 42, borderRadius: radius.full, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.cardAlt}}>
+                <span style={{fontSize: 13, fontWeight: 800, color: colors.textPrimary}}>{u.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
               </div>
               <div style={{flex: 1, textAlign: 'left', minWidth: 0}}>
                 <div style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>{u.username}</div>

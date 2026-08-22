@@ -55,16 +55,16 @@ function UserCalendar({user, monthStr, colors}: {user: MonthlyUser; monthStr: st
   const cells: (number | null)[] = [...Array(firstWeekday).fill(null), ...Array.from({length: daysInMonth}, (_, i) => i + 1)];
 
   return (
-    <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, padding: spacing.md, marginBottom: spacing.md, backgroundColor: colors.card, boxShadow: `0 2px 8px ${colors.shadow}`}}>
+    <div style={{borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, padding: spacing.md, marginBottom: spacing.md, backgroundColor: colors.card}}>
       <div style={{display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md}}>
-        <div style={{width: 34, height: 34, borderRadius: radius.sm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary + '15'}}>
-          <span style={{fontSize: 12, fontWeight: 900, color: colors.primary}}>{user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+        <div style={{width: 36, height: 36, borderRadius: radius.full, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt}}>
+          <span style={{fontSize: 12, fontWeight: 800, color: colors.textPrimary}}>{user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
         </div>
         <div style={{flex: 1, minWidth: 0}}>
           <div style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>{user.name}</div>
           <div style={{fontSize: 11, marginTop: 2, color: colors.textMuted}}>{roleLabel[user.role] ?? user.role} · {user.employeeId}</div>
         </div>
-        <div style={{borderRadius: radius.sm, padding: '5px 10px', textAlign: 'center', backgroundColor: colors.successLight}}>
+        <div style={{borderRadius: radius.lg, padding: '5px 10px', textAlign: 'center', backgroundColor: colors.successLight}}>
           <div style={{fontSize: 15, fontWeight: 900, color: colors.success}}>{presentCount}</div>
           <div style={{fontSize: 8, fontWeight: 700, textTransform: 'uppercase', color: colors.textMuted}}>days</div>
         </div>
@@ -131,7 +131,7 @@ export function AdminAttendanceScreen() {
   const filteredUsers = category === 'all' ? monthUsers : monthUsers.filter(u => u.role === category);
   const visibleCategories = CATEGORIES.filter(c => c.key === 'all' || categoryCounts[c.key] > 0);
 
-  const sec: React.CSSProperties = {fontSize: typography.sizes.xs, fontWeight: typography.weights.bold, letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: spacing.sm, color: colors.textMuted};
+  const sec: React.CSSProperties = {fontSize: typography.sizes.base, fontWeight: typography.weights.black, letterSpacing: -0.2, marginBottom: spacing.sm, color: colors.textPrimary};
 
   if (loading) {
     return (
@@ -144,27 +144,27 @@ export function AdminAttendanceScreen() {
 
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background, padding: 16, paddingBottom: 40}}>
-      <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, textAlign: 'center', padding: '22px 0', marginBottom: spacing.base, backgroundColor: colors.card, boxShadow: `0 2px 8px ${colors.shadow}`}}>
+      <div style={{borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, textAlign: 'center', padding: '24px 0', marginBottom: spacing.base, backgroundColor: colors.card}}>
         <div style={{width: 44, height: 44, borderRadius: radius.full, margin: '0 auto', marginBottom: spacing.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.successLight}}>
           <Icon name="checkBold" size={20} color={colors.success} />
         </div>
-        <div style={{fontSize: typography.sizes['4xl'], fontWeight: typography.weights.black, color: colors.success, lineHeight: 1.1}}>{present}</div>
+        <div style={{fontSize: typography.sizes['4xl'], fontWeight: typography.weights.black, color: colors.textPrimary, lineHeight: 1.1}}>{present}</div>
         <div style={{fontSize: 11, fontWeight: 700, marginTop: 4, color: colors.textMuted}}>Present right now</div>
       </div>
 
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: spacing.base}}>
-        <PressableScale style={{width: 34, height: 34, borderRadius: radius.sm, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card}} onClick={() => setMonthStr(m => shiftMonth(m, -1))}>
+        <PressableScale style={{width: 36, height: 36, borderRadius: radius.full, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card}} onClick={() => setMonthStr(m => shiftMonth(m, -1))}>
           <span style={{fontSize: 18, fontWeight: 900, color: colors.textPrimary}}>‹</span>
         </PressableScale>
         <span style={{fontSize: 15, fontWeight: 800, minWidth: 140, textAlign: 'center', color: colors.textPrimary}}>{monthLabel(monthStr)}</span>
         <PressableScale
-          style={{width: 34, height: 34, borderRadius: radius.sm, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, opacity: isCurrentMonth ? 0.35 : 1}}
+          style={{width: 36, height: 36, borderRadius: radius.full, border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card, opacity: isCurrentMonth ? 0.35 : 1}}
           onClick={() => !isCurrentMonth && setMonthStr(m => shiftMonth(m, 1))} disabled={isCurrentMonth}>
           <span style={{fontSize: 18, fontWeight: 900, color: colors.textPrimary}}>›</span>
         </PressableScale>
       </div>
 
-      <div style={sec}>CATEGORY</div>
+      <div style={sec}>Category</div>
       <div style={{display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 14, paddingBottom: 2}}>
         {visibleCategories.map(c => {
           const on = category === c.key;
@@ -181,26 +181,26 @@ export function AdminAttendanceScreen() {
         })}
       </div>
 
-      <div style={{...sec, marginTop: 4}}>PER-USER CALENDAR</div>
+      <div style={{...sec, marginTop: 4}}>Per-user calendar</div>
       {filteredUsers.length === 0 ? (
-        <div style={{borderRadius: radius.lg, border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center', marginBottom: spacing.sm}}>
+        <div style={{borderRadius: radius['2xl'], border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center', marginBottom: spacing.sm}}>
           <Icon name="calendar" size={22} color={colors.textMuted} />
           <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>No one in this category yet</div>
         </div>
       ) : filteredUsers.map(u => <UserCalendar key={u.userId} user={u} monthStr={monthStr} colors={colors} />)}
 
-      <div style={{...sec, marginTop: spacing.sm}}>TODAY — MARKED AUTOMATICALLY</div>
+      <div style={{...sec, marginTop: spacing.sm}}>Today — marked automatically</div>
       {todayRows.length === 0 ? (
-        <div style={{borderRadius: radius.lg, border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center'}}>
+        <div style={{borderRadius: radius['2xl'], border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center'}}>
           <Icon name="clock" size={22} color={colors.textMuted} />
           <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>Nobody has been marked present yet today</div>
         </div>
       ) : (
-        <div style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card, boxShadow: `0 2px 8px ${colors.shadow}`}}>
+        <div style={{borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card}}>
           {todayRows.map((r, i) => (
             <div key={r.id} style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '13px 14px', borderBottom: i === todayRows.length - 1 ? 'none' : `1px solid ${colors.divider}`}}>
-              <div style={{width: 34, height: 34, borderRadius: radius.sm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: r.checkOut ? colors.cardAlt : colors.successLight}}>
-                <span style={{fontSize: 12, fontWeight: 900, color: r.checkOut ? colors.textSecondary : colors.success}}>{r.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+              <div style={{width: 36, height: 36, borderRadius: radius.full, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: r.checkOut ? colors.cardAlt : colors.successLight}}>
+                <span style={{fontSize: 12, fontWeight: 800, color: r.checkOut ? colors.textSecondary : colors.success}}>{r.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
               </div>
               <div style={{flex: 1, minWidth: 0}}>
                 <div style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>{r.name}</div>

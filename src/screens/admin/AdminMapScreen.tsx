@@ -61,7 +61,7 @@ export function AdminMapScreen() {
           an occupied slot is selected; clicking that same slot again (see
           selectSlot) clears the selection and this reverts automatically. */}
       {showingOwnerDetail && pickedSlot ? (
-        <div style={{borderRadius: radius['2xl'], padding: 18, marginBottom: spacing.base, backgroundColor: colors.primary, boxShadow: `0 6px 14px ${colors.shadow}`}}>
+        <div style={{borderRadius: radius['2xl'], padding: 20, marginBottom: spacing.base, backgroundColor: colors.primary}}>
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14}}>
             <div style={{flex: 1, minWidth: 0}}>
               <div style={{fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: colors.textOnPrimary + '99'}}>
@@ -93,7 +93,7 @@ export function AdminMapScreen() {
           </div>
         </div>
       ) : (
-        <div style={{borderRadius: radius['2xl'], padding: 18, marginBottom: spacing.base, backgroundColor: colors.primary, boxShadow: `0 6px 14px ${colors.shadow}`}}>
+        <div style={{borderRadius: radius['2xl'], padding: 20, marginBottom: spacing.base, backgroundColor: colors.primary}}>
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14}}>
             <div>
               <div style={{fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: colors.textOnPrimary + '99'}}>OCCUPANCY</div>
@@ -113,7 +113,7 @@ export function AdminMapScreen() {
       )}
 
       {/* Legend */}
-      <div style={{display: 'flex', alignItems: 'center', gap: 12, marginBottom: spacing.base, padding: '10px 12px', borderRadius: radius.md, backgroundColor: colors.surface, border: `1px solid ${colors.border}`}}>
+      <div style={{display: 'flex', alignItems: 'center', gap: 12, marginBottom: spacing.base, padding: '12px 14px', borderRadius: radius.full, backgroundColor: colors.card, border: `1px solid ${colors.border}`}}>
         {[
           {bg: colors.successLight, br: colors.success, lbl: 'Free'},
           {bg: colors.cardAlt, br: colors.border, lbl: 'Occupied'},
@@ -137,15 +137,15 @@ export function AdminMapScreen() {
 
       {/* Blocks */}
       {blocks.length === 0 ? (
-        <div style={{borderRadius: radius.lg, border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center'}}>
+        <div style={{borderRadius: radius['2xl'], border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center'}}>
           <Icon name="parking" size={26} color={colors.textMuted} />
           <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>No parking slots configured yet</div>
         </div>
       ) : blocks.map(bl => (
-        <div key={bl.name} style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, marginBottom: spacing.md, overflow: 'hidden', backgroundColor: colors.surface, boxShadow: `0 2px 8px ${colors.shadow}`}}>
+        <div key={bl.name} style={{borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, marginBottom: spacing.md, overflow: 'hidden', backgroundColor: colors.card}}>
           <div style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: 14, borderBottom: `1px solid ${colors.divider}`}}>
-            <div style={{width: 32, height: 32, borderRadius: radius.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt}}>
-              <span style={{fontSize: 14, fontWeight: 900, color: colors.textPrimary}}>{bl.name}</span>
+            <div style={{width: 34, height: 34, borderRadius: radius.full, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt}}>
+              <span style={{fontSize: 13, fontWeight: 800, color: colors.textPrimary}}>{bl.name}</span>
             </div>
             <span style={{flex: 1, fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>Block {bl.name}</span>
             <Badge label={bl.free > 0 ? `${bl.free} free` : 'Full'} variant={bl.free > 0 ? 'success' : 'error'} dot />
@@ -160,7 +160,7 @@ export function AdminMapScreen() {
                 <PressableScale
                   key={sl.id}
                   onClick={() => selectSlot(sl.id)}
-                  style={{width: 44, height: 40, borderRadius: radius.sm, border: `2px solid ${isSel ? colors.textPrimary : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: bg}}
+                  style={{width: 44, height: 40, borderRadius: radius.lg, border: `2px solid ${isSel ? colors.textPrimary : 'transparent'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: bg}}
                 >
                   <span style={{fontSize: 12, fontWeight: 800, color: tc}}>{sl.number}</span>
                 </PressableScale>

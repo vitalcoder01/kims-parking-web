@@ -58,42 +58,48 @@ export function AdminDashboardScreen() {
 
   const today = new Date().toLocaleDateString(undefined, {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
 
-  const sec: React.CSSProperties = {fontSize: typography.sizes.xs, fontWeight: typography.weights.bold, letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: spacing.sm, marginTop: spacing.xs, color: colors.textMuted};
-  const sheet: React.CSSProperties = {borderRadius: radius.xl, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card, marginBottom: spacing.xl, boxShadow: `0 2px 8px ${colors.shadow}`};
+  const sec: React.CSSProperties = {fontSize: typography.sizes.base, fontWeight: typography.weights.black, letterSpacing: -0.2, marginBottom: spacing.sm, marginTop: spacing.xs, color: colors.textPrimary};
+  const sheet: React.CSSProperties = {borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card, marginBottom: spacing.xl};
   const emptyTxt: React.CSSProperties = {fontSize: typography.sizes.base, fontWeight: typography.weights.semibold, padding: spacing.xl, textAlign: 'center', color: colors.textMuted};
   const trackBg = isDark ? '#2A2A2A' : '#EBEBEB';
 
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 40}}>
-      {/* Header */}
-      <div style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '18px 16px', borderBottom: `1px solid ${colors.border}`, backgroundColor: colors.surface}}>
+      {/* Header — circular avatar (Uber never uses a rounded-square), plain
+          bold name, status as a small dot rather than a boxed badge. */}
+      <div style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '20px 16px 18px', backgroundColor: colors.background}}>
         <div style={{
-          width: 46, height: 46, borderRadius: radius.lg, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backgroundColor: colors.primary, boxShadow: `0 4px 10px ${colors.shadow}`,
+          width: 44, height: 44, borderRadius: radius.full, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: colors.primary,
         }}>
-          <span style={{fontSize: typography.sizes.md, fontWeight: typography.weights.black, color: colors.textOnPrimary}}>
+          <span style={{fontSize: typography.sizes.base, fontWeight: typography.weights.bold, color: colors.textOnPrimary}}>
             {(user?.name ?? 'Admin').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
           </span>
         </div>
         <div style={{flex: 1, minWidth: 0}}>
-          <div style={{fontSize: typography.sizes.xs, fontWeight: typography.weights.semibold, letterSpacing: 0.4, textTransform: 'uppercase', color: colors.textSecondary}}>Admin Panel</div>
-          <div style={{fontSize: typography.sizes.xl, fontWeight: typography.weights.black, letterSpacing: -0.4, marginTop: 2, color: colors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{user?.name ?? 'Admin'}</div>
-          <div style={{fontSize: typography.sizes.xs, marginTop: 3, color: colors.textMuted}}>{today}</div>
+          <div style={{fontSize: typography.sizes['2xl'], fontWeight: typography.weights.black, letterSpacing: -0.5, color: colors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{user?.name ?? 'Admin'}</div>
+          <div style={{fontSize: typography.sizes.sm, marginTop: 2, color: colors.textMuted}}>{today}</div>
         </div>
-        <Badge label="Live" variant="success" dot />
+        <div style={{display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: radius.full, backgroundColor: colors.card, border: `1px solid ${colors.border}`}}>
+          <span style={{width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success}} />
+          <span style={{fontSize: typography.sizes.xs, fontWeight: typography.weights.bold, color: colors.textSecondary}}>Live</span>
+        </div>
       </div>
 
-      {/* Metrics 2x2 */}
-      <div style={{padding: `${spacing.base}px ${spacing.base}px 0`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.md}}>
+      {/* Metrics 2x2 — one restrained accent (a small dot, not a big tinted
+          icon block) instead of four different hues; the number itself is
+          what should read first, the way a fare or an ETA does in Uber. */}
+      <div style={{padding: `0 ${spacing.base}px`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: spacing.md, marginBottom: spacing.md}}>
         {[
           {n: String(parkedCars), l: 'Vehicles Parked', c: colors.primary, ic: 'parking' as IconName},
           {n: String(busyDrivers), l: 'Drivers On Duty', c: colors.info, ic: 'people' as IconName},
           {n: String(liveTasks.length), l: 'Tasks Active', c: colors.warning, ic: 'bolt' as IconName},
           {n: String(pendingRetrieval), l: 'Retrieval Pending', c: colors.success, ic: 'refresh' as IconName},
         ].map(m => (
-          <div key={m.l} style={{borderRadius: radius.xl, border: `1px solid ${colors.border}`, padding: '18px 16px', backgroundColor: colors.card, boxShadow: `0 4px 10px ${m.c}1e`}}>
-            <div style={{width: 40, height: 40, borderRadius: radius.md, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md, backgroundColor: m.c + '18'}}>
-              <Icon name={m.ic} size={19} color={m.c} />
+          <div key={m.l} style={{borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, padding: '20px 18px', backgroundColor: colors.card}}>
+            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md}}>
+              <Icon name={m.ic} size={18} color={colors.textMuted} />
+              <span style={{width: 7, height: 7, borderRadius: 4, backgroundColor: m.c}} />
             </div>
             <div style={{fontSize: typography.sizes['3xl'], fontWeight: typography.weights.black, letterSpacing: -1, color: colors.textPrimary, lineHeight: 1.1}}>{m.n}</div>
             <div style={{fontSize: typography.sizes.xs, fontWeight: typography.weights.semibold, marginTop: 4, color: colors.textMuted}}>{m.l}</div>
@@ -152,9 +158,9 @@ export function AdminDashboardScreen() {
             const initials = d.name.split(' ').map(w => w[0]).join('').slice(0, 2);
             const busy = d.status === 'busy';
             return (
-              <div key={d.id} style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '12px 16px', borderBottom: i === drivers.length - 1 ? 'none' : `1px solid ${colors.divider}`}}>
-                <div style={{width: 36, height: 36, borderRadius: radius.sm, border: `1px solid ${colors.primary}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.primary + '1A'}}>
-                  <span style={{fontSize: 11, fontWeight: 900, color: colors.primary}}>{initials}</span>
+              <div key={d.id} style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '14px 16px', borderBottom: i === drivers.length - 1 ? 'none' : `1px solid ${colors.divider}`}}>
+                <div style={{width: 38, height: 38, borderRadius: radius.full, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.cardAlt}}>
+                  <span style={{fontSize: 12, fontWeight: 800, color: colors.textPrimary}}>{initials}</span>
                 </div>
                 <div style={{flex: 1}}>
                   <div style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>{d.name}</div>
@@ -173,12 +179,12 @@ export function AdminDashboardScreen() {
             <div style={emptyTxt}>No activity yet today</div>
           ) : liveActivity.map((a, i) => (
             <div key={i} style={{display: 'flex', alignItems: 'center', padding: '12px 0', borderBottom: i === liveActivity.length - 1 ? 'none' : `1px solid ${colors.divider}`, gap: 10}}>
-              <span style={{width: 3, alignSelf: 'stretch', borderRadius: 2, flexShrink: 0, backgroundColor: actColor[a.type], marginLeft: 16}} />
+              <span style={{width: 8, height: 8, borderRadius: 4, flexShrink: 0, backgroundColor: actColor[a.type], marginLeft: 16}} />
               <div style={{
-                width: 30, height: 30, borderRadius: radius.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                backgroundColor: actColor[a.type] + '15',
+                width: 32, height: 32, borderRadius: radius.full, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                backgroundColor: colors.cardAlt,
               }}>
-                <Icon name={a.icon} size={15} color={actColor[a.type]} />
+                <Icon name={a.icon} size={15} color={colors.textPrimary} />
               </div>
               <div style={{flex: 1, paddingRight: 16}}>
                 <div style={{fontSize: 13, fontWeight: 600, color: colors.textPrimary}}>{a.text}</div>
