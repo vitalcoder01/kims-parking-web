@@ -181,6 +181,9 @@ export function AdminAttendanceScreen() {
   useEffect(() => { setLoading(true); load(monthStr); }, [monthStr, load]);
 
   const present = todayRows.filter(r => r.checkIn && !r.checkOut).length;
+  const checkedInToday = todayRows.length;
+  const totalStaff = monthUsers.length;
+  const attendanceRate = totalStaff ? Math.round((checkedInToday / totalStaff) * 100) : 0;
   const isCurrentMonth = monthStr === currentMonthStr();
   const categoryCounts: Record<string, number> = {all: monthUsers.length};
   for (const u of monthUsers) categoryCounts[u.role] = (categoryCounts[u.role] ?? 0) + 1;
@@ -200,12 +203,27 @@ export function AdminAttendanceScreen() {
 
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background, padding: 16, paddingBottom: 40}}>
-      <div style={{borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, textAlign: 'center', padding: '24px 0', marginBottom: spacing.base, backgroundColor: colors.card}}>
-        <div style={{width: 44, height: 44, borderRadius: radius.full, margin: '0 auto', marginBottom: spacing.sm, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.successLight}}>
-          <Icon name="checkBold" size={20} color={colors.success} />
+      {/* Two paired stats, not one number alone — Mobbin reference: Open's
+          streak hero (two big numbers side by side, small caption below
+          each), Duolingo's bold streak treatment. Both are real, derived
+          data: present is today's still-clocked-in count, the rate is
+          checked-in-today over the whole roster. */}
+      <div style={{borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, marginBottom: spacing.base, backgroundColor: colors.card, overflow: 'hidden'}}>
+        <div style={{display: 'flex', alignItems: 'center', padding: '22px 0'}}>
+          <div style={{flex: 1, textAlign: 'center'}}>
+            <div style={{fontSize: 40, fontWeight: 900, letterSpacing: -1, lineHeight: 1, color: colors.success}}>{present}</div>
+            <div style={{fontSize: 11, fontWeight: 700, marginTop: 6, color: colors.textMuted}}>Present<br />right now</div>
+          </div>
+          <div style={{width: 1, alignSelf: 'stretch', margin: '8px 0', backgroundColor: colors.divider}} />
+          <div style={{flex: 1, textAlign: 'center'}}>
+            <div style={{fontSize: 40, fontWeight: 900, letterSpacing: -1, lineHeight: 1, color: colors.textPrimary}}>{attendanceRate}%</div>
+            <div style={{fontSize: 11, fontWeight: 700, marginTop: 6, color: colors.textMuted}}>Checked in<br />today</div>
+          </div>
         </div>
-        <div style={{fontSize: typography.sizes['4xl'], fontWeight: typography.weights.black, color: colors.textPrimary, lineHeight: 1.1}}>{present}</div>
-        <div style={{fontSize: 11, fontWeight: 700, marginTop: 4, color: colors.textMuted}}>Present right now</div>
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '12px 0', borderTop: `1px solid ${colors.divider}`}}>
+          <Icon name="people" size={13} color={colors.textMuted} />
+          <span style={{fontSize: 12, fontWeight: 600, color: colors.textSecondary}}>{checkedInToday} of {totalStaff} staff checked in today</span>
+        </div>
       </div>
 
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: spacing.base}}>
