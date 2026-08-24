@@ -7,12 +7,9 @@ import {getSwRegistration} from '../services/swRegistration';
 import {getCurrentPositionSafe} from '../utils/location';
 import {useAuth} from './AuthContext';
 
-// Full port of the mobile app's AppStateContext — same wire-format mappers,
-// same socket delta events, same "fetch on connect, patch on event" sync
-// model, now covering every role (doctor/staff/admin/valet/driver) instead
-// of just the desk roles. GPS comes from the browser's Geolocation API in
-// place of react-native-geolocation-service; everything else (sockets, REST
-// calls, mappers) is identical wire-for-wire with the mobile client.
+// Ports the mobile app's socket sync model to the browser: fetch on
+// connect, patch on each delta event. GPS uses the Geolocation API instead
+// of react-native-geolocation-service; everything else is wire-identical.
 
 export type DriverStatus = 'available' | 'busy' | 'off';
 export type TaskType = 'park' | 'retrieve';
@@ -149,12 +146,9 @@ export interface ReassignPrompt {
   visitor?: Visitor;
   driverName: string | null;
   rejected?: boolean;
-  // 'escalation' (default) is the existing one-time grace-period ladder in
-  // jobAlerts.js — "Later" there DEFERS (touchOwnerWindow, one more prompt
-  // after another grace window). 'reminder' is the repeating 60s loop in
-  // driverReminder.js for a freshly-created park ticket — "Later" there
-  // SILENCES permanently instead. Same dialog, different backend call on
-  // the same button.
+  // 'escalation' (jobAlerts.js): Later defers, one more prompt after another
+  // grace window. 'reminder' (driverReminder.js, 60s loop): Later silences
+  // permanently. Same dialog, different backend call on the same button.
   source?: 'escalation' | 'reminder';
 }
 
@@ -300,10 +294,9 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     setActiveAlert(null);
   }, []);
 
-  // Only valet/admin screens ever read the full `drivers` roster.
+  // Only valet/admin need the full drivers roster.
   const needsOpsData = user?.role === 'valet' || user?.role === 'admin';
-  // `visitors` is also needed by drivers — DriverJobsScreen's "Visitor
-  // Pickups" section filters this list down to the ones assigned to them.
+  // Drivers need `visitors` too — DriverJobsScreen filters it to their own assignments.
   const needsVisitors = needsOpsData || user?.role === 'driver';
 
   const fetchAll = useCallback(async () => {
@@ -325,13 +318,10 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     if (a) setArrivals(a.map(mapArrival));
     setHydrated(true);
 
-    // Kill a stale alarm that no socket event could ever have reached us —
-    // mirrors mobile's identical sweep in AppStateContext.tsx. If the tab was
-    // backgrounded/offline when the assignment was rolled back elsewhere,
-    // nothing ever told this alarm to stop. This full fetch is the
-    // authoritative answer: we just asked the server for everything, so if
-    // nothing is actually waiting on this driver's acceptance, nothing
-    // should be ringing.
+    // Authoritative stale-alarm check: a rollback that happened while this
+    // tab was backgrounded/offline has no socket event to reach us, so if
+    // nothing is actually awaiting this driver's acceptance after a full
+    // refetch, nothing should be ringing.
     const me = userRef.current;
     const myDrvId = me?.role === 'driver' ? me.linkedDriverId ?? null : null;
     if (myDrvId != null) {
@@ -344,22 +334,15 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
   const userRef = useRef(user);
   userRef.current = user;
 
-  // A handful of mutators need the freshest `tasks` AFTER an await, not the
-  // snapshot closed over when they were called — see assignVisitorDriver's
-  // linkedTaskId lookup below for why.
+  // A few mutators need `tasks` fresh AFTER an await, not the stale
+  // snapshot closed over at call time — see assignVisitorDriver below.
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
 
   const reassignShownAt = useRef(0);
 
-  // reassignPrompt is a single dialog slot, but the events that fill it
-  // (accept-timeout, driver reject, the repeating driver-reminder) can land
-  // for TWO DIFFERENT jobs close together. The old code just overwrote the
-  // slot — whichever event landed second silently discarded whatever job
-  // the valet hadn't dismissed yet, with no way to see it again short of
-  // the 60s reminder loop happening to cover it. Queue-backed instead: only
-  // one prompt is ever on screen, but a second one waits its turn instead
-  // of erasing the first.
+  // reassignPrompt shows one dialog at a time. A second needs-reassign
+  // event for a different job queues instead of overwriting the first.
   const reassignQueueRef = useRef<ReassignPrompt[]>([]);
   const reassignPromptKey = (p: ReassignPrompt) =>
     `${p.kind}:${p.kind === 'task' ? p.task?.id : p.visitor?.id}:${p.source ?? 'escalation'}`;
@@ -378,9 +361,8 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     });
   }, []);
 
-  // Dismiss whichever queued/active prompt(s) match — used both when the
-  // valet explicitly closes the current one and when a job resolves itself
-  // (someone else staffed it) while its prompt is still queued or showing.
+  // Dismisses matching prompt(s) from both the active slot and the queue —
+  // used on explicit dismiss and when a job resolves itself elsewhere.
   const closeReassignPromptFor = useCallback((matches: (p: ReassignPrompt) => boolean) => {
     reassignQueueRef.current = reassignQueueRef.current.filter(p => !matches(p));
     setReassignPrompt(prev => {
@@ -394,8 +376,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     });
   }, []);
 
-  // The valet dismissing the current prompt (Reassign now / Later) always
-  // advances to whatever's next in the queue, if anything.
+  // Dismiss + advance to whatever's next in the queue, if anything.
   const clearReassignPrompt = useCallback(() => closeReassignPromptFor(() => true), [closeReassignPromptFor]);
 
   // ── True-WebSocket sync — full fetch on connect/reconnect, deltas after.
@@ -476,21 +457,14 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
         (me?.linkedDriverId != null && n.targetId === me.linkedDriverId) ||
         n.targetRole === me?.role ||
         n.targetRole === `driver:${me?.linkedDriverId}` ||
-        // Owner-scoped valet pushes (e.g. "car parked at the counter" —
-        // see backend task.service.js's markParked notify, `valet:${parkOwner}`)
-        // use this exact shape, matching driver:<id> above. Missing this
-        // meant the one valet the notification was addressed to never
-        // matched any branch and the alarm/tray entry silently never fired
-        // for them — same bug ported from mobile's identical omission,
-        // fixed there too (kims-parking-frontend AppStateContext.tsx).
+        // Owner-scoped valet pushes (backend task.service.js's markParked,
+        // `valet:${parkOwner}`) — parallel to driver:<id> above.
         n.targetRole === `valet:${me?.id}` ||
         n.targetRole === 'all';
       if (!isForMe) return;
-      // A reassign alert arrives twice: once as task:needs-reassign (the
-      // in-app dialog) and once as this notification (which rings the
-      // alarm). They land within milliseconds of each other, so a short
-      // window is enough to tell "companion of the dialog" from "genuinely
-      // new".
+      // A reassign event fires both as task:needs-reassign (dialog) and
+      // this notification (alarm) within ms of each other — suppress the
+      // alarm's duplicate for a short window after the dialog shows.
       if (Date.now() - reassignShownAt.current < 4000) return;
       if (n.type === 'alarm') {
         ringAlarm();
@@ -541,20 +515,13 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     });
 
     // ── accept-timeout / reject prompts (valet + admin rooms only) ──
-    // enqueueReassignPrompt (not a direct setReassignPrompt) — two of these
-    // can legitimately land for two different jobs seconds apart, and this
-    // is a queue, not an overwritable single slot.
     socket.on('task:needs-reassign', ({task, driverName, rejected}: any) => {
       enqueueReassignPrompt({kind: 'task', task: mapTask(task), driverName, rejected});
     });
     socket.on('visitor:needs-reassign', ({visitor, driverName, rejected}: any) => {
       enqueueReassignPrompt({kind: 'visitor', visitor: mapVisitor(visitor), driverName, rejected});
     });
-    // Repeating "still needs a driver" reminder for a freshly-created park
-    // ticket (see backend driverReminder.js) — fires every 60s until a
-    // driver's assigned or the valet taps Later. Same dialog as the
-    // escalation prompts above, tagged source:'reminder' so Later calls the
-    // silence endpoint instead of the defer one.
+    // Repeats every 60s until staffed or silenced (driverReminder.js).
     socket.on('task:driver-reminder', ({task}: any) => {
       const mapped = mapTask(task);
       enqueueReassignPrompt({kind: 'task', task: mapped, driverName: null, source: 'reminder'});
@@ -570,12 +537,8 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     };
   }, [user?.id, fetchAll]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The socket reconnecting is the only refetch trigger otherwise — so a
-  // socket that drops without ever reconnecting (laptop sleep, wifi drop,
-  // backgrounded tab) leaves the UI frozen indefinitely. Coming back to the
-  // tab is the moment the user is about to act on what they see, so it's
-  // exactly when this must be true. Mirrors mobile's identical
-  // RNAppState-based effect, using the DOM equivalent.
+  // Socket reconnect is the only other refetch trigger — a tab that drops
+  // without reconnecting (sleep, backgrounded) would otherwise stay frozen.
   useEffect(() => {
     if (!user) return;
     const onVisible = () => {
@@ -585,11 +548,8 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [user?.id, fetchAll]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sweep stale GPS markers (socket still open but no pings — e.g. a driver's
-  // GPS/tab backgrounded on their end). Mirrors mobile's identical sweep;
-  // LOCATION_STALE_MS was declared up top but never actually applied here,
-  // so a driver's marker on the live map just froze in place forever once
-  // their pings stopped instead of disappearing.
+  // Drops GPS markers with no ping in LOCATION_STALE_MS — otherwise a
+  // driver whose pings stopped stays frozen on the map forever.
   useEffect(() => {
     const sweep = setInterval(() => {
       setDriverLocations(p => {
@@ -611,10 +571,8 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     if (!stillNeedsDriver) clearReassignPrompt();
   }, [reassignPrompt, tasks, visitors, clearReassignPrompt]);
 
-  // A GPS ping is authoritative about ONE thing: where the driver is. Only
-  // the position fields are merged; the rest of the local record is left
-  // alone (see mobile AppStateContext for why — same "hasn't moved, skip
-  // the write" race).
+  // A GPS ping only carries position — merge just those fields, leave the
+  // rest of the task record alone.
   const reportLocation = useCallback(async (taskId: number, lat: number, lng: number) => {
     const fresh = mapTask(await tasksApi.updateLocation(taskId, lat, lng));
     setTasks(p => p.map(t => (t.id === taskId
@@ -628,12 +586,9 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
       : t)));
   }, []);
 
-  // Single, centralized GPS watcher for the whole app — browser Geolocation
-  // in place of react-native-geolocation-service. Runs for the entire
-  // logged-in session for a driver (not just during a task): every fix is
-  // pushed over the socket so the valet's live map shows all reachable
-  // drivers; during an active trip the same fix additionally goes through
-  // the REST location endpoint.
+  // One GPS watcher for the whole driver session, not just active trips:
+  // every fix streams to the live map; during an active trip it also posts
+  // to the task's location endpoint.
   const myDriverId = user?.role === 'driver' ? user.linkedDriverId ?? null : null;
   const activeDriverTask = myDriverId != null
     ? tasks.find(t => t.driverId != null && t.driverId === myDriverId
@@ -660,10 +615,9 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [user?.role, user?.id, reportLocation]);
 
-  // One immediate one-shot fix the moment tracking starts, rather than
-  // waiting for the ambient watch's next callback — closes the gap the
-  // doctor's live tracking screen sits in "Waiting for driver's location…"
-  // for.
+  // One-shot fix the moment tracking starts, instead of waiting for the
+  // ambient watch's next callback — avoids "Waiting for location…" hanging
+  // on the doctor's tracking screen.
   useEffect(() => {
     if (user?.role !== 'driver' || !activeDriverTaskId) return;
     if (!('geolocation' in navigator)) return;
@@ -713,31 +667,43 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     }
   }, []);
 
-  const acceptRetrieval = useCallback(async (taskId: number) => {
+  // Six task actions are a plain status transition: stop any ringing alarm,
+  // hit the endpoint, patch the task in place. Everything else below has
+  // its own side effects (slot/driver patches, race guards) and stays its
+  // own function.
+  const simpleTaskAction = useCallback((apiCall: (id: number) => Promise<any>) => async (taskId: number) => {
     stopAlarm();
-    const updated = mapTask(await tasksApi.acceptRetrieval(taskId));
+    const updated = mapTask(await apiCall(taskId));
     setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
   }, []);
+
+  const acceptRetrieval = useCallback(simpleTaskAction(tasksApi.acceptRetrieval), []);
 
   const cancelMyRetrieval = useCallback(async (taskId: number) => {
     const updated = mapTask(await tasksApi.cancelMyRetrieval(taskId));
     setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
   }, []);
 
+  // freeDriverIfNoNewJob guards every "cancel/reject frees this driver"
+  // patch below against the same race: the driver may have already picked
+  // up a genuinely new job in the time the request was in flight, so this
+  // only clears currentTaskId if it's still (or already) pointing at the
+  // job actually being cancelled — never a job that superseded it.
+  const freeDriverIfNoNewJob = useCallback((driverId: number | undefined | null, expectTaskId: number | undefined) => {
+    if (driverId == null) return;
+    setDrivers(p => p.map(d => (d.id === driverId && (d.currentTaskId == null || d.currentTaskId === expectTaskId)
+      ? {...d, status: 'available', currentTaskId: undefined} : d)));
+  }, []);
+
   const assignDriver = useCallback(async (taskId: number, driverId: number) => {
     stopAlarm();
     const task = tasks.find(t => t.id === taskId);
-    // getCurrentPositionSafe() can take a while (permission prompt, no GPS
-    // fix yet), so `task` above may be stale by the time it resolves — but
-    // everything that follows keys off `updated`, the server's own response,
-    // not this local read, so a race here can't corrupt anything; worst
-    // case is a retrieve task's initial coords getting skipped this once.
+    // getCurrentPositionSafe() can be slow (permission prompt, no fix yet);
+    // everything below keys off `updated`, the server's own response, so a
+    // stale `task` read here can't corrupt state.
     const coords = task?.type === 'retrieve' ? await getCurrentPositionSafe() : null;
     const updated = mapTask(await tasksApi.assignDriver(taskId, driverId, coords ? {lat: coords.lat, lng: coords.lng} : undefined));
     setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
-    // Only trust driverId as confirmed if the server actually agrees it's
-    // who ended up on this task — defensive, since assignDriver's own
-    // request already asked for exactly this driver.
     if (updated.driverId === driverId) {
       setDrivers(p => p.map(d => (d.id === driverId ? {...d, status: 'busy', currentTaskId: taskId} : d)));
     }
@@ -747,50 +713,24 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     const freedDriverId = tasks.find(t => t.id === taskId)?.driverId;
     const updated = mapTask(await tasksApi.cancelAssignment(taskId));
     setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
-    // Guard against the driver having already moved on to a genuinely new
-    // job while this cancel was in flight — only clear currentTaskId if
-    // it's still pointing at the job we just cancelled (or already empty).
-    // Without this, a driver who got reassigned in that window would have
-    // their live currentTaskId wiped out from under their actual new job.
-    if (freedDriverId != null) {
-      setDrivers(p => p.map(d => (d.id === freedDriverId && (d.currentTaskId == null || d.currentTaskId === taskId)
-        ? {...d, status: 'available', currentTaskId: undefined} : d)));
-    }
-  }, [tasks]);
+    freeDriverIfNoNewJob(freedDriverId, taskId);
+  }, [tasks, freeDriverIfNoNewJob]);
 
-  const acceptTask = useCallback(async (taskId: number) => {
-    stopAlarm();
-    const updated = mapTask(await tasksApi.accept(taskId));
-    setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
-  }, []);
+  const acceptTask = useCallback(simpleTaskAction(tasksApi.accept), []);
 
   const rejectTask = useCallback(async (taskId: number) => {
     stopAlarm();
-    // The task's own driverId at call time, not myDriverId blindly — a
-    // driver only ever rejects their own job so these normally agree, but
-    // if the watchdog reassigned this exact task to someone else in the
-    // same instant this tap landed, freeing "myDriverId" unconditionally
-    // would wipe THIS driver's own currentTaskId even if the backend had,
-    // at that same moment, already handed them something new. Falls back
-    // to myDriverId only if the task had somehow already dropped off local
-    // state.
+    // The task's own driverId, not myDriverId blindly — a driver only ever
+    // rejects their own job so these normally agree, but if the watchdog
+    // reassigned this exact task the same instant, freeing myDriverId
+    // unconditionally would wipe this driver's real new job.
     const freedDriverId = tasks.find(t => t.id === taskId)?.driverId ?? myDriverId;
     const updated = mapTask(await tasksApi.reject(taskId));
     setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
-    // Same currentTaskId guard as cancelTaskAssignment — don't clobber a
-    // driver who's already moved on to a different job by the time this
-    // resolves.
-    if (freedDriverId != null) {
-      setDrivers(p => p.map(d => (d.id === freedDriverId && (d.currentTaskId == null || d.currentTaskId === taskId)
-        ? {...d, status: 'available', currentTaskId: undefined} : d)));
-    }
-  }, [tasks, myDriverId]);
+    freeDriverIfNoNewJob(freedDriverId, taskId);
+  }, [tasks, myDriverId, freeDriverIfNoNewJob]);
 
-  const markKeyCollected = useCallback(async (taskId: number) => {
-    stopAlarm();
-    const updated = mapTask(await tasksApi.keyCollected(taskId));
-    setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
-  }, []);
+  const markKeyCollected = useCallback(simpleTaskAction(tasksApi.keyCollected), []);
 
   const markParked = useCallback(async (taskId: number, slotId: string) => {
     stopAlarm();
@@ -820,26 +760,12 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     }
   }, [tasks]);
 
-  const confirmTaskDelivered = useCallback(async (taskId: number) => {
-    stopAlarm();
-    const updated = mapTask(await tasksApi.confirmDelivered(taskId));
-    setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
-  }, []);
-
-  const cancelTask = useCallback(async (taskId: number) => {
-    stopAlarm();
-    const updated = mapTask(await tasksApi.cancel(taskId));
-    setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
-  }, []);
+  const confirmTaskDelivered = useCallback(simpleTaskAction(tasksApi.confirmDelivered), []);
+  const cancelTask = useCallback(simpleTaskAction(tasksApi.cancel), []);
+  const markTaskReturned = useCallback(simpleTaskAction(tasksApi.markReturned), []);
 
   const recallTask = useCallback(async (taskId: number) => {
     const updated = mapTask(await tasksApi.recall(taskId));
-    setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
-  }, []);
-
-  const markTaskReturned = useCallback(async (taskId: number) => {
-    stopAlarm();
-    const updated = mapTask(await tasksApi.markReturned(taskId));
     setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
   }, []);
 
@@ -859,45 +785,28 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     return created;
   }, []);
 
+  // Driver.currentTaskId is a ParkingTask id, never a visitor id — mixing
+  // the two once left a driver permanently stuck "busy" server-side (see
+  // visitor.service.js's freeDriverIfStillOn).
+  const linkedParkTaskId = (visitorId: number) =>
+    tasksRef.current.find(t => t.visitorId === visitorId && t.type === 'park' && t.status !== 'completed' && t.status !== 'cancelled')?.id;
+
   const assignVisitorDriver = useCallback(async (visitorId: number, driverId: number) => {
     stopAlarm();
     const updated = mapVisitor(await visitorsApi.assignDriver(visitorId, driverId));
     setVisitors(p => p.map(v => (v.id === visitorId ? updated : v)));
-    // Driver.currentTaskId is a ParkingTask id, never a visitor id (mixing
-    // the two once left a driver permanently stuck "busy" backend-side —
-    // see visitor.service.js's freeDriverIfStillOn comment). The visitor's
-    // linked ParkingTask (created alongside the visitor row itself — see
-    // backend createVisitor) is usually already in `tasks` by the time the
-    // assignDriver request above resolves, but reading `tasks` directly
-    // here would mean reading whatever snapshot was closed over when this
-    // function was CALLED, before that await — if the backend created the
-    // linked task as a side effect of this very call and its task:upsert
-    // socket delta hadn't landed yet at call time, that stale snapshot
-    // would never see it even though it exists by now. tasksRef.current is
-    // read fresh, after the await, so it reflects everything received in
-    // the meantime — falling back to undefined rather than the wrong id
-    // only if the task genuinely still isn't in yet.
-    const linkedTaskId = tasksRef.current.find(t => t.visitorId === visitorId && t.type === 'park' && t.status !== 'completed' && t.status !== 'cancelled')?.id;
-    setDrivers(p => p.map(d => (d.id === driverId ? {...d, status: 'busy', currentTaskId: linkedTaskId} : d)));
+    // tasksRef, not `tasks` — reads fresh after the await, since the linked
+    // park task can be created as a side effect of this very call.
+    setDrivers(p => p.map(d => (d.id === driverId ? {...d, status: 'busy', currentTaskId: linkedParkTaskId(visitorId)} : d)));
   }, []);
 
   const cancelVisitorAssignment = useCallback(async (visitorId: number) => {
     const freedDriverId = visitors.find(v => v.id === visitorId)?.driverId;
-    // The linked park task's id, same lookup assignVisitorDriver uses — the
-    // reference point for the guard below, not the value being freed.
-    const linkedTaskId = tasksRef.current.find(t => t.visitorId === visitorId && t.type === 'park' && t.status !== 'completed' && t.status !== 'cancelled')?.id;
+    const linkedTaskId = linkedParkTaskId(visitorId);
     const updated = mapVisitor(await visitorsApi.cancelAssignment(visitorId));
     setVisitors(p => p.map(v => (v.id === visitorId ? updated : v)));
-    // Same race as cancelTaskAssignment: only clear this driver's
-    // currentTaskId if it's still pointing at the job we just cancelled (or
-    // already empty) — otherwise a driver who picked up a genuinely new job
-    // while this cancel was in flight would have it wiped out from under
-    // them.
-    if (freedDriverId != null) {
-      setDrivers(p => p.map(d => (d.id === freedDriverId && (d.currentTaskId == null || d.currentTaskId === linkedTaskId)
-        ? {...d, status: 'available', currentTaskId: undefined} : d)));
-    }
-  }, [visitors]);
+    freeDriverIfNoNewJob(freedDriverId, linkedTaskId);
+  }, [visitors, freeDriverIfNoNewJob]);
 
   const cancelVisitor = useCallback(async (visitorId: number, reason: 'no_show' | 'valet_cancelled' | 'parking_failed') => {
     const existing = visitors.find(v => v.id === visitorId);
@@ -907,11 +816,9 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     if (driverId) setDrivers(p => p.map(d => (d.id === driverId ? {...d, status: 'available', currentTaskId: undefined} : d)));
   }, [visitors]);
 
-  // "Bring my car back" — the key's already with a driver, so the linked
-  // ParkingTask (not the Visitor row — see backend recallVisitor) is what
-  // actually flips to recalled; that arrives here over the socket's normal
-  // task:upsert event. This just fires the request and refreshes the
-  // visitor row for anything it does mirror (e.g. driverName).
+  // The linked ParkingTask (not the Visitor row) flips to recalled, via the
+  // normal task:upsert delta — this just fires the request and refreshes
+  // whatever the visitor row does mirror (e.g. driverName).
   const recallVisitor = useCallback(async (visitorId: number) => {
     const updated = mapVisitor(await visitorsApi.recall(visitorId));
     setVisitors(p => p.map(v => (v.id === visitorId ? updated : v)));
@@ -921,8 +828,6 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     stopAlarm();
     const updated = mapVisitor(await visitorsApi.assignRetrievalDriver(visitorId, driverId));
     setVisitors(p => p.map(v => (v.id === visitorId ? updated : v)));
-    // Same fix as assignVisitorDriver above — currentTaskId must be the
-    // linked ParkingTask's id, not the visitor's.
     const linkedTaskId = tasks.find(t => t.visitorId === visitorId && t.type === 'retrieve' && t.status !== 'completed' && t.status !== 'cancelled')?.id;
     setDrivers(p => p.map(d => (d.id === driverId ? {...d, status: 'busy', currentTaskId: linkedTaskId} : d)));
   }, [tasks]);
