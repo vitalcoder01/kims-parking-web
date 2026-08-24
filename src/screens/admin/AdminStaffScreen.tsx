@@ -54,6 +54,7 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
   const {colors} = useTheme();
   const dialog = useDialog();
   const [filter, setFilter] = useState<Filter>(initialFilter);
+  const [query, setQuery] = useState('');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -197,7 +198,9 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
   };
 
   const driverStaff = users.filter(u => u.role === 'driver');
-  const filtered = filter === 'all' ? users : users.filter(u => u.role === filter);
+  const q = query.trim().toLowerCase();
+  const filtered = (filter === 'all' ? users : users.filter(u => u.role === filter))
+    .filter(u => !q || u.name.toLowerCase().includes(q) || u.username.toLowerCase().includes(q) || u.employeeId.toLowerCase().includes(q));
   const onDuty = driverStaff.filter(d => d.driverStatus === 'available').length;
   const onTask = driverStaff.filter(d => d.driverStatus === 'busy').length;
   const offDuty = driverStaff.filter(d => d.driverStatus === 'off').length;
@@ -363,6 +366,25 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
         ))}
       </div>
 
+      {/* Search — same box the Jobs/Records screen already uses. Real gap
+          this closes: with only role filter chips, finding one specific
+          person in a roster of dozens meant scrolling and reading every
+          row. */}
+      <div style={{display: 'flex', alignItems: 'center', gap: 10, borderRadius: radius.lg, border: `1px solid ${colors.border}`, padding: '0 15px', height: 48, marginBottom: spacing.md, backgroundColor: colors.surface}}>
+        <Icon name="search" size={17} color={colors.textMuted} />
+        <input
+          style={{flex: 1, fontSize: 15, fontWeight: 500, padding: 0, border: 'none', outline: 'none', background: 'transparent', color: colors.textPrimary}}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Search name, username, ID"
+        />
+        {!!query && (
+          <PressableScale onClick={() => setQuery('')} style={{background: 'transparent', border: 'none', padding: 0}}>
+            <Icon name="close" size={15} color={colors.textMuted} />
+          </PressableScale>
+        )}
+      </div>
+
       <div style={{display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: spacing.md}}>
         {FILTER_TABS.map(tab => {
           const on = filter === tab.key;
@@ -383,7 +405,7 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
       ) : filtered.length === 0 ? (
         <div style={{borderRadius: radius['2xl'], border: `1px dashed ${colors.border}`, padding: 32, textAlign: 'center', backgroundColor: colors.card}}>
           <Icon name="people" size={26} color={colors.textMuted} />
-          <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>No staff in this category yet</div>
+          <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>{q ? `No match for "${query.trim()}"` : 'No staff in this category yet'}</div>
         </div>
       ) : (
         <div style={{borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card}}>

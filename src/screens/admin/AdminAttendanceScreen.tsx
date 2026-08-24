@@ -160,6 +160,7 @@ export function AdminAttendanceScreen() {
   const [monthUsers, setMonthUsers] = useState<MonthlyUser[]>([]);
   const [monthStr, setMonthStr] = useState(currentMonthStr());
   const [category, setCategory] = useState('all');
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<MonthlyUser | null>(null);
 
@@ -187,7 +188,9 @@ export function AdminAttendanceScreen() {
   const isCurrentMonth = monthStr === currentMonthStr();
   const categoryCounts: Record<string, number> = {all: monthUsers.length};
   for (const u of monthUsers) categoryCounts[u.role] = (categoryCounts[u.role] ?? 0) + 1;
-  const filteredUsers = category === 'all' ? monthUsers : monthUsers.filter(u => u.role === category);
+  const attQ = query.trim().toLowerCase();
+  const filteredUsers = (category === 'all' ? monthUsers : monthUsers.filter(u => u.role === category))
+    .filter(u => !attQ || u.name.toLowerCase().includes(attQ) || u.employeeId.toLowerCase().includes(attQ));
   const visibleCategories = CATEGORIES.filter(c => c.key === 'all' || categoryCounts[c.key] > 0);
 
   const sec: React.CSSProperties = {fontSize: typography.sizes.base, fontWeight: typography.weights.black, letterSpacing: -0.2, marginBottom: spacing.sm, color: colors.textPrimary};
@@ -238,6 +241,24 @@ export function AdminAttendanceScreen() {
         </PressableScale>
       </div>
 
+      {/* Search — same box the Jobs/Records screen uses. Real gap this
+          closes: with only role filter chips, finding one person in a
+          roster of dozens meant scrolling and reading every row. */}
+      <div style={{display: 'flex', alignItems: 'center', gap: 10, borderRadius: radius.lg, border: `1px solid ${colors.border}`, padding: '0 15px', height: 48, marginBottom: 14, backgroundColor: colors.card}}>
+        <Icon name="search" size={17} color={colors.textMuted} />
+        <input
+          style={{flex: 1, fontSize: 15, fontWeight: 500, padding: 0, border: 'none', outline: 'none', background: 'transparent', color: colors.textPrimary}}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Search name, employee ID"
+        />
+        {!!query && (
+          <PressableScale onClick={() => setQuery('')} style={{background: 'transparent', border: 'none', padding: 0}}>
+            <Icon name="close" size={15} color={colors.textMuted} />
+          </PressableScale>
+        )}
+      </div>
+
       <div style={sec}>Category</div>
       <div style={{display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 14, paddingBottom: 2}}>
         {visibleCategories.map(c => {
@@ -259,7 +280,7 @@ export function AdminAttendanceScreen() {
       {filteredUsers.length === 0 ? (
         <div style={{borderRadius: radius['2xl'], border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center', marginBottom: spacing.sm}}>
           <Icon name="calendar" size={22} color={colors.textMuted} />
-          <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>No one in this category yet</div>
+          <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>{attQ ? `No match for "${query.trim()}"` : 'No one in this category yet'}</div>
         </div>
       ) : (
         <div style={{borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card, marginBottom: spacing.sm}}>
