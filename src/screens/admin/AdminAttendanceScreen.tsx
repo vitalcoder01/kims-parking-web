@@ -99,6 +99,61 @@ function UserCalendar({user, monthStr, colors}: {user: MonthlyUser; monthStr: st
   );
 }
 
+// A compact roster row, not a full stacked calendar per person — with
+// dozens of staff, rendering everyone's full month grid one after another
+// (the old behavior) turned this screen into an enormous scroll nobody
+// could scan. Mobbin research (Remote Global HR's absences list, Fable's
+// streak log) confirmed the standard pattern at this scale: a flat,
+// scannable roster with each person's summary, drilling into their own
+// calendar only on tap — see the modal below, reusing UserCalendar as-is.
+function RosterRow({user, monthStr, colors, onClick, isLast}: {user: MonthlyUser; monthStr: string; colors: any; onClick: () => void; isLast: boolean}) {
+  const [y, m] = monthStr.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const presentDates = new Set(user.days.filter(d => d.checkIn).map(d => d.date));
+  const presentCount = presentDates.size;
+  const pct = daysInMonth ? Math.round((presentCount / daysInMonth) * 100) : 0;
+
+  // Last 7 calendar days up to today (or the month's end if viewing a past
+  // month) — the same dot-per-day idiom Journal/Weverse use for a full
+  // month, condensed to a week strip so it fits inline on a roster row.
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const monthEndStr = `${monthStr}-${String(daysInMonth).padStart(2, '0')}`;
+  const anchor = monthEndStr < todayStr ? new Date(y, m - 1, daysInMonth) : new Date();
+  const recentDays = Array.from({length: 7}, (_, i) => {
+    const d = new Date(anchor);
+    d.setDate(d.getDate() - (6 - i));
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return {key, present: presentDates.has(key), inMonth: key.startsWith(monthStr)};
+  });
+
+  return (
+    <PressableScale onClick={onClick} style={{width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: isLast ? 'none' : `1px solid ${colors.divider}`, textAlign: 'left'}}>
+      <div style={{width: 40, height: 40, borderRadius: radius.full, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary + '15'}}>
+        <span style={{fontSize: 12, fontWeight: 900, color: colors.primary}}>{user.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
+      </div>
+      <div style={{flex: 1, minWidth: 0}}>
+        <div style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{user.name}</div>
+        <div style={{fontSize: 11, marginTop: 2, color: colors.textMuted}}>{roleLabel[user.role] ?? user.role} · {user.employeeId}</div>
+        <div style={{display: 'flex', gap: 4, marginTop: 6}}>
+          {recentDays.map(d => (
+            <span key={d.key} style={{
+              width: 7, height: 7, borderRadius: 3.5,
+              backgroundColor: d.present ? colors.success : 'transparent',
+              border: d.present ? 'none' : `1.5px solid ${colors.border}`,
+              opacity: d.present || d.inMonth ? 1 : 0.4,
+            }} />
+          ))}
+        </div>
+      </div>
+      <div style={{textAlign: 'right', flexShrink: 0}}>
+        <div style={{fontSize: 15, fontWeight: 900, color: pct >= 80 ? colors.success : pct >= 50 ? colors.warning : colors.textMuted}}>{pct}%</div>
+        <div style={{fontSize: 10, fontWeight: 600, marginTop: 1, color: colors.textMuted}}>{presentCount}/{daysInMonth} days</div>
+      </div>
+      <Icon name="chevronRight" size={16} color={colors.textMuted} />
+    </PressableScale>
+  );
+}
+
 export function AdminAttendanceScreen() {
   const {colors} = useTheme();
   const [todayRows, setTodayRows] = useState<TodayRow[]>([]);
@@ -106,6 +161,7 @@ export function AdminAttendanceScreen() {
   const [monthStr, setMonthStr] = useState(currentMonthStr());
   const [category, setCategory] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<MonthlyUser | null>(null);
 
   const load = useCallback(async (month: string) => {
     try {
@@ -181,13 +237,19 @@ export function AdminAttendanceScreen() {
         })}
       </div>
 
-      <div style={{...sec, marginTop: 4}}>Per-user calendar</div>
+      <div style={{...sec, marginTop: 4}}>Roster — click for calendar</div>
       {filteredUsers.length === 0 ? (
         <div style={{borderRadius: radius['2xl'], border: `1px dashed ${colors.border}`, padding: 28, textAlign: 'center', marginBottom: spacing.sm}}>
           <Icon name="calendar" size={22} color={colors.textMuted} />
           <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>No one in this category yet</div>
         </div>
-      ) : filteredUsers.map(u => <UserCalendar key={u.userId} user={u} monthStr={monthStr} colors={colors} />)}
+      ) : (
+        <div style={{borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card, marginBottom: spacing.sm}}>
+          {filteredUsers.map((u, i) => (
+            <RosterRow key={u.userId} user={u} monthStr={monthStr} colors={colors} onClick={() => setSelectedUser(u)} isLast={i === filteredUsers.length - 1} />
+          ))}
+        </div>
+      )}
 
       <div style={{...sec, marginTop: spacing.sm}}>Today — marked automatically</div>
       {todayRows.length === 0 ? (
@@ -210,6 +272,22 @@ export function AdminAttendanceScreen() {
               <Badge label={r.checkOut ? 'Done' : 'Present'} variant={r.checkOut ? 'muted' : 'success'} dot={!r.checkOut} />
             </div>
           ))}
+        </div>
+      )}
+
+      {/* One person's full calendar, on demand — reuses UserCalendar as-is,
+          just no longer stacked for every user at once. */}
+      {selectedUser && (
+        <div style={{position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 1000}} onClick={() => setSelectedUser(null)}>
+          <div style={{width: '100%', maxWidth: 420}} onClick={e => e.stopPropagation()}>
+            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12}}>
+              <span style={{fontSize: 17, fontWeight: 900, color: colors.textPrimary}}>{monthLabel(monthStr)}</span>
+              <PressableScale style={{width: 32, height: 32, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt}} onClick={() => setSelectedUser(null)}>
+                <Icon name="close" size={16} color={colors.textPrimary} />
+              </PressableScale>
+            </div>
+            <UserCalendar user={selectedUser} monthStr={monthStr} colors={colors} />
+          </div>
         </div>
       )}
     </div>
