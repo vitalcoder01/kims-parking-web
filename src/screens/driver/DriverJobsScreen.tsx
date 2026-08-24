@@ -75,13 +75,13 @@ export function DriverJobsScreen() {
   const myTasks = tasks.filter(t => isMyJob(t.driverId, myDriverId) && t.status !== 'completed' && t.status !== 'delivered' && t.status !== 'cancelled');
   const activeTask = myTasks[0] ?? null;
 
-  // The live `tasks` array is bounded to "at most one row per doctor" now —
-  // a completed job vanishes from it the moment that doctor's next car comes
-  // in, so "completed today" needs the real history, not this list.
+  // The live `tasks` array is bounded to "at most one row per doctor" —
+  // a completed job vanishes from it once that doctor's next car comes in,
+  // so "completed today" needs the real history, not this list.
   //
-  // Depends on `tasks` itself, not `tasks.length` (see DriverDashboardScreen
-  // for the full explanation) — completing a job replaces a row in place,
-  // so the array's length never changes when this effect needs to refire.
+  // Depends on `tasks` itself, not `tasks.length` — completing a job
+  // replaces a row in place, so the array's length never changes even
+  // though the effect needs to refire.
   const [history, setHistory] = useState<typeof tasks>([]);
   useEffect(() => {
     if (!myDriverId) return;
@@ -90,20 +90,13 @@ export function DriverJobsScreen() {
   const today = new Date().toDateString();
   const completedToday = history.filter(t => t.status === 'completed' && t.completedAt && new Date(t.completedAt).toDateString() === today);
 
-  // Visitor pickups/retrievals assigned to this driver. Informational only:
-  // the actual accept/park/retrieve actions live on the Active Job card
-  // above (same underlying task), this just surfaces the visitor contact
-  // details that card can't show.
-  //
-  // The retrieval half used to match on `v.driverId` alone, but that field
-  // is reused from the park leg and isn't cleared once it completes (see
-  // visitor.service.js's assignRetrievalDriver comment) — so the original
-  // parking driver kept seeing (and could see the phone number for) a
-  // retrieval the valet hadn't actually dispatched to them, or had
-  // dispatched to someone else entirely. Fixed by requiring an actual live
-  // retrieve-type task assigned to this driver, the same source of truth
-  // `tasks`/`activeTask` above already use, instead of trusting the visitor
-  // row's own driverId for that case.
+  // Visitor pickups/retrievals assigned to this driver. Informational only —
+  // actions live on the Active Job card above (same underlying task); this
+  // surfaces the visitor's phone number, which that card doesn't show.
+  // The retrieval half requires an actual live retrieve-type task assigned
+  // to this driver, not the visitor row's own driverId — that field is
+  // reused from the park leg and stays stale after it completes (see
+  // visitor.service.js's assignRetrievalDriver).
   const myVisitorJobs = visitors.filter(v =>
     (isMyJob(v.driverId, myDriverId) && v.status === 'pending')
     || (v.status === 'parked' && v.retrievalRequested
@@ -118,14 +111,11 @@ export function DriverJobsScreen() {
   });
   const liveProgress = trip?.progress ?? 0;
 
-  // A driver tapping Accept on a card the server has already invalidated is
-  // the normal end of a stalled assignment, not an error they did anything
-  // wrong about: the watchdog rolled it back, or the valet gave it to someone
-  // else. web's api.ts DOES carry the same JOB_GONE error code as mobile
-  // (isJobGone, exported right alongside ApiCallError) — this used to ignore
-  // it and show the server's raw message for every failure alike, which
-  // reads as something having gone wrong when nothing actually did. Now
-  // mirrors mobile's softer "reassigned" copy for that one case.
+  // A driver tapping Accept on a card the server already invalidated is the
+  // normal end of a stalled assignment (watchdog rollback, or the valet
+  // gave it to someone else), not an error — isJobGone (api.ts) tells the
+  // two apart so this can show mobile's softer "reassigned" copy instead of
+  // the server's raw message.
   const handleActionError = (err: any, fallback: string) => {
     if (isJobGone(err)) {
       dialog.alert('This job was reassigned while you were deciding.', {title: 'Job no longer yours'});
