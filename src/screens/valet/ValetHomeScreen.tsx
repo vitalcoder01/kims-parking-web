@@ -1526,9 +1526,8 @@ export function ValetHomeScreen() {
                     <Icon name={icon} size={13} color={active ? tint : 'rgba(255,255,255,0.6)'} />
                   </div>
                   <div style={{color: active ? tint : '#fff', fontSize: 20, fontWeight: 900, fontVariantNumeric: 'tabular-nums'}}>{num}</div>
-                  <div style={{display: 'flex', alignItems: 'center', gap: 4, marginTop: 2}}>
+                  <div style={{marginTop: 2}}>
                     <span style={{color: active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600}}>{label}</span>
-                    {active && <span style={{width: 5, height: 5, borderRadius: 3, backgroundColor: tint}} />}
                   </div>
                 </PressableScale>
               </React.Fragment>
@@ -1544,18 +1543,18 @@ export function ValetHomeScreen() {
             Dashboard's "Driver assign pending" section below — this tile
             is the dedicated urgency-sorted view, not a replacement for it. */}
         <div style={{display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12, marginBottom: 24}}>
-          <PressableScale style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary, border: `1px solid ${colors.success}40`, position: 'relative'}} onClick={() => setScreen('scan')}>
+          <PressableScale style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: colors.primary, border: `1px solid ${colors.success}40`, position: 'relative'}} onClick={() => setScreen('scan')}>
             <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: colors.success + '26', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="key" size={24} color={colors.success} /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Staff</span>
             <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Collect key from doctor / staff</span>
           </PressableScale>
-          <PressableScale style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary, border: '1px solid #F5C16840', position: 'relative'}} onClick={() => setScreen('visitor')}>
+          <PressableScale style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: colors.primary, border: '1px solid #F5C16840', position: 'relative'}} onClick={() => setScreen('visitor')}>
             <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: '#F5C16826', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="ticket" size={24} color="#F5C168" /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Visitor</span>
             <span style={{color: 'rgba(255,255,255,0.65)', fontSize: 11, lineHeight: '14px', marginTop: 4, textAlign: 'center', ...clamp2}}>Patient / VIP token</span>
           </PressableScale>
           <PressableScale
-            style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary, border: '1px solid #E5393540', position: 'relative'}}
+            style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: colors.primary, border: '1px solid #E5393540', position: 'relative'}}
             onClick={() => { setInboxSection('retrievals'); setScreen('retrievals'); }}>
             <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: '#E5393526', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="inbox" size={24} color="#F1786F" /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Retrieval Requests</span>
@@ -1565,7 +1564,7 @@ export function ValetHomeScreen() {
             </span>
           </PressableScale>
           <PressableScale
-            style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 6px 10px rgba(0,0,0,0.16)', backgroundColor: colors.primary, border: '1px solid #2F6FA840', position: 'relative'}}
+            style={{width: '48.5%', borderRadius: 22, padding: 18, minHeight: 148, display: 'flex', flexDirection: 'column', alignItems: 'center', backgroundColor: colors.primary, border: '1px solid #2F6FA840', position: 'relative'}}
             onClick={() => { setInboxSection('arrivals'); setScreen('retrievals'); }}>
             <div style={{width: 46, height: 46, borderRadius: 14, backgroundColor: '#2F6FA826', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}><Icon name="bellAlert" size={24} color="#6FA8DC" /></div>
             <span style={{color: '#fff', fontSize: 15, fontWeight: 800, textAlign: 'center'}}>Expected Arrivals</span>
@@ -1613,8 +1612,7 @@ export function ValetHomeScreen() {
             const rank = driverStatFilter === 'doneToday' && (d.completedToday ?? 0) > 0 ? i + 1 : null;
             const medal = rank === 1 ? '#F5C168' : rank === 2 ? '#C7CDD6' : rank === 3 ? '#D3946B' : null;
             return (
-              <div key={d.id} style={{borderRadius: 16, border: `${medal ? 1.5 : 1}px solid ${medal ?? colors.border}`, width: 128, flexShrink: 0, overflow: 'hidden', backgroundColor: colors.surface, boxShadow: medal ? '0 2px 8px rgba(245,193,104,0.3)' : undefined}}>
-                <div style={{height: 3, width: '100%', backgroundColor: sc}} />
+              <div key={d.id} style={{borderRadius: 16, border: `${medal ? 1.5 : 1}px solid ${medal ?? colors.border}`, width: 128, flexShrink: 0, overflow: 'hidden', backgroundColor: colors.surface}}>
                 <div style={{display: 'flex', alignItems: 'center', gap: 8, padding: 12, borderBottom: `1px solid ${colors.divider}`}}>
                   <div style={{width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: sc + '14'}}>
                     <span style={{fontSize: 16, fontWeight: 800, color: sc}}>{d.name[0]}</span>

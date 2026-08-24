@@ -391,8 +391,7 @@ export function ValetRecordsScreen() {
         <div style={{flex: 1, padding: '16px 12px 16px 18px', minWidth: 0}}>
           <div style={{display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8}}>
             <span style={{fontSize: 18, fontWeight: 800, color: colors.textPrimary}}>{v.name || 'Visitor'}</span>
-            <span style={{display: 'flex', alignItems: 'center', gap: 5, borderRadius: 99, padding: '4px 9px', backgroundColor: chipBg}}>
-              <span style={{width: 5, height: 5, borderRadius: 3, backgroundColor: chipTone}} />
+            <span style={{display: 'flex', alignItems: 'center', borderRadius: 99, padding: '4px 9px', backgroundColor: chipBg}}>
               <span style={{fontSize: 11.5, fontWeight: 700, color: chipTone}}>{chipLabel}</span>
             </span>
             <PressableScale style={{width: 22, height: 22, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt}} onClick={() => setDetailVisitor(v)}>
@@ -545,8 +544,7 @@ export function ValetRecordsScreen() {
         <div style={{flex: 1, padding: '16px 12px 16px 18px', minWidth: 0}}>
           <div style={{display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8}}>
             <span style={{fontSize: 18, fontWeight: 800, color: colors.textPrimary}}>{t.doctorName}</span>
-            <span style={{display: 'flex', alignItems: 'center', gap: 5, borderRadius: 99, padding: '4px 9px', backgroundColor: chipBg}}>
-              <span style={{width: 5, height: 5, borderRadius: 3, backgroundColor: chipTone}} />
+            <span style={{display: 'flex', alignItems: 'center', borderRadius: 99, padding: '4px 9px', backgroundColor: chipBg}}>
               <span style={{fontSize: 11.5, fontWeight: 700, color: chipTone}}>{chipLabel}</span>
             </span>
             <PressableScale style={{width: 22, height: 22, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt}} onClick={() => setDetailTask(t)}>

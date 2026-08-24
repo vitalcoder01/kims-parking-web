@@ -80,7 +80,7 @@ function Option({icon, label, sub, active, disabled, colors, onClick}: {
       style={{
         display: 'flex', alignItems: 'center', gap: 14, width: '100%',
         backgroundColor: colors.surface, border: `1px solid ${colors.border}`,
-        borderRadius: 18, padding: 18, boxShadow: '0 6px 16px rgba(0,0,0,0.08)',
+        borderRadius: 18, padding: 18,
         opacity: disabled && !active ? 0.5 : 1,
       }}>
       <span style={{

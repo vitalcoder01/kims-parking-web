@@ -334,7 +334,7 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
             onClick={() => setShowArrivalModal(true)}
             style={{
               display: 'flex', alignItems: 'center', gap: 14, borderRadius: 22, padding: 18,
-              backgroundColor: colors.primary, boxShadow: '0 6px 10px rgba(0,0,0,0.16)',
+              backgroundColor: colors.primary, boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
             }}>
             <div style={{
               width: 46, height: 46, borderRadius: 14, flexShrink: 0,
@@ -355,7 +355,7 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
             onClick={() => setShowDepartureModal(true)}
             style={{
               display: 'flex', alignItems: 'center', gap: 14, borderRadius: 22, padding: 18,
-              backgroundColor: colors.primary, boxShadow: '0 6px 10px rgba(0,0,0,0.16)',
+              backgroundColor: colors.primary, boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
             }}>
             <div style={{
               width: 46, height: 46, borderRadius: 14, flexShrink: 0,

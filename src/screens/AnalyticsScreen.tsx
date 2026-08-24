@@ -165,8 +165,7 @@ export function AnalyticsScreen() {
       <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), padding: '16px 20px 18px', borderBottomLeftRadius: 28, borderBottomRightRadius: 28}}>
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20}}>
           <div>
-            <div style={{display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4}}>
-              <Icon name="sparkle" size={12} color="rgba(255,255,255,0.75)" />
+            <div style={{marginBottom: 4}}>
               <span style={{color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 800, letterSpacing: 1.2}}>{PERIODS.find(p => p.key === period)?.label.toUpperCase()} · LIVE</span>
             </div>
             <div style={{color: '#fff', fontSize: 24, fontWeight: 900}}>Analytics</div>
@@ -453,7 +452,6 @@ export function AnalyticsScreen() {
                     style={{
                       ...cardStyle, borderColor: medal ?? colors.border, borderWidth: medal ? 1.5 : 1,
                       padding: 14, textAlign: 'left', display: 'block',
-                      boxShadow: i === 0 && medal ? '0 3px 10px rgba(245,193,104,0.35)' : undefined,
                     }}>
                     <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
                       <div style={{width: 30, height: 30, borderRadius: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: medal ?? colors.border}}>

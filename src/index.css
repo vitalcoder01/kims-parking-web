@@ -89,15 +89,6 @@ input:focus {
   animation: kims-pulse 2s ease-in-out infinite;
 }
 
-/* Virtual card glow — port of the Animated glow loop */
-@keyframes kims-glow {
-  0%, 100% { opacity: 0.4; }
-  50%      { opacity: 0.9; }
-}
-.glow {
-  animation: kims-glow 3.6s ease-in-out infinite;
-}
-
 /* Spinner (ActivityIndicator stand-in) */
 @keyframes kims-spin {
   to { transform: rotate(360deg); }

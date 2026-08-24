@@ -147,8 +147,7 @@ export function ValetMapScreen() {
         {/* Leaflet + CARTO tiles card — markers driven purely by socket
             deltas via postMessage (never a page reload) */}
         <div style={{
-          position: 'relative', height: 320, borderRadius: 20, border: `2px solid ${colors.textPrimary}`, overflow: 'hidden', marginBottom: 20,
-          boxShadow: '0 6px 12px rgba(0,0,0,0.12)',
+          position: 'relative', height: 320, borderRadius: 20, border: `1px solid ${colors.border}`, overflow: 'hidden', marginBottom: 20,
         }}>
           <iframe
             ref={frameRef}
@@ -161,8 +160,7 @@ export function ValetMapScreen() {
             onLoad={sendMarkers}
             style={{border: 'none', width: '100%', height: '100%'}}
           />
-          <div style={{position: 'absolute', top: 12, right: 12, display: 'flex', alignItems: 'center', gap: 5, borderRadius: 20, padding: '5px 10px', backgroundColor: colors.error}}>
-            <span style={{width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff'}} />
+          <div style={{position: 'absolute', top: 12, right: 12, display: 'flex', alignItems: 'center', borderRadius: 20, padding: '5px 10px', backgroundColor: colors.error}}>
             <span style={{color: '#fff', fontSize: 10, fontWeight: 900, letterSpacing: 1}}>LIVE</span>
           </div>
         </div>

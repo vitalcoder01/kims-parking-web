@@ -33,12 +33,8 @@ export function VirtualCardScreen({onBack}: {onBack: () => void}) {
         <div style={{
           width: '100%', borderRadius: 24, padding: 24, marginBottom: 24,
           overflow: 'hidden', position: 'relative', backgroundColor: colors.primary,
-          boxShadow: '0 12px 20px rgba(0,0,0,0.3)',
+          boxShadow: '0 6px 12px rgba(0,0,0,0.16)',
         }}>
-          <div className="glow" style={{
-            position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.06)', pointerEvents: 'none',
-          }} />
-
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32}}>
             <div>
               <div style={{color: '#fff', fontSize: 16, fontWeight: 900}}>KIMS Hospital</div>

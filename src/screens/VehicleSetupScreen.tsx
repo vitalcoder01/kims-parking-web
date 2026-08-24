@@ -392,9 +392,8 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
         </div>
 
         <div style={{
-          borderRadius: 20, border: `2px solid ${colors.textPrimary}`, overflow: 'hidden',
+          borderRadius: 20, border: `1px solid ${colors.border}`, overflow: 'hidden',
           marginBottom: 24, height: 220, backgroundColor: colors.surface,
-          boxShadow: '0 6px 12px rgba(0,0,0,0.1)',
         }}>
           <iframe
             ref={frameRef}

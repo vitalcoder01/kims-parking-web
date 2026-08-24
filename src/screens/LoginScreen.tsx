@@ -139,7 +139,7 @@ export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
           style={{
             margin: 20, marginTop: -24, borderRadius: 24, border: `1px solid ${colors.border}`,
             padding: 24, backgroundColor: colors.surface,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+            boxShadow: '0 3px 8px rgba(0,0,0,0.05)',
           }}>
           <div style={{fontSize: 22, fontWeight: 900, marginBottom: 4, color: colors.textPrimary}}>Welcome Back</div>
           <div style={{fontSize: 13, marginBottom: 24, color: colors.textMuted}}>Sign in to continue your shift</div>
