@@ -1,6 +1,6 @@
 import React, {useState, useEffect} from 'react';
 import {useTheme} from '../../context/ThemeContext';
-import {Visitor, ParkingTask, Driver, mapVisitor} from '../../context/AppStateContext';
+import {Visitor, ParkingTask, mapVisitor} from '../../context/AppStateContext';
 import {Icon} from '../../components/Icon';
 import {PressableScale} from '../../components/PressableScale';
 import {HScrollHint} from '../../components/HScrollHint';
@@ -10,6 +10,7 @@ import {useBackStep} from '../../hooks/useBackStep';
 import {useValetActions} from './useValetActions';
 import {visitorsApi} from '../../services/api';
 import {AdminMapScreen} from '../admin/AdminMapScreen';
+import {DriverPickerList} from '../../components/DriverPickerList';
 
 // Direct DOM port of the mobile app's ValetRecordsScreen — same
 // Active/Completed session logic for both visitor and staff/doctor tickets,
@@ -44,53 +45,6 @@ function PerfLine({color}: {color: string}) {
         <span key={i} style={{width: 2, height: 6, borderRadius: 1, backgroundColor: color}} />
       ))}
     </div>
-  );
-}
-
-// Shared "pick an available driver" list — web port of the mobile
-// DriverPickerList component (no equivalent lives in src/components yet).
-function DriverPickerList({drivers, onAssign, assigningId}: {drivers: Driver[]; onAssign: (driverId: number) => void; assigningId: number | null}) {
-  const {colors} = useTheme();
-  const disabled = assigningId != null;
-
-  if (drivers.length === 0) {
-    return (
-      <div style={{borderRadius: 14, border: `1px dashed ${colors.border}`, padding: 24, textAlign: 'center', marginBottom: 16}}>
-        <Icon name="timer" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
-        <div style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>No drivers available right now</div>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      {drivers.map(d => {
-        const done = d.completedToday;
-        const load = done == null ? '' : done === 0 ? 'No jobs yet today' : `${done} ${done === 1 ? 'job' : 'jobs'} today`;
-        return (
-          <PressableScale
-            key={d.id}
-            style={{width: '100%', display: 'flex', alignItems: 'center', gap: 12, borderRadius: 16, border: `1px solid ${colors.border}`, padding: 14, marginBottom: 10, backgroundColor: colors.surface, opacity: disabled ? 0.5 : 1}}
-            onClick={() => { if (!disabled) onAssign(d.id); }}
-            disabled={disabled}
-          >
-            <div style={{width: 44, height: 44, borderRadius: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.primary + '18'}}>
-              <span style={{fontSize: 16, fontWeight: 800, color: colors.primary}}>{d.name[0]}</span>
-            </div>
-            <div style={{flex: 1, minWidth: 0, textAlign: 'left'}}>
-              <div style={{fontSize: 15, fontWeight: 800, color: colors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{d.name}</div>
-              {!!load && <div style={{fontSize: 12, fontWeight: 600, marginTop: 2, color: colors.textSecondary}}>{load}</div>}
-            </div>
-            <div style={{display: 'flex', alignItems: 'center', gap: 6, borderRadius: 12, padding: '10px 14px', flexShrink: 0, backgroundColor: colors.primary}}>
-              <span style={{fontSize: 13, fontWeight: 700, color: colors.textOnPrimary}}>
-                {assigningId === d.id ? 'Assigning…' : 'Assign'}
-              </span>
-              {assigningId !== d.id && <Icon name="arrowRight" size={14} color={colors.textOnPrimary} />}
-            </div>
-          </PressableScale>
-        );
-      })}
-    </>
   );
 }
 
@@ -176,13 +130,9 @@ export function ValetRecordsScreen() {
     if (tab !== 'staff') return;
     setHistoryLoading(true);
     fetchTaskHistory().then(setStaffHistory).catch(() => {}).finally(() => setHistoryLoading(false));
-    // This screen used to fetch history ONCE, on tab entry, and never again —
-    // a check-in or status change that happened while a valet was already
-    // sitting on this tab just never appeared until they left and came back.
-    // `tasks` (the live, socket-fed current-tasks list from AppStateContext)
-    // changing is our proxy for "something happened" — history itself isn't
-    // pushed over the socket, so this piggybacks on the one realtime signal
-    // that already exists, and the backend response is cheap/cached anyway.
+    // `tasks` (the live, socket-fed list) changing is our proxy for
+    // "something happened" — history itself isn't pushed over the socket,
+    // so this piggybacks on the one realtime signal that already exists.
   }, [tab, fetchTaskHistory, tasks]);
 
   const q = query.trim().toLowerCase();
@@ -214,10 +164,7 @@ export function ValetRecordsScreen() {
   };
 
   // Completed/All need retrieved (and cancelled, for All) visitors too —
-  // activeVisitors is deliberately pre-stripped of both (see useValetActions),
-  // which is exactly why "Completed" here used to always come up empty: every
-  // visitor the completed check could ever match had already been filtered
-  // out one step earlier, before this check ever ran.
+  // activeVisitors is deliberately pre-stripped of both (see useValetActions).
   // A selected calendar date overrides all of that — it's its own fetched
   // snapshot of one specific day, live-bounding doesn't apply to it.
   const visitorsSource = selectedDate ? (dateVisitors ?? []) : statusFilter === 'active' ? activeVisitors : visitors;
@@ -571,12 +518,9 @@ export function ValetRecordsScreen() {
   // this whole redesign was meant to get rid of).
   const renderStaffTicket = (t: ParkingTask) => {
     // 'requested'/'accepted' are the same "no driver yet" state as 'assigned'
-    // with no driverId — the Home tab's Job Queue keeps them out of the queue
-    // entirely (they live in the Retrieval Requests inbox instead) and
-    // assignDriver always flips status straight to 'assigned' once a driver
-    // is actually picked, so a requested/accepted row here always means
-    // nobody's been assigned. Missing these two fell through to the "Driver
-    // assigned" default below, which said the opposite of what was true.
+    // with no driverId — assignDriver always flips status straight to
+    // 'assigned' once a driver is picked, so either of these always means
+    // nobody's been assigned yet.
     const needsDriver = (t.status === 'assigned' || t.status === 'requested' || t.status === 'accepted') && !t.driverId;
     const delivered = t.status === 'delivered';
     const cancelled = t.status === 'cancelled';
