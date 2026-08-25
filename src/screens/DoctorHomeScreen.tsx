@@ -85,7 +85,30 @@ function SkeletonBlock({height, width = '100%', radius = 10, style}: {height: nu
 
 export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () => void; onOpenHistory: () => void}) {
   const {user} = useAuth();
-  const {tasks, sendArrivalNotice, cancelMyRetrieval, hydrated} = useAppState();
+  const {tasks, sendArrivalNotice, cancelMyRetrieval, hydrated,
+    myArrivalNotice, cancelMyArrival} = useAppState();
+  const [cancellingArrival, setCancellingArrival] = useState(false);
+
+  // Plans changed before they set off — take the heads-up back so the valet
+  // isn't holding a spot for someone who isn't coming.
+  const handleCancelArrival = async () => {
+    if (!myArrivalNotice || cancellingArrival) return;
+    const ok = await dialog.confirm({
+      title: 'Not coming after all?',
+      message: 'This clears the heads-up you sent the valet team.',
+      confirmText: 'Cancel arrival', destructive: true,
+    });
+    if (!ok) return;
+    setCancellingArrival(true);
+    try {
+      await cancelMyArrival(myArrivalNotice.id);
+      setArrivalSent(null);
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not cancel');
+    } finally {
+      setCancellingArrival(false);
+    }
+  };
   const {colors, isDark} = useTheme();
   const dialog = useDialog();
   const {activeRetrieve, now, requestRetrieval} = useRetrievalRequest();
@@ -372,12 +395,31 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
           </PressableScale>
         )}
 
-        {arrivalSent && showEmptyState && (
+        {/* Driven by myArrivalNotice (the server's own record) rather than
+            the local arrivalSent flag alone — that flag is lost on every
+            reload, which meant a heads-up you'd already sent quietly
+            disappeared from your side while still sitting in the valet's
+            queue. With the real record here, plans changing has an answer:
+            take it back. */}
+        {(myArrivalNotice || arrivalSent) && showEmptyState && (
           <div style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: 14, border: `1px solid ${colors.success}30`, padding: 12, backgroundColor: colors.success + '10'}}>
             <Icon name="bellAlert" size={16} color={colors.success} />
             <span style={{flex: 1, fontSize: 12, fontWeight: 700, color: colors.success}}>
-              Valet notified — arriving in ~{arrivalSent >= 60 ? `${arrivalSent / 60} hr` : `${arrivalSent} min`}
+              {(() => {
+                const eta = myArrivalNotice?.eta ?? arrivalSent ?? 0;
+                return `Valet notified — arriving in ~${eta >= 60 ? `${eta / 60} hr` : `${eta} min`}`;
+              })()}
             </span>
+            {!!myArrivalNotice && (
+              <PressableScale
+                onClick={handleCancelArrival}
+                disabled={cancellingArrival}
+                style={{background: 'transparent', border: 'none', padding: 0, flexShrink: 0}}>
+                {cancellingArrival
+                  ? <span className="spinner" style={{width: 13, height: 13, borderColor: colors.success + '40', borderTopColor: colors.success}} />
+                  : <span style={{fontSize: 12.5, fontWeight: 800, color: colors.success, textDecoration: 'underline'}}>Cancel</span>}
+              </PressableScale>
+            )}
           </div>
         )}
 

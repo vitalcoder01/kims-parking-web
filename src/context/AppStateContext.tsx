@@ -190,6 +190,10 @@ interface AppState {
   markRetrieved: (taskId: number) => Promise<void>;
   confirmTaskDelivered: (taskId: number) => Promise<void>;
   cancelTask: (taskId: number) => Promise<void>;
+  closeParkedSession: (taskId: number) => Promise<void>; // valet: car left without a retrieval — frees the slot
+  myArrivalNotice: ArrivalNotice | null;                 // doctor/staff: their own open heads-up, if any
+  refreshMyArrival: () => Promise<void>;
+  cancelMyArrival: (id: number) => Promise<void>;
   recallTask: (taskId: number) => Promise<void>;
   markTaskReturned: (taskId: number) => Promise<void>;
   fetchTaskHistory: (params?: {doctorId?: number; driverId?: number}) => Promise<ParkingTask[]>;
@@ -650,8 +654,33 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     return created.id;
   }, []);
 
+  // A doctor/staff member's own open heads-up. They can't read the valet's
+  // queue (GET /arrivals is valet/admin-scoped), so this is the only way
+  // their app knows they have one outstanding — and therefore the only way
+  // it can offer to take it back.
+  const [myArrivalNotice, setMyArrivalNotice] = useState<ArrivalNotice | null>(null);
+  const isArrivalOwner = user?.role === 'doctor' || user?.role === 'staff';
+
+  const refreshMyArrival = useCallback(async () => {
+    if (!isArrivalOwner) { setMyArrivalNotice(null); return; }
+    try {
+      const raw = await arrivalsApi.mine();
+      setMyArrivalNotice(raw ? mapArrival(raw) : null);
+    } catch {
+      // Non-critical: the send/cancel buttons still work without it.
+    }
+  }, [isArrivalOwner]);
+
+  useEffect(() => { refreshMyArrival(); }, [refreshMyArrival]);
+
   const sendArrivalNotice = useCallback(async (eta: number) => {
     await arrivalsApi.create(eta);
+    await refreshMyArrival();
+  }, [refreshMyArrival]);
+
+  const cancelMyArrival = useCallback(async (id: number) => {
+    await arrivalsApi.dismiss(id);
+    setMyArrivalNotice(null);
   }, []);
 
   const dismissArrivalNotice = useCallback(async (id: number) => {
@@ -764,6 +793,19 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
   const cancelTask = useCallback(simpleTaskAction(tasksApi.cancel), []);
   const markTaskReturned = useCallback(simpleTaskAction(tasksApi.markReturned), []);
 
+  // Valet: the car physically left without anyone requesting a retrieval.
+  // Frees the slot as well as closing the session — the backend does both,
+  // and the slot:patch/task:upsert deltas bring every other client along.
+  const closeParkedSession = useCallback(async (taskId: number) => {
+    const updated = mapTask(await tasksApi.closeParked(taskId));
+    setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
+    if (updated.slotId) {
+      setSlots(p => p.map(sl => (sl.id === updated.slotId
+        ? {...sl, status: 'free' as const, taskId: undefined, carNumber: undefined, doctorId: undefined}
+        : sl)));
+    }
+  }, []);
+
   const recallTask = useCallback(async (taskId: number) => {
     const updated = mapTask(await tasksApi.recall(taskId));
     setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
@@ -868,7 +910,8 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
       driverLocations, onlineDriverIds, reassignPrompt, clearReassignPrompt, dismissAlert,
       addTask, requestRetrieval, cancelMyRetrieval, sendArrivalNotice, acceptRetrieval, dismissArrivalNotice, updateTask,
       assignDriver, cancelTaskAssignment, acceptTask, rejectTask, markKeyCollected, markParked, markRetrieved,
-      confirmTaskDelivered, cancelTask, recallTask, markTaskReturned, fetchTaskHistory, reportLocation,
+      confirmTaskDelivered, cancelTask, closeParkedSession, recallTask, markTaskReturned, fetchTaskHistory, reportLocation,
+      myArrivalNotice, refreshMyArrival, cancelMyArrival,
       setDriverStatus, addVisitor,
       assignVisitorDriver, cancelVisitorAssignment, cancelVisitor, recallVisitor,
       assignRetrievalDriver, assignStaffRetrievalDriver, confirmVisitorDelivered,

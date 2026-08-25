@@ -165,6 +165,10 @@ export const tasksApi = {
     client.patch(`/tasks/${id}/confirm-delivered`).then(r => r.data.task),
   cancel: (id: number) =>
     client.patch(`/tasks/${id}/cancel`).then(r => r.data.task),
+  // Valet: close a parked session whose car already left without anyone
+  // requesting a retrieval — frees the slot it was holding.
+  closeParked: (id: number) =>
+    client.patch(`/tasks/${id}/close-parked`).then(r => r.data.task),
   acceptRetrieval: (id: number) =>
     client.patch(`/tasks/${id}/accept-retrieval`).then(r => r.data.task),
   // Valet dismissed a reassign prompt ("Later") without picking a driver —
@@ -222,6 +226,8 @@ export const arrivalsApi = {
   create: (eta: number) => client.post('/arrivals', {eta}).then(r => r.data.arrival),
   list: () => client.get('/arrivals').then(r => r.data.arrivals),
   dismiss: (id: number) => client.patch(`/arrivals/${id}/dismiss`).then(r => r.data.arrival),
+  // The caller's own still-open heads-up, or null. Doctor/staff only.
+  mine: () => client.get('/arrivals/mine').then(r => r.data.arrival),
 };
 
 // ── Slots ────────────────────────────────────────────────────────────────

@@ -107,7 +107,7 @@ export function ValetHomeScreen() {
   const {drivers, tasks, visitors, addTask, addVisitor, markKeyCollected,
     activeTasks, availableDrivers, retrievalRequests, assignTaskDriver, assignVisitorPickupDriver,
     cancelTaskAssignment,
-    confirmTaskDelivered, cancelTask, recallTask, arrivalNotices, dismissArrivalNotice,
+    confirmTaskDelivered, cancelTask, closeParkedSession, recallTask, arrivalNotices, dismissArrivalNotice,
     acceptRetrieval, myValetId} = useValetActions();
   const {hydrated, slots} = useAppState();
   const {colors, isDark} = useTheme();
@@ -164,6 +164,7 @@ export function ValetHomeScreen() {
   // Which job's pending assignment is being cancelled right now — guards
   // against a double-tap firing the cancel-assignment call twice.
   const [cancellingAssignmentId, setCancellingAssignmentId] = useState<number | null>(null);
+  const [closingParkedId, setClosingParkedId] = useState<number | null>(null);
   // Same guard pattern for the other one-tap job actions that had none at
   // all — a slow response left the button tappable and a second tap either
   // fired a genuine duplicate (arrival -> two key tasks) or hit the server
@@ -572,6 +573,27 @@ export function ValetHomeScreen() {
       dialog.alert(err.message || 'Could not dismiss');
     } finally {
       setDismissingArrivalId(null);
+    }
+  };
+
+  // Frees the slot as well as closing the session, so the confirm has to be
+  // explicit about that: if the car is in fact still in the bay, the next
+  // park job could be sent to an occupied space.
+  const handleCloseParked = async (taskId: number, carNumber: string, slotId: string) => {
+    if (closingParkedId != null) return;
+    const ok = await dialog.confirm({
+      title: 'Car already left?',
+      message: `This closes ${carNumber}'s parking session and marks slot ${slotId} FREE for the next car.\n\nOnly do this if the car has physically gone — nobody ever asked for a retrieval.`,
+      confirmText: 'Yes, free the slot', destructive: true,
+    });
+    if (!ok) return;
+    setClosingParkedId(taskId);
+    try {
+      await closeParkedSession(taskId);
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not close this session');
+    } finally {
+      setClosingParkedId(null);
     }
   };
 
@@ -1711,6 +1733,29 @@ export function ValetHomeScreen() {
                     <span style={{color: '#fff', fontSize: 11, fontWeight: 900, letterSpacing: 0.8}}>PARKED</span>
                   </span>
                 </div>
+                {/* The escape hatch for a car that physically left without
+                    anyone ever requesting a retrieval. Nothing else in the
+                    lifecycle can clear it — the park task is already
+                    completed — so without this the session and its slot stay
+                    held forever. Destructive (it frees the slot), so the
+                    confirm spells out exactly that. */}
+                {!!ownerTask && (
+                  <PressableScale
+                    disabled={closingParkedId != null}
+                    onClick={() => handleCloseParked(ownerTask.id, sl.carNumber ?? 'this car', sl.id)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      borderRadius: 12, border: `1px solid ${colors.border}`, padding: '10px 0', marginTop: 12,
+                      background: 'transparent', opacity: closingParkedId === ownerTask.id ? 0.6 : 1,
+                    }}>
+                    {closingParkedId === ownerTask.id
+                      ? <span className="spinner" style={{width: 14, height: 14, borderColor: colors.border, borderTopColor: colors.textSecondary}} />
+                      : <Icon name="close" size={14} color={colors.textSecondary} />}
+                    <span style={{fontSize: 12.5, fontWeight: 700, color: colors.textSecondary}}>
+                      {closingParkedId === ownerTask.id ? 'Closing…' : 'Car already left'}
+                    </span>
+                  </PressableScale>
+                )}
               </div>
             );
           })
