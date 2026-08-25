@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 42;
-export const APP_VERSION_NAME = '1.8.30';
+export const APP_VERSION_CODE = 43;
+export const APP_VERSION_NAME = '1.8.31';
 export const RELEASE_NOTES =
-  'Fixed 5 narrow race conditions in valet/driver dispatch: a reassignment prompt could silently overwrite another job\'s still-unhandled prompt (now queued instead), two spots could wipe a driver\'s live job status if they\'d already moved on to a new job in a timing gap, and a driver\'s linked task lookup could miss a job created moments earlier.';
+  'Redesigned sign-in: saved accounts are now full-width rows you can actually read (instead of cramped chips), cleaner fields, and a clearer layout throughout. Added search to the admin Staff and Attendance rosters, and rebuilt Attendance so it lists everyone at a glance with per-person calendars one tap away.';
