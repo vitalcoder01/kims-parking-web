@@ -43,21 +43,6 @@ function relativeTime(iso: string | undefined): string {
   return `Updated ${Math.floor(secs / 3600)}h ago`;
 }
 
-// Tunable heuristics, not contractual SLAs — just enough to turn a raw
-// minutes figure into an at-a-glance "is this good" signal.
-function parkRating(m: number | null): {label: string; tone: 'good' | 'ok' | 'bad'} | null {
-  if (m == null) return null;
-  if (m <= 5) return {label: 'Excellent', tone: 'good'};
-  if (m <= 9) return {label: 'Good', tone: 'ok'};
-  return {label: 'Needs attention', tone: 'bad'};
-}
-function retrieveRating(m: number | null): {label: string; tone: 'good' | 'ok' | 'bad'} | null {
-  if (m == null) return null;
-  if (m <= 3) return {label: 'Excellent', tone: 'good'};
-  if (m <= 6) return {label: 'Good', tone: 'ok'};
-  return {label: 'Needs attention', tone: 'bad'};
-}
-
 const PERIOD_TITLES: Record<AnalyticsPeriod, string> = {
   daily: 'Today', weekly: 'This Week', monthly: 'This Month', yearly: 'This Year', all: 'All-Time',
 };
@@ -78,10 +63,6 @@ function buildShareText(data: AnalyticsOverview): string {
       `${i + 1}. ${d.name} — ${d.totalCompleted} jobs (${d.parksCompleted} parked, ${d.retrievesCompleted} retrieved)`),
   ];
   return lines.join('\n');
-}
-
-function toneColor(tone: 'good' | 'ok' | 'bad', colors: any) {
-  return tone === 'good' ? colors.success : tone === 'ok' ? colors.warning : colors.error;
 }
 
 export function AnalyticsScreen() {
@@ -113,8 +94,6 @@ export function AnalyticsScreen() {
   const visitorPct = visitorTotal > 0 ? Math.round(((data?.visitorJobs ?? 0) / visitorTotal) * 100) : 0;
   const activeDrivers = (data?.drivers ?? []).filter(d => d.totalCompleted > 0);
   const idleDrivers = (data?.drivers ?? []).filter(d => d.totalCompleted === 0);
-  const pRating = parkRating(data?.avgParkMinutes ?? null);
-  const rRating = retrieveRating(data?.avgRetrieveMinutes ?? null);
 
   const fastestParkId = useMemo(() => {
     const withAvg = activeDrivers.filter(d => d.avgParkMinutes != null);
@@ -237,26 +216,14 @@ export function AnalyticsScreen() {
         </div>
       ) : (
         <div style={{padding: '18px 20px 32px'}}>
-          {/* Performance — rated, not just reported */}
           <div style={{display: 'flex', gap: 12, marginBottom: 14}}>
             {([
-              ['carKey', colors.success, minutesLabel(data?.avgParkMinutes ?? null), 'Avg. park time', pRating],
-              ['route', colors.info, minutesLabel(data?.avgRetrieveMinutes ?? null), 'Avg. retrieve time', rRating],
-            ] as const).map(([icon, tint, val, lbl, rating], i) => (
-              <div key={i} style={{...cardStyle, flex: 1, display: 'flex', overflow: 'hidden'}}>
-                <div style={{width: 4, backgroundColor: rating ? toneColor(rating.tone, colors) : colors.border, flexShrink: 0}} />
-                <div style={{flex: 1, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-start'}}>
-                  <div style={{width: 32, height: 32, borderRadius: 10, backgroundColor: tint + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10}}>
-                    <Icon name={icon} size={17} color={tint} />
-                  </div>
-                  <span style={{fontSize: 17, fontWeight: 900, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums'}}>{val}</span>
-                  <span style={{fontSize: 11, fontWeight: 700, marginTop: 2, color: colors.textMuted}}>{lbl}</span>
-                  {rating && (
-                    <span style={{marginTop: 8, padding: '3px 8px', borderRadius: 999, backgroundColor: toneColor(rating.tone, colors) + '18'}}>
-                      <span style={{fontSize: 10, fontWeight: 800, color: toneColor(rating.tone, colors)}}>{rating.label}</span>
-                    </span>
-                  )}
-                </div>
+              [minutesLabel(data?.avgParkMinutes ?? null), 'Avg. park time'],
+              [minutesLabel(data?.avgRetrieveMinutes ?? null), 'Avg. retrieve time'],
+            ] as const).map(([val, lbl], i) => (
+              <div key={i} style={{...cardStyle, flex: 1, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-start'}}>
+                <span style={{fontSize: 22, fontWeight: 900, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums'}}>{val}</span>
+                <span style={{fontSize: 11.5, fontWeight: 700, marginTop: 4, color: colors.textMuted}}>{lbl}</span>
               </div>
             ))}
           </div>
@@ -264,10 +231,7 @@ export function AnalyticsScreen() {
           {/* Activity by hour — real 24h histogram, click any bar to inspect it */}
           <div style={{...cardStyle, padding: 14, marginBottom: 14}}>
             <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12}}>
-              <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
-                <Icon name="trending" size={15} color={colors.primary} />
-                <span style={{fontSize: 13.5, fontWeight: 800, color: colors.textPrimary}}>Activity by Hour</span>
-              </div>
+              <span style={{fontSize: 13.5, fontWeight: 800, color: colors.textPrimary}}>Activity by Hour</span>
               {activeHour != null && (
                 <span style={{fontSize: 11, fontWeight: 700, color: colors.textMuted}}>
                   {activeHourCount} job{activeHourCount === 1 ? '' : 's'} · {hourLabel(activeHour)}
@@ -421,8 +385,7 @@ export function AnalyticsScreen() {
           </div>
 
           {/* Leaderboard — click a row to expand */}
-          <div style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12}}>
-            <Icon name="trophy" size={16} color="#F5C168" />
+          <div style={{marginBottom: 12}}>
             <span style={{fontSize: 15, fontWeight: 900, color: colors.textPrimary}}>Top Performers</span>
           </div>
 

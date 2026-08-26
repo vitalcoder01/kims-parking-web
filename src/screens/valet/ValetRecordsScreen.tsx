@@ -50,6 +50,52 @@ function PerfLine({color}: {color: string}) {
 
 type RecordsTab = 'visitors' | 'staff' | 'map';
 type StatusFilter = 'all' | 'active' | 'completed';
+
+// Date scope for the records tabs. 'live' is the existing bounded view
+// (last 24h + anything still active) — the default, because that's what a
+// valet on shift actually wants. The rest are real calendar windows,
+// answered by the server's uncapped range query rather than by filtering
+// the live list, which is deliberately capped and could never show a full
+// month.
+type Period = 'live' | 'today' | 'yesterday' | 'week' | 'month';
+const PERIODS: {key: Period; label: string}[] = [
+  {key: 'live', label: 'Live'},
+  {key: 'today', label: 'Today'},
+  {key: 'yesterday', label: 'Yesterday'},
+  {key: 'week', label: 'This week'},
+  {key: 'month', label: 'This month'},
+];
+
+const ymd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// Inclusive [from, to] in local calendar days. Week starts Monday, matching
+// the backend's own analytics period logic so the two never disagree about
+// which days "this week" covers.
+function periodRange(p: Period): {from: string; to: string} | null {
+  if (p === 'live') return null;
+  const now = new Date();
+  if (p === 'today') return {from: ymd(now), to: ymd(now)};
+  if (p === 'yesterday') {
+    const y = new Date(now);
+    y.setDate(now.getDate() - 1);
+    return {from: ymd(y), to: ymd(y)};
+  }
+  if (p === 'week') {
+    const start = new Date(now);
+    start.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // back to Monday
+    return {from: ymd(start), to: ymd(now)};
+  }
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  return {from: ymd(start), to: ymd(now)};
+}
+
+// Which timestamp a staff/doctor task belongs to, date-wise: when it
+// finished if it did, otherwise when it was raised. Used to scope the Staff
+// tab to the same window as the Visitors tab.
+function taskDateMs(t: ParkingTask): number {
+  return t.completedAt ?? t.assignedAt ?? t.requestedAt ?? 0;
+}
 // One shared vehicle-lifecycle stage, whether the ticket is a visitor token
 // or a staff/doctor session — both run the identical park -> parked ->
 // retrieve journey underneath, just through different record shapes.
@@ -98,19 +144,26 @@ export function ValetRecordsScreen() {
   // `visitors` array, which is deliberately capped to the last 24h.
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [period, setPeriod] = useState<Period>('live');
   const [dateVisitors, setDateVisitors] = useState<Visitor[] | null>(null);
   const [dateLoading, setDateLoading] = useState(false);
 
+  // A hand-picked calendar date wins over the period pills; both resolve to
+  // the same {from,to} so everything downstream has one thing to read.
+  const activeRange = selectedDate
+    ? {from: selectedDate, to: selectedDate}
+    : periodRange(period);
+
   useEffect(() => {
-    if (!selectedDate) { setDateVisitors(null); return; }
+    if (!activeRange) { setDateVisitors(null); return; }
     let cancelled = false;
     setDateLoading(true);
-    visitorsApi.byDate(selectedDate)
+    visitorsApi.byRange(activeRange.from, activeRange.to)
       .then((rows: any[]) => { if (!cancelled) setDateVisitors(rows.map(mapVisitor)); })
       .catch(() => { if (!cancelled) setDateVisitors([]); })
       .finally(() => { if (!cancelled) setDateLoading(false); });
     return () => { cancelled = true; };
-  }, [selectedDate]);
+  }, [activeRange?.from, activeRange?.to]);
 
   const todayKey = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
   const calendarDateLabel = (key: string) => key === todayKey
@@ -167,9 +220,9 @@ export function ValetRecordsScreen() {
   // activeVisitors is deliberately pre-stripped of both (see useValetActions).
   // A selected calendar date overrides all of that — it's its own fetched
   // snapshot of one specific day, live-bounding doesn't apply to it.
-  const visitorsSource = selectedDate ? (dateVisitors ?? []) : statusFilter === 'active' ? activeVisitors : visitors;
+  const visitorsSource = activeRange ? (dateVisitors ?? []) : statusFilter === 'active' ? activeVisitors : visitors;
   const visitorsFiltered = visitorsSource
-    .filter(v => selectedDate || statusFilter === 'all' || (statusFilter === 'completed' ? v.status === 'retrieved' : v.status !== 'retrieved'))
+    .filter(v => activeRange || statusFilter === 'all' || (statusFilter === 'completed' ? v.status === 'retrieved' : v.status !== 'retrieved'))
     .filter(v => statusFilter !== 'active' || stageFilter === 'all' || visitorStage(v) === stageFilter)
     .filter(v => !q || v.name?.toLowerCase().includes(q) || v.carNumber?.toLowerCase().includes(q) || v.token.toLowerCase().includes(q));
 
@@ -205,9 +258,19 @@ export function ValetRecordsScreen() {
   // the Home tab's Job Queue; this one's a searchable log). Visitor-linked
   // tasks are excluded — they already have their own tab, and an unscoped
   // history fetch returns every task ever, staff and visitor alike.
+  // Staff history is already unbounded, so its date scope is applied here
+  // rather than by a second fetch.
+  const rangeStartMs = activeRange ? new Date(`${activeRange.from}T00:00:00`).getTime() : 0;
+  const rangeEndMs = activeRange ? new Date(`${activeRange.to}T00:00:00`).getTime() + 86400000 : 0;
+
   const staffFiltered = staffHistory
     .filter(t => !t.isVisitor)
-    .filter(t => statusFilter === 'all' || (statusFilter === 'completed' ? !isStaffRowActive(t) && t.status !== 'cancelled' : isStaffRowActive(t)))
+    .filter(t => {
+      if (!activeRange) return true;
+      const ms = taskDateMs(t);
+      return ms >= rangeStartMs && ms < rangeEndMs;
+    })
+    .filter(t => activeRange || statusFilter === 'all' || (statusFilter === 'completed' ? !isStaffRowActive(t) && t.status !== 'cancelled' : isStaffRowActive(t)))
     .filter(t => statusFilter !== 'active' || stageFilter === 'all' || staffStage(t) === stageFilter)
     .filter(t => !q || t.doctorName?.toLowerCase().includes(q) || t.carNumber?.toLowerCase().includes(q));
 
@@ -695,16 +758,42 @@ export function ValetRecordsScreen() {
         )}
       </div>
 
+      {/* Date scope. Applies to BOTH tabs so Visitors and Staff always
+          describe the same window. Picking a specific calendar date takes
+          precedence, so choosing a period here clears it. */}
+      <div style={{display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px 0', overflowX: 'auto'}}>
+        {PERIODS.map(p => {
+          const on = !selectedDate && period === p.key;
+          return (
+            <PressableScale
+              key={p.key}
+              onClick={() => { setPeriod(p.key); setSelectedDate(null); }}
+              style={{
+                flexShrink: 0, borderRadius: 99, padding: '8px 14px',
+                border: `1px solid ${on ? colors.primary : colors.border}`,
+                backgroundColor: on ? colors.primary : colors.surface,
+              }}
+            >
+              <span style={{fontSize: 12.5, fontWeight: 800, color: on ? colors.textOnPrimary : colors.textSecondary}}>{p.label}</span>
+            </PressableScale>
+          );
+        })}
+      </div>
+
       {/* Selected-date banner — this IS the view (not a filter layered on
           top of the live one), so it reads as a distinct mode rather than
           just another chip in the row above. */}
-      {tab === 'visitors' && selectedDate && (
+      {!!activeRange && (
         <div style={{display: 'flex', alignItems: 'center', gap: 8, margin: '10px 20px 0', padding: '10px 14px', borderRadius: 14, backgroundColor: colors.cardAlt}}>
           <Icon name="calendar" size={14} color={colors.textSecondary} />
-          <span style={{fontSize: 13, fontWeight: 800, color: colors.textPrimary}}>{calendarDateLabel(selectedDate)}</span>
+          <span style={{fontSize: 13, fontWeight: 800, color: colors.textPrimary}}>
+            {activeRange.from === activeRange.to
+              ? calendarDateLabel(activeRange.from)
+              : `${calendarDateLabel(activeRange.from)} — ${calendarDateLabel(activeRange.to)}`}
+          </span>
           {dateLoading && <span className="spinner" style={{width: 13, height: 13, marginLeft: 4, borderColor: colors.border, borderTopColor: colors.textMuted}} />}
           <div style={{flex: 1}} />
-          <PressableScale onClick={() => setSelectedDate(null)} style={{background: 'transparent', border: 'none', padding: 0}}>
+          <PressableScale onClick={() => { setSelectedDate(null); setPeriod('live'); }} style={{background: 'transparent', border: 'none', padding: 0}}>
             <Icon name="close" size={16} color={colors.textSecondary} />
           </PressableScale>
         </div>
@@ -716,9 +805,9 @@ export function ValetRecordsScreen() {
           return (
             <PressableScale
               key={f}
-              disabled={!!selectedDate}
+              disabled={!!activeRange}
               onClick={() => { setStatusFilter(f); if (f !== 'active') setStageFilter('all'); }}
-              style={{flex: 1, textAlign: 'center', borderRadius: 99, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '9px 14px', backgroundColor: on ? colors.primary : colors.surface, opacity: selectedDate ? 0.4 : 1}}
+              style={{flex: 1, textAlign: 'center', borderRadius: 99, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '9px 14px', backgroundColor: on ? colors.primary : colors.surface, opacity: activeRange ? 0.4 : 1}}
             >
               <span style={{fontSize: 12, fontWeight: 900, fontFamily: 'Arial', color: on ? colors.textOnPrimary : colors.textSecondary}}>
                 {f === 'all' ? 'All' : f === 'active' ? 'Active' : 'Completed'}

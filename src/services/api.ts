@@ -200,7 +200,10 @@ export const visitorsApi = {
   // Calendar-wise records view — every visitor checked in on that local
   // calendar day (any status), unbounded by the live list's 24h/active-only
   // window. `date` is 'YYYY-MM-DD'.
-  byDate: (date: string) => client.get('/visitors', {params: {date}}).then(r => r.data.visitors),
+  // Inclusive [from, to] calendar range — backs the records tab's date
+  // scopes (a single picked day is just from === to).
+  byRange: (from: string, to?: string) =>
+    client.get('/visitors', {params: {from, to: to ?? from}}).then(r => r.data.visitors),
   create: (data: {name: string; carNumber?: string; mobile: string; vehicleType?: 'car' | 'bike'}) =>
     client.post('/visitors', data).then(r => r.data.visitor),
   assignDriver: (id: number, driverId: number) =>
