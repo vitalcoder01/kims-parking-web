@@ -48,6 +48,41 @@ export function unlockOnFirstGesture() {
   window.addEventListener('keydown', unlock, true);
 }
 
+/*
+ * Vibration, attempted only when the browser will actually allow it.
+ *
+ * Chrome gates navigator.vibrate behind "sticky activation" -- the page must
+ * have received at least one real click/tap/keypress in its lifetime. An
+ * alarm is asynchronous by nature (it fires from a socket message, not a
+ * gesture), so on a page nobody has touched yet every call is blocked and
+ * logged as an Intervention. sirenCycle fires one per 1.2s cycle for the
+ * full 45s ring, so a single unattended alarm printed roughly 37 console
+ * errors and vibrated nothing.
+ *
+ * Checking hasBeenActive does not make vibration work where it was blocked
+ * -- nothing in-page can -- it stops the app pretending it did and drowning
+ * the console at the exact moment someone is trying to read it.
+ *
+ * navigator.userActivation is Chromium-only. Where it is absent (Firefox,
+ * and Safari which has no vibrate at all) we attempt the call as before
+ * rather than assume a restriction that browser may not have.
+ *
+ * The reliable path for a phone sitting untouched is not this: it is the
+ * service worker's showNotification({vibrate}), which is not gated on
+ * activation. See public/sw.js. This stays as the in-page enhancement for
+ * when the tab is already open and in use.
+ */
+function vibrate(pattern: number | number[]) {
+  if (typeof navigator === 'undefined' || !navigator.vibrate) return;
+  const activation = (navigator as any).userActivation;
+  if (activation && activation.hasBeenActive === false) return;
+  try {
+    navigator.vibrate(pattern);
+  } catch {
+    /* Some browsers throw instead of returning false when blocked. */
+  }
+}
+
 function tone(freq: number, at: number, dur: number, gainDb = 0.28) {
   if (!ctx) return;
   const osc = ctx.createOscillator();
@@ -69,7 +104,7 @@ function sirenCycle() {
   tone(880, t, 0.25);
   tone(660, t + 0.3, 0.25);
   tone(880, t + 0.6, 0.25);
-  navigator.vibrate?.([300, 150, 300]);
+  vibrate([300, 150, 300]);
   window.setTimeout(sirenCycle, 1200);
 }
 
@@ -89,7 +124,7 @@ export function stopAlarm() {
   stopFlag = true;
   ringing = false;
   window.clearTimeout(autoStopTimer);
-  navigator.vibrate?.(0);
+  vibrate(0);
 }
 
 export function isAlarmRinging() {
@@ -114,5 +149,5 @@ export function playChime() {
   };
   soft(740, t, 0.18);
   soft(988, t + 0.16, 0.28);
-  navigator.vibrate?.(120);
+  vibrate(120);
 }

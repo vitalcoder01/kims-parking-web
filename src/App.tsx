@@ -8,6 +8,7 @@ import {Icon, IconName} from './components/Icon';
 import {AlarmBanner} from './components/AlarmBanner';
 import {InstallBanner} from './components/InstallBanner';
 import {UpdateBanner} from './components/UpdateBanner';
+import {ErrorBoundary} from './components/ErrorBoundary';
 // LoginScreen stays eager: it is what a signed-out visitor sees first, and
 // making the very first paint wait on a second round-trip would be a
 // pessimisation, not an optimisation.
@@ -286,7 +287,13 @@ function RoleRouter() {
 
       {/* Screen body — keyed so each tab change gets the light fade-in */}
       <div key={tab} className="screen-enter" style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0}}>
-        <Suspense fallback={<ScreenFallback />}>{screen}</Suspense>
+        {/* Keyed by tab so switching tabs clears a previous crash -- without
+            the key the boundary stays in its error state and the next tab
+            renders the error screen too. Inside the tab bar, not around it,
+            so a broken screen still leaves the user able to navigate away. */}
+        <ErrorBoundary key={tab}>
+          <Suspense fallback={<ScreenFallback />}>{screen}</Suspense>
+        </ErrorBoundary>
       </div>
 
       {/* Bottom tab bar */}
@@ -358,6 +365,7 @@ function AppInner() {
 
 export default function App() {
   return (
+    <ErrorBoundary label="The app failed to start">
     <ThemeProvider>
       <DialogProvider>
         <AuthProvider>
@@ -367,5 +375,6 @@ export default function App() {
         </AuthProvider>
       </DialogProvider>
     </ThemeProvider>
+    </ErrorBoundary>
   );
 }
