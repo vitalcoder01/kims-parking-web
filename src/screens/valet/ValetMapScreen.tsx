@@ -1,6 +1,6 @@
 import React, {useEffect, useMemo, useRef} from 'react';
 import {useTheme} from '../../context/ThemeContext';
-import {useAppState} from '../../context/AppStateContext';
+import {useAppState, useDriverLocations} from '../../context/AppStateContext';
 import {Icon} from '../../components/Icon';
 
 // Same Leaflet multi-driver map the mobile app renders in a WebView (see
@@ -95,7 +95,9 @@ function buildMultiMapHTML(isDark: boolean) {
 // screen is GPS-only now.
 export function ValetMapScreen() {
   const {colors, isDark} = useTheme();
-  const {drivers, tasks, driverLocations, onlineDriverIds} = useAppState();
+  const {drivers, tasks} = useAppState();
+  // Separate context — a GPS ping re-renders this screen and nothing else.
+  const {driverLocations, onlineDriverIds} = useDriverLocations();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const fittedOnce = useRef(false);
 

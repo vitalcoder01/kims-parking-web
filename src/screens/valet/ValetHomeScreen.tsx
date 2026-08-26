@@ -16,8 +16,9 @@ import {useDialog} from '../../components/AppDialog';
 import {useBackStep} from '../../hooks/useBackStep';
 import {
   plannedDepartureLabel, minutesUntilDeparture, departureClockLabel,
-  enRouteSeconds, fmtDuration, departurePriority, agoLabel,
+  departurePriority, agoLabel,
 } from '../../utils/retrievalClocks';
+import {EnRouteTimer} from '../../components/EnRouteTimer';
 
 // Web (DOM) port of the mobile app's ValetHomeScreen — same screens, same
 // state machine, same business logic. Navigation between the five
@@ -207,9 +208,17 @@ export function ValetHomeScreen() {
   const [driverStatFilter, setDriverStatFilter] = useState<DriverStatFilter>(null);
   // Deadlines have to visibly tick — a static "wants it in 10 min" rendered
   // once tells the valet nothing about how much of that is left by now.
+  //
+  // Every label this drives is minute-granularity ("5 min ago", "45 MIN",
+  // the urgency sort), so a per-second tick re-rendered this whole screen
+  // 60 times a minute to produce the same pixels 59 of those times. 10s
+  // keeps a label at most 10s stale — invisible on a minute counter, and
+  // tight enough that a departure flipping to "NOW" still reads as instant
+  // — for a sixth of the work. The one genuinely per-second thing on the
+  // screen, the en-route mm:ss, owns its own clock (see EnRouteTimer).
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    const iv = setInterval(() => setNow(Date.now()), 1000);
+    const iv = setInterval(() => setNow(Date.now()), 10000);
     return () => clearInterval(iv);
   }, []);
   // Return-key chaining: enter on one field jumps to the next.
@@ -1372,10 +1381,10 @@ export function ValetHomeScreen() {
           </div>
         )}
         {t.type === 'retrieve' && (() => {
-          const en = enRouteSeconds(t, now);
+          const enRoute = t.startedAt != null;
           const mins = t.plannedDepartureMinutes;
           const left = minutesUntilDeparture(t.requestedAt, mins, now);
-          if (mins == null && en == null) return null;
+          if (mins == null && !enRoute) return null;
           return (
             <div style={{display: 'flex', alignItems: 'center', gap: 5, marginTop: 10, flexWrap: 'wrap'}}>
               {mins != null && (
@@ -1385,11 +1394,8 @@ export function ValetHomeScreen() {
                   </span>
                 </span>
               )}
-              {en != null && (
-                <span style={{fontSize: 12, fontWeight: 700, color: colors.textSecondary}}>
-                  on the way {fmtDuration(en)}
-                </span>
-              )}
+              {/* Owns its own per-second clock — see EnRouteTimer. */}
+              <EnRouteTimer task={t} style={{fontSize: 12, fontWeight: 700, color: colors.textSecondary}} />
             </div>
           );
         })()}

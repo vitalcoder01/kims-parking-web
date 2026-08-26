@@ -1,0 +1,26 @@
+/*
+ * The Material Design Icons face, declared ourselves instead of importing
+ * @mdi/font's stylesheet.
+ *
+ * That stylesheet is 326 kB of `.mdi-<name>::before { content: "\FXXXX" }`
+ * rules — one for each of the 7,448 icons in the set. We use 77. It also
+ * lists four `src` formats (eot, woff2, woff, ttf), and a bundler has to
+ * emit every file it references, so the build shipped 3.6 MB of font
+ * binaries where one 403 kB woff2 covers every browser we support.
+ *
+ * So: one @font-face, woff2 only, and the 77 codepoints we actually use
+ * live as a plain map in Icon.tsx. Same font file, same glyphs, same
+ * rendering — just without the other 7,371 rules and the three redundant
+ * binaries.
+ *
+ * `font-display: block` because these are icons, not text: a fallback
+ * glyph flashing in a button before the real one swaps in reads as a bug.
+ * The block period is short and the file is cached after first load.
+ */
+@font-face {
+  font-family: 'Material Design Icons';
+  src: url('@mdi/font/fonts/materialdesignicons-webfont.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}

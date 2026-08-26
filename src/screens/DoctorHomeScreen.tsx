@@ -11,7 +11,6 @@ import {Icon} from '../components/Icon';
 import {useDialog} from '../components/AppDialog';
 import {
   PLANNED_DEPARTURE_OPTIONS, ARRIVAL_ETA_OPTIONS, clockToMinutes, fmtClock12, to12, to24,
-  enRouteSeconds,
 } from '../utils/retrievalClocks';
 
 // Direct port of the mobile app's DoctorHomeScreen — Arrival/Departure
@@ -111,7 +110,7 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
   };
   const {colors, isDark} = useTheme();
   const dialog = useDialog();
-  const {activeRetrieve, now, requestRetrieval} = useRetrievalRequest();
+  const {activeRetrieve, requestRetrieval} = useRetrievalRequest();
 
   const [showArrivalModal, setShowArrivalModal] = useState(false);
   const [showDepartureModal, setShowDepartureModal] = useState(false);
@@ -241,8 +240,7 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
         {/* Countdown — hidden once 'delivered', the CAR READY banner below
             already covers that. */}
         {activeRetrieve && activeRetrieve.status !== 'delivered' && (() => {
-          const enRoute = enRouteSeconds(activeRetrieve, now);
-          const onTheWay = activeRetrieve.status === 'in_transit' && enRoute != null;
+          const onTheWay = activeRetrieve.status === 'in_transit' && activeRetrieve.startedAt != null;
           const trip = onTheWay
             ? computeTrip({
                 startLat: activeRetrieve.driverStartLat, startLng: activeRetrieve.driverStartLng,
