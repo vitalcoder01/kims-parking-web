@@ -9,6 +9,12 @@ import {useDialog} from '../../components/AppDialog';
 import {useBackStep} from '../../hooks/useBackStep';
 import {useValetActions} from './useValetActions';
 import {visitorsApi} from '../../services/api';
+import {selectVisitorStage, selectStaffStage, Stage} from '../../core/valet/selectors/JobStageSelector';
+import {
+  buildLatestTaskByDoctor, canRequestStaffRetrieval as coreCanRequestStaffRetrieval,
+  isStaffRowActive as coreIsStaffRowActive,
+  matchesStaffStatusFilter, matchesVisitorStatusFilter,
+} from '../../core/valet/selectors/JobHistorySelector';
 import {AdminMapScreen} from '../admin/AdminMapScreen';
 import {DriverPickerList} from '../../components/DriverPickerList';
 
@@ -99,7 +105,7 @@ function taskDateMs(t: ParkingTask): number {
 // One shared vehicle-lifecycle stage, whether the ticket is a visitor token
 // or a staff/doctor session — both run the identical park -> parked ->
 // retrieve journey underneath, just through different record shapes.
-type StageFilter = 'all' | 'atHospital' | 'transitToLot' | 'parked' | 'transitToHospital';
+type StageFilter = 'all' | Stage;
 const STAGE_FILTERS: {key: Exclude<StageFilter, 'all'>; label: string}[] = [
   {key: 'atHospital', label: 'At hospital'},
   {key: 'transitToLot', label: 'Vehicle → parking lot'},
@@ -193,28 +199,10 @@ export function ValetRecordsScreen() {
   // The 4-stage breakdown that appears under "Active" — same stages for a
   // visitor token and a staff/doctor session, since both run the identical
   // park -> parked -> retrieve journey, just through different record shapes.
-  const visitorStage = (v: Visitor): Exclude<StageFilter, 'all'> => {
-    if (v.status === 'pending') {
-      // Key not yet taken vs. already taken and driving to a slot.
-      return v.pickedUpAt != null ? 'transitToLot' : 'atHospital';
-    }
-    // v.status === 'parked' from here on — delivered/retrieved/cancelled
-    // visitors don't reach this (they're excluded from activeVisitors, or
-    // land under Completed instead of Active).
-    if (!v.retrievalRequested) return 'parked';
-    return hasActiveRetrievalDriver(v) ? 'transitToHospital' : 'atHospital';
-  };
-
-  const staffStage = (t: ParkingTask): Exclude<StageFilter, 'all'> => {
-    if (t.type === 'park') {
-      if (t.status === 'key_collected' || t.status === 'in_transit') return 'transitToLot';
-      if (t.status === 'completed') return 'parked';
-      return 'atHospital'; // assigned with no driver yet
-    }
-    // retrieve — a driver attached means it's accepted the job and is en
-    // route either direction; with none it's still waiting to be staffed.
-    return t.driverId != null ? 'transitToHospital' : 'atHospital';
-  };
+  // Stage classification lives in core/valet/selectors/JobStageSelector —
+  // the same module the mobile app uses, so the two cannot drift.
+  const visitorStage = (v: Visitor): Stage => selectVisitorStage(v, hasActiveRetrievalDriver);
+  const staffStage = (t: ParkingTask): Stage => selectStaffStage(t);
 
   // Completed/All need retrieved (and cancelled, for All) visitors too —
   // activeVisitors is deliberately pre-stripped of both (see useValetActions).
@@ -222,7 +210,7 @@ export function ValetRecordsScreen() {
   // snapshot of one specific day, live-bounding doesn't apply to it.
   const visitorsSource = activeRange ? (dateVisitors ?? []) : statusFilter === 'active' ? activeVisitors : visitors;
   const visitorsFiltered = visitorsSource
-    .filter(v => activeRange || statusFilter === 'all' || (statusFilter === 'completed' ? v.status === 'retrieved' : v.status !== 'retrieved'))
+    .filter(v => activeRange || matchesVisitorStatusFilter(v, statusFilter))
     .filter(v => statusFilter !== 'active' || stageFilter === 'all' || visitorStage(v) === stageFilter)
     .filter(v => !q || v.name?.toLowerCase().includes(q) || v.carNumber?.toLowerCase().includes(q) || v.token.toLowerCase().includes(q));
 
@@ -231,14 +219,8 @@ export function ValetRecordsScreen() {
   // alike, so "parked, nothing pending" is only true when the LATEST row
   // for that doctor is a completed park (a later retrieve row, of any
   // status, means one's already in flight or done).
-  const latestTaskByDoctor = new Map<number, ParkingTask>();
-  for (const t of staffHistory) {
-    if (t.isVisitor) continue;
-    const prev = latestTaskByDoctor.get(t.doctorId);
-    if (!prev || t.id > prev.id) latestTaskByDoctor.set(t.doctorId, t);
-  }
-  const canRequestStaffRetrieval = (t: ParkingTask) =>
-    t.type === 'park' && t.status === 'completed' && latestTaskByDoctor.get(t.doctorId)?.id === t.id;
+  const latestTaskByDoctor = buildLatestTaskByDoctor(staffHistory);
+  const canRequestStaffRetrieval = (t: ParkingTask) => coreCanRequestStaffRetrieval(t, latestTaskByDoctor);
 
   // Active/Completed here means "is the car back with its owner yet", not
   // the raw per-row status — a park row's own status turns 'completed' the
@@ -247,11 +229,7 @@ export function ValetRecordsScreen() {
   // canRequestStaffRetrieval); a retrieve row is Active until the valet
   // actually confirms the handover (status -> 'completed'), which is also
   // the moment its paired park row stops being "latest" and flips too.
-  const isStaffRowActive = (t: ParkingTask) => {
-    if (t.status === 'cancelled') return false; // same convention as elsewhere: cancelled only shows under "All"
-    if (t.type === 'retrieve') return t.status !== 'completed';
-    return t.status !== 'completed' || latestTaskByDoctor.get(t.doctorId)?.id === t.id;
-  };
+  const isStaffRowActive = (t: ParkingTask) => coreIsStaffRowActive(t, latestTaskByDoctor);
 
   // Staff/doctor tab is the actual "how many doctors" record — every park +
   // retrieve task, not just the ones still in progress (that live view is
@@ -270,7 +248,7 @@ export function ValetRecordsScreen() {
       const ms = taskDateMs(t);
       return ms >= rangeStartMs && ms < rangeEndMs;
     })
-    .filter(t => activeRange || statusFilter === 'all' || (statusFilter === 'completed' ? !isStaffRowActive(t) && t.status !== 'cancelled' : isStaffRowActive(t)))
+    .filter(t => activeRange || matchesStaffStatusFilter(t, statusFilter, latestTaskByDoctor))
     .filter(t => statusFilter !== 'active' || stageFilter === 'all' || staffStage(t) === stageFilter)
     .filter(t => !q || t.doctorName?.toLowerCase().includes(q) || t.carNumber?.toLowerCase().includes(q));
 

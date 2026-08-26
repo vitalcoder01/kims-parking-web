@@ -5,22 +5,13 @@ import {useAuth} from '../../context/AuthContext';
 // port of the mobile app's identically-named hook) so none of them
 // re-derive the same filters or duplicate the assign/notify logic.
 // Mirrors isVisibleToValet() in the backend's task.service.js.
-export function isMyRetrieval(t: ParkingTask, myValetId: number | null | undefined): boolean {
-  const owner = t.retrievalOwnerValetId ?? t.arrivalOwnerValetId;
-  if (owner == null) return true;
-  if (owner === myValetId) return true;
-  if (t.retrievalOwnerValetId != null) return t.escalatedAt != null;
-  return t.recoveryBroadcastAt != null || t.escalatedAt != null;
-}
-
-// Which side of the Job Queue split a job falls on — see the mobile hook
-// for the full reasoning behind "mine to run" being wider than "I own it".
-export function isMyJobToRun(t: ParkingTask, myValetId: number | null | undefined): boolean {
-  if (t.valetId == null) return true;
-  if (t.valetId === myValetId) return true;
-  const needsDriver = t.status === 'assigned' && !t.driverId;
-  return !!t.escalatedAt && needsDriver;
-}
+// Both re-exported from core/valet/services/OwnershipService — the same
+// module the mobile app uses. They were duplicated here character for
+// character, which meant a change to who may see or run a job had to be
+// made twice, in two repos, with nothing to catch it if it was not. Kept
+// under these names so every existing caller is unaffected.
+import {isMyRetrieval, isMyJobToRun} from '../../core/valet/services/OwnershipService';
+export {isMyRetrieval, isMyJobToRun};
 
 export function useValetActions() {
   const {drivers, tasks, visitors, arrivalNotices, dismissArrivalNotice, addTask, assignDriver, cancelTaskAssignment, markKeyCollected, pushNotification, addVisitor,
