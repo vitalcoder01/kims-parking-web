@@ -19,6 +19,7 @@ import {
   departurePriority, agoLabel,
 } from '../../utils/retrievalClocks';
 import {EnRouteTimer} from '../../components/EnRouteTimer';
+import {deriveJobAction} from '../../core/valet/state/JobAction';
 
 // Web (DOM) port of the mobile app's ValetHomeScreen — same screens, same
 // state machine, same business logic. Navigation between the five
@@ -1317,45 +1318,28 @@ export function ValetHomeScreen() {
   // identical no matter which section it's currently filed under.
   const renderJobCard = (t: ParkingTask) => {
     const tc = t.type === 'park' ? colors.primary : colors.warning;
-    const needsDriver = t.status === 'assigned' && !t.driverId;
-    const isMine = t.valetId === user?.id;
-    const isEscalated = !!t.escalatedAt && needsDriver;
-    const claimedByOther = !!t.valetId && !isMine && !t.escalatedAt;
-    const awaitingAccept = t.status === 'assigned' && !!t.driverId && !t.acceptedAt;
-    const needsConfirm = t.status === 'delivered';
-    const recalled = !!t.recalledAt;
-    const canDispatch = isMyJobToRun(t, myValetId);
-    const canRecall = canDispatch && t.type === 'park' && !recalled
-      && (t.status === 'key_collected' || t.status === 'in_transit');
-    // How long a job's been sitting without a driver has real operational
-    // weight — travel time to wherever it actually gets parked varies job to
-    // job, so nothing else tells a valet which unclaimed job has been
-    // waiting longest. Mirrors the mobile app's core/valet/state/JobAction.
-    const waitedSince = t.type === 'retrieve' ? t.requestedAt : t.assignedAt;
-    const waitingNote =
-        awaitingAccept ? `Waiting for ${t.driverName ?? 'driver'} to accept…`
-      : recalled && t.status !== 'delivered' ? `${t.driverName ?? 'Driver'} is bringing it back`
-      : t.status === 'key_collected' ? `${t.driverName ?? 'Driver'} has the key`
-      : t.status === 'in_transit' ? (t.type === 'park' ? `${t.driverName ?? 'Driver'} is parking it` : `${t.driverName ?? 'Driver'} is bringing it`)
-      : (needsDriver || t.status === 'requested' || t.status === 'accepted') ? `Waiting for a driver · ${agoLabel(waitedSince, now)}`
-      : null;
-
+    // Card state — which action shows, and the locked/escalated/recall
+    // badges — comes from core/valet/state/JobAction, the same module the
+    // mobile app uses. It replaces eight booleans that were re-derived here
+    // character-for-character from mobile's version: identical today, and
+    // with nothing to keep them identical tomorrow.
+    const action = deriveJobAction(t, {myValetId, myUserId: user?.id, now});
     // Urgency wash for a still-unclaimed retrieval — restores the "hot to
     // cool" visual weight the old standalone Retrieval Requests inbox had.
     // Park jobs (no departure deadline) stay a plain card; only a retrieval
     // genuinely racing a clock gets tinted.
-    const isPendingRetrieval = t.type === 'retrieve' && (t.status === 'requested' || t.status === 'accepted');
+    const isPendingRetrieval = action.kind === 'assign_retrieval_request';
     const departureLeft = isPendingRetrieval ? minutesUntilDeparture(t.requestedAt, t.plannedDepartureMinutes, now) : null;
     const urgencyTone = isPendingRetrieval ? departureTone(departureLeft, colors) : null;
     const urgencyWash = departureLeft == null ? '00' : departureLeft <= 0 ? '1C' : departureLeft <= 10 ? '14' : departureLeft <= 20 ? '0E' : departureLeft <= 30 ? '0A' : '08';
     const urgencyEdge = departureLeft == null ? null : departureLeft <= 0 ? '66' : departureLeft <= 10 ? '4D' : departureLeft <= 20 ? '3A' : '26';
     const cardBg = urgencyTone && urgencyEdge ? urgencyTone + urgencyWash : colors.surface;
-    const cardBorder = isEscalated ? colors.error : (urgencyTone && urgencyEdge ? urgencyTone + urgencyEdge : colors.border);
+    const cardBorder = action.isEscalated ? colors.error : (urgencyTone && urgencyEdge ? urgencyTone + urgencyEdge : colors.border);
     return (
       <div key={t.id} style={{
         ...taskCardBase,
         backgroundColor: cardBg,
-        border: `${isEscalated ? 2 : 1}px solid ${cardBorder}`,
+        border: `${action.isEscalated ? 2 : 1}px solid ${cardBorder}`,
       }}>
         <div style={{display: 'flex', alignItems: 'flex-start', gap: 12}}>
           <div style={{flex: 1, minWidth: 0}}>
@@ -1370,21 +1354,21 @@ export function ValetHomeScreen() {
               <Icon name={t.type === 'park' ? 'arrowDown' : 'arrowUp'} size={11} color={colors.textOnPrimary} />
               <span style={{fontSize: 10, fontWeight: 900, color: colors.textOnPrimary}}>{t.type === 'park' ? 'IN' : 'OUT'}</span>
             </span>
-            {(isMine || !!t.valetName) && (
+            {(action.isMine || !!t.valetName) && (
               <span style={{
                 borderRadius: 6, padding: '3px 7px', maxWidth: 96,
-                border: `1px solid ${isMine ? colors.primary + '55' : colors.border}`,
-                backgroundColor: isMine ? colors.primary + '1A' : 'transparent',
+                border: `1px solid ${action.isMine ? colors.primary + '55' : colors.border}`,
+                backgroundColor: action.isMine ? colors.primary + '1A' : 'transparent',
               }}>
-                <span style={{fontSize: 9.5, fontWeight: 900, letterSpacing: 0.6, color: isMine ? colors.primary : colors.textSecondary, ...ellipsis1}}>
-                  {isMine ? 'YOURS' : (t.valetName ?? '').split(' ')[0].toUpperCase()}
+                <span style={{fontSize: 9.5, fontWeight: 900, letterSpacing: 0.6, color: action.isMine ? colors.primary : colors.textSecondary, ...ellipsis1}}>
+                  {action.isMine ? 'YOURS' : (t.valetName ?? '').split(' ')[0].toUpperCase()}
                 </span>
               </span>
             )}
           </div>
         </div>
 
-        {isEscalated && (
+        {action.isEscalated && (
           <div style={{display: 'flex', alignItems: 'center', gap: 7, borderRadius: 10, padding: '9px 11px', marginTop: 12, backgroundColor: colors.error + '14'}}>
             <Icon name="bellAlert" size={13} color={colors.error} />
             <span style={{flex: 1, fontSize: 12.5, fontWeight: 800, color: colors.error}}>Needs a driver</span>
@@ -1409,18 +1393,18 @@ export function ValetHomeScreen() {
             </div>
           );
         })()}
-        {!!waitingNote && !isEscalated && (
-          <div style={{fontSize: 12, fontWeight: 600, marginTop: 10, color: colors.textMuted, ...ellipsis1}}>{waitingNote}</div>
+        {!!action.waitingNote && (
+          <div style={{fontSize: 12, fontWeight: 600, marginTop: 10, color: colors.textMuted, ...ellipsis1}}>{action.waitingNote}</div>
         )}
 
-        {(t.status === 'requested' || t.status === 'accepted') && (
+        {action.kind === 'assign_retrieval_request' && (
           <PressableScale style={{...taskActionBtnBase, marginTop: 12, backgroundColor: colors.primary}}
             onClick={() => handleAssignDriverTo(t)}>
             <Icon name="people" size={13} color={colors.textOnPrimary} />
             <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textOnPrimary}}>Assign driver</span>
           </PressableScale>
         )}
-        {needsDriver && claimedByOther && (
+        {action.kind === 'locked' && (
           <div style={{...taskActionBtnBase, marginTop: 12, border: `1px solid ${colors.border}`, backgroundColor: 'transparent'}}>
             <Icon name="lock" size={13} color={colors.textMuted} />
             <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textMuted}}>
@@ -1428,7 +1412,7 @@ export function ValetHomeScreen() {
             </span>
           </div>
         )}
-        {needsDriver && !claimedByOther && (
+        {action.kind === 'assign_or_cancel' && (
           <div style={{display: 'flex', gap: 8, marginTop: 12}}>
             <PressableScale style={{...taskActionBtnBase, flex: 1, backgroundColor: colors.primary}}
               onClick={() => handleAssignDriverTo(t)}>
@@ -1441,8 +1425,8 @@ export function ValetHomeScreen() {
             </PressableScale>
           </div>
         )}
-        {t.status === 'assigned' && !needsDriver && t.type === 'park' && (
-          awaitingAccept ? (
+        {(action.kind === 'awaiting_accept' || action.kind === 'key_handover') && (
+          action.kind === 'awaiting_accept' ? (
             <div style={{display: 'flex', gap: 8, marginTop: 12}}>
               <div style={{...taskActionBtnBase, flex: 1, border: `1px solid ${colors.border}`, backgroundColor: 'transparent'}}>
                 <Icon name="timer" size={13} color={colors.textMuted} />
@@ -1481,20 +1465,20 @@ export function ValetHomeScreen() {
             </PressableScale>
           )
         )}
-        {canRecall && (
+        {action.canRecall && (
           <PressableScale style={{...taskActionBtnBase, marginTop: 12, border: `1px solid ${colors.warning}`, backgroundColor: 'transparent'}}
             onClick={() => handleRecallTask(t.id, t.carNumber)}>
             <Icon name="back" size={13} color={colors.warning} />
             <span style={{fontSize: 12.5, fontWeight: 800, color: colors.warning}}>Bring car back</span>
           </PressableScale>
         )}
-        {recalled && (t.status === 'key_collected' || t.status === 'in_transit') && (
+        {action.isRecalledInTransit && (
           <div style={{...taskActionBtnBase, marginTop: 12, border: `1px solid ${colors.border}`, backgroundColor: 'transparent'}}>
             <Icon name="timer" size={13} color={colors.textMuted} />
             <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textMuted}}>Driver is bringing it back…</span>
           </div>
         )}
-        {needsConfirm && (
+        {action.kind === 'confirm_handover' && (
           <PressableScale
             style={{...taskActionBtnBase, marginTop: 12, backgroundColor: colors.success, opacity: confirmingTaskId === t.id ? 0.6 : 1}}
             disabled={confirmingTaskId === t.id}
@@ -1503,7 +1487,7 @@ export function ValetHomeScreen() {
               ? <span className="spinner" style={{width: 15, height: 15}} />
               : <Icon name="checkBold" size={14} color="#fff" />}
             <span style={{fontSize: 12.5, fontWeight: 800, color: '#fff'}}>
-              {confirmingTaskId === t.id ? 'Please wait…' : (recalled ? 'Confirm car returned' : 'Confirm handover')}
+              {confirmingTaskId === t.id ? 'Please wait…' : (action.wasRecalled ? 'Confirm car returned' : 'Confirm handover')}
             </span>
           </PressableScale>
         )}
