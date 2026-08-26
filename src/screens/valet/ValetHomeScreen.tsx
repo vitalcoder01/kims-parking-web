@@ -258,8 +258,15 @@ export function ValetHomeScreen() {
     const message = noDriverYet
       ? `${what} still has no driver. Assign one?`
       : `${reassignPrompt.driverName} ${why} for ${what}. Assign another driver?`;
+    // The dialog can sit open indefinitely — nothing forces an answer. By
+    // the time one arrives this prompt may have been superseded (another
+    // reassign landed) or the screen torn down, and acting on it would
+    // navigate to a job the valet was never asked about. The cleanup below
+    // marks this run stale; a stale answer is discarded.
+    let stale = false;
     (async () => {
       const reassignNow = await dialog.confirm({title, message, confirmText: 'Reassign now', cancelText: 'Later'});
+      if (stale) return;
       if (reassignNow) {
         if (reassignPrompt.kind === 'task' && reassignPrompt.task) {
           setPendingVisitorId(null);
@@ -281,8 +288,11 @@ export function ValetHomeScreen() {
           else tasksApi.acknowledge(id).catch(() => {});
         }
       }
-      clearReassignPrompt();
+      // Not ours to clear if superseded — that would dismiss a newer
+          // prompt the valet has not answered yet.
+          if (!stale) clearReassignPrompt();
     })();
+    return () => { stale = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reassignPrompt, clearReassignPrompt]);
 

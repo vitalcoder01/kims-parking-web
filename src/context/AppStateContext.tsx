@@ -338,8 +338,32 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
    */
   const fetchSeqRef = useRef(0);
 
+  /*
+   * Counts live mutations, so a refresh can tell whether the world moved
+   * underneath it.
+   *
+   * fetchAll reads a server snapshot taken when the request left. If a
+   * socket event lands while that request is in flight, the event carries
+   * NEWER truth than the snapshot -- but the snapshot arrives second and
+   * overwrites it. The job that just went in_transit reverts to assigned
+   * and stays wrong until the next unrelated event happens to repair it.
+   *
+   * Bumped by every socket handler that mutates entity state. fetchAll
+   * records it before the request and re-reads it on commit; a change means
+   * the snapshot is known-stale, so it is applied and then immediately
+   * followed by one more fetch to converge on the truth. Applying it is
+   * still right -- it is fresher than what was there for everything the
+   * event did not touch -- it just cannot be the last word.
+   */
+  const mutationSeqRef = useRef(0);
+  // Lets the converge pass call fetchAll without fetchAll depending on
+  // itself (a useCallback cannot reference its own identity).
+  const fetchAllRef = useRef<(() => Promise<void>) | null>(null);
+  const bumpMutation = useCallback(() => { mutationSeqRef.current += 1; }, []);
+
   const fetchAll = useCallback(async () => {
     const seq = ++fetchSeqRef.current;
+    const mutationsAtStart = mutationSeqRef.current;
     const [t, s, n, d, v, a] = await Promise.all([
       tasksApi.list(),
       slotsApi.list(),
@@ -362,6 +386,17 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     if (a) setArrivals(a.map(mapArrival));
     setHydrated(true);
 
+    // A socket event overtook this snapshot while it was in flight, so what
+    // we just applied is stale for whatever that event touched. One more
+    // pass settles it. Guarded by the seq check at the top, so a burst of
+    // events cannot turn this into a fetch loop: each retry supersedes the
+    // last rather than stacking.
+    if (mutationSeqRef.current !== mutationsAtStart) {
+      // setTimeout rather than a microtask: this lets the socket handler's
+      // own setState flush first, so the retry reads settled state.
+      setTimeout(() => { void fetchAllRef.current?.(); }, 0);
+    }
+
     // Authoritative stale-alarm check: a rollback that happened while this
     // tab was backgrounded/offline has no socket event to reach us, so if
     // nothing is actually awaiting this driver's acceptance after a full
@@ -374,6 +409,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
       if (!awaitingMe) stopAlarm();
     }
   }, [needsOpsData, needsVisitors]);
+  fetchAllRef.current = fetchAll;
 
   const userRef = useRef(user);
   userRef.current = user;
@@ -447,6 +483,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     socket.on('connect', () => { fetchAll().catch(() => {}); });
 
     socket.on('task:upsert', (raw: any) => {
+      bumpMutation(); // snapshot in flight is now stale — see mutationSeqRef
       const task = mapTask(raw);
       const me = userRef.current;
       setTasks(p => {
@@ -477,6 +514,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     });
 
     socket.on('visitor:upsert', (raw: any) => {
+      bumpMutation(); // snapshot in flight is now stale — see mutationSeqRef
       const visitor = mapVisitor(raw);
       setVisitors(p => upsertById(p, visitor));
       if (visitor.driverId) {
@@ -485,14 +523,17 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     });
 
     socket.on('slot:patch', (slot: ParkingSlot) => {
+      bumpMutation(); // snapshot in flight is now stale — see mutationSeqRef
       setSlots(p => upsertById(p, slot));
     });
 
     socket.on('driver:patch', (patch: Partial<Driver> & {id: number}) => {
+      bumpMutation(); // snapshot in flight is now stale — see mutationSeqRef
       setDrivers(p => p.map(d => (d.id === patch.id ? {...d, ...patch} : d)));
     });
 
     socket.on('notification:new', (raw: any) => {
+      bumpMutation(); // snapshot in flight is now stale — see mutationSeqRef
       const n = mapNotification(raw);
       setNotifs(p => (p.some(x => x.id === n.id) ? p : [n, ...p]));
       const me = userRef.current;
@@ -543,18 +584,22 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     // A retrieval just became someone's alone. Anyone who isn't that valet
     // drops it.
     socket.on('task:restrict', ({id, ownerValetId}: {id: number; ownerValetId: number}) => {
+      bumpMutation(); // snapshot in flight is now stale — see mutationSeqRef
       if (user.role !== 'valet' || user.id === ownerValetId) return;
       setTasks(p => p.filter(t => t.id !== id));
     });
 
     socket.on('task:recovery', ({task}: any) => {
+      bumpMutation(); // snapshot in flight is now stale — see mutationSeqRef
       setTasks(p => upsertById(p, mapTask(task)));
     });
 
     socket.on('arrival:upsert', (raw: any) => {
+      bumpMutation(); // snapshot in flight is now stale — see mutationSeqRef
       setArrivals(p => upsertById(p, mapArrival(raw)));
     });
     socket.on('arrival:remove', ({id}: {id: number}) => {
+      bumpMutation(); // snapshot in flight is now stale — see mutationSeqRef
       setArrivals(p => p.filter(a => a.id !== id));
     });
 
