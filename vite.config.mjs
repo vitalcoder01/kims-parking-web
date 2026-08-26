@@ -20,4 +20,21 @@ export default defineConfig({
   server: {port: 5173, host: true},
   esbuild: {tsconfigRaw},
   optimizeDeps: {esbuildOptions: {tsconfigRaw: JSON.stringify(tsconfigRaw)}},
+  build: {
+    rollupOptions: {
+      output: {
+        // Dependencies get their own chunk, separate from our code.
+        //
+        // We ship releases often and these libraries change on a completely
+        // different clock, so bundling them together meant every release
+        // invalidated ~200 kB of React/axios/socket.io that hadn't changed.
+        // Split out, a returning user re-downloads only what we actually
+        // edited and keeps the vendor chunk from cache.
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          net: ['axios', 'socket.io-client'],
+        },
+      },
+    },
+  },
 });
