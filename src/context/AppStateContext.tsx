@@ -203,6 +203,8 @@ interface AppState {
   cancelVisitorAssignment: (visitorId: number) => Promise<void>;
   cancelVisitor: (visitorId: number, reason: 'no_show' | 'valet_cancelled' | 'parking_failed') => Promise<void>;
   recallVisitor: (visitorId: number) => Promise<void>;
+  /** Valet: car gone, nobody asked — closes the session and frees the bay. */
+  closeParkedVisitor: (visitorId: number) => Promise<void>;
   assignRetrievalDriver: (visitorId: number, driverId: number) => Promise<void>;
   assignStaffRetrievalDriver: (doctorId: number, driverId: number) => Promise<void>;
   confirmVisitorDelivered: (visitorId: number) => Promise<void>;
@@ -948,6 +950,11 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
   // The linked ParkingTask (not the Visitor row) flips to recalled, via the
   // normal task:upsert delta — this just fires the request and refreshes
   // whatever the visitor row does mirror (e.g. driverName).
+  const closeParkedVisitor = useCallback(async (visitorId: number) => {
+    const updated = mapVisitor(await visitorsApi.closeParked(visitorId));
+    setVisitors(p => p.map(v => (v.id === visitorId ? updated : v)));
+  }, []);
+
   const recallVisitor = useCallback(async (visitorId: number) => {
     const updated = mapVisitor(await visitorsApi.recall(visitorId));
     setVisitors(p => p.map(v => (v.id === visitorId ? updated : v)));
@@ -1040,6 +1047,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     cancelVisitorAssignment,
     cancelVisitor,
     recallVisitor,
+    closeParkedVisitor,
     assignRetrievalDriver,
     assignStaffRetrievalDriver,
     confirmVisitorDelivered,
@@ -1047,7 +1055,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     markNotificationRead,
     clearNotifications,
     refreshTasks: fetchAll,
-  }), [drivers, tasks, slots, visitors, arrivalNotices, notifications, activeAlert, hydrated, reassignPrompt, clearReassignPrompt, dismissAlert, addTask, requestRetrieval, cancelMyRetrieval, sendArrivalNotice, acceptRetrieval, dismissArrivalNotice, updateTask, assignDriver, cancelTaskAssignment, acceptTask, rejectTask, markKeyCollected, markParked, markRetrieved, confirmTaskDelivered, cancelTask, closeParkedSession, recallTask, markTaskReturned, fetchTaskHistory, reportLocation, myArrivalNotice, refreshMyArrival, cancelMyArrival, setDriverStatus, addVisitor, assignVisitorDriver, cancelVisitorAssignment, cancelVisitor, recallVisitor, assignRetrievalDriver, assignStaffRetrievalDriver, confirmVisitorDelivered, pushNotification, markNotificationRead, clearNotifications, fetchAll]);
+  }), [drivers, tasks, slots, visitors, arrivalNotices, notifications, activeAlert, hydrated, reassignPrompt, clearReassignPrompt, dismissAlert, addTask, requestRetrieval, cancelMyRetrieval, sendArrivalNotice, acceptRetrieval, dismissArrivalNotice, updateTask, assignDriver, cancelTaskAssignment, acceptTask, rejectTask, markKeyCollected, markParked, markRetrieved, confirmTaskDelivered, cancelTask, closeParkedSession, recallTask, markTaskReturned, fetchTaskHistory, reportLocation, myArrivalNotice, refreshMyArrival, cancelMyArrival, setDriverStatus, addVisitor, assignVisitorDriver, cancelVisitorAssignment, cancelVisitor, recallVisitor, closeParkedVisitor, assignRetrievalDriver, assignStaffRetrievalDriver, confirmVisitorDelivered, pushNotification, markNotificationRead, clearNotifications, fetchAll]);
 
   const locationsValue = useMemo(
     () => ({driverLocations, onlineDriverIds}),

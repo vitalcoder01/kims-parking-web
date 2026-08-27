@@ -15,7 +15,7 @@ export {isMyRetrieval, isMyJobToRun};
 
 export function useValetActions() {
   const {drivers, tasks, visitors, arrivalNotices, dismissArrivalNotice, addTask, assignDriver, cancelTaskAssignment, markKeyCollected, pushNotification, addVisitor,
-    assignVisitorDriver, cancelVisitorAssignment, assignRetrievalDriver, assignStaffRetrievalDriver, cancelVisitor, recallVisitor,
+    assignVisitorDriver, cancelVisitorAssignment, assignRetrievalDriver, assignStaffRetrievalDriver, cancelVisitor, recallVisitor, closeParkedVisitor,
     confirmTaskDelivered, confirmVisitorDelivered, cancelTask, closeParkedSession, recallTask, fetchTaskHistory,
     acceptRetrieval} = useAppState();
   const {user} = useAuth();
@@ -56,7 +56,7 @@ export function useValetActions() {
   };
 
   return {
-    drivers, tasks, visitors, dismissArrivalNotice, addTask, addVisitor, pushNotification, markKeyCollected, cancelVisitor, recallVisitor,
+    drivers, tasks, visitors, dismissArrivalNotice, addTask, addVisitor, pushNotification, markKeyCollected, cancelVisitor, recallVisitor, closeParkedVisitor,
     arrivalNotices,
     acceptRetrieval, myValetId,
     activeTasks, availableDrivers, retrievalRequests, activeVisitors, hasActiveRetrievalDriver,

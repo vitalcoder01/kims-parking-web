@@ -117,7 +117,7 @@ export function ValetRecordsScreen() {
   const {colors} = useTheme();
   const dialog = useDialog();
   const {tasks, visitors, activeVisitors, availableDrivers, hasActiveRetrievalDriver,
-    assignVisitorPickupDriver, assignVisitorRetrievalDriver, assignStaffRetrievalDriver, cancelVisitor, cancelVisitorAssignment, recallVisitor, confirmVisitorDelivered,
+    assignVisitorPickupDriver, assignVisitorRetrievalDriver, assignStaffRetrievalDriver, cancelVisitor, cancelVisitorAssignment, recallVisitor, closeParkedVisitor, confirmVisitorDelivered,
     confirmTaskDelivered, fetchTaskHistory} = useValetActions();
 
   const [tab, setTab] = useState<RecordsTab>('visitors');
@@ -131,6 +131,35 @@ export function ValetRecordsScreen() {
   // below can serve both flows.
   const [pendingDoctorTaskId, setPendingDoctorTaskId] = useState<number | null>(null);
   const [assigningDriverId, setAssigningDriverId] = useState<number | null>(null);
+  const [closingVisitorId, setClosingVisitorId] = useState<number | null>(null);
+
+  /*
+   * "The car has gone and nobody ever asked for it."
+   *
+   * Frees the bay as well as closing the session, so the confirm says so
+   * plainly: if the car is in fact still sitting there, the next park job
+   * gets sent to an occupied space.
+   */
+  const handleCloseParked = async (v: Visitor) => {
+    if (closingVisitorId != null) return;
+    const ok = await dialog.confirm({
+      title: 'Car already left?',
+      message: `This closes ${v.carNumber ?? 'this visitor'}'s session${v.slotId ? ` and marks slot ${v.slotId} FREE` : ''}.
+
+Only do this if the car has physically gone — nobody ever asked for a retrieval.`,
+      confirmText: 'Yes, close it',
+      cancelText: 'Never mind',
+    });
+    if (!ok) return;
+    setClosingVisitorId(v.id);
+    try {
+      await closeParkedVisitor(v.id);
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not close this session', {title: 'Error'});
+    } finally {
+      setClosingVisitorId(null);
+    }
+  };
 
   // Browser/PWA back gesture — the Assign Driver screen (below) is a plain
   // conditional full-screen replace, not a real route. Mirrors mobile's
@@ -462,11 +491,24 @@ export function ValetRecordsScreen() {
           </div>
 
           {parkedIdle && (
-            <PressableScale style={actionBtnStyle(colors.primary)}
-              onClick={() => { setPendingVisitorId(v.id); setPendingMode('retrieve'); }}>
-              <span style={{fontSize: 14, fontWeight: 700, color: colors.textOnPrimary}}>Request retrieval</span>
-              <Icon name="arrowRight" size={15} color={colors.textOnPrimary} />
-            </PressableScale>
+            <>
+              <PressableScale style={actionBtnStyle(colors.primary)}
+                onClick={() => { setPendingVisitorId(v.id); setPendingMode('retrieve'); }}>
+                <span style={{fontSize: 14, fontWeight: 700, color: colors.textOnPrimary}}>Request retrieval</span>
+                <Icon name="arrowRight" size={15} color={colors.textOnPrimary} />
+              </PressableScale>
+              {/* Secondary on purpose — it frees a bay, and must never be the
+                  button someone hits by muscle memory. */}
+              <PressableScale
+                onClick={() => handleCloseParked(v)}
+                disabled={closingVisitorId === v.id}
+                style={{...actionBtnStyle('transparent'), border: `1px solid ${colors.border}`, marginTop: 8}}
+              >
+                <span style={{fontSize: 14, fontWeight: 700, color: colors.textSecondary}}>
+                  {closingVisitorId === v.id ? 'Closing…' : 'Car already left'}
+                </span>
+              </PressableScale>
+            </>
           )}
           {needsDriver && (
             <PressableScale style={actionBtnStyle(colors.warning)}
