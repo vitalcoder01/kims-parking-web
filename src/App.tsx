@@ -9,6 +9,8 @@ import {AlarmBanner} from './components/AlarmBanner';
 import {InstallBanner} from './components/InstallBanner';
 import {UpdateBanner} from './components/UpdateBanner';
 import {ErrorBoundary} from './components/ErrorBoundary';
+import {CopilotOverlay} from './components/copilot/CopilotOverlay';
+import {installCrashReporting, setCurrentScreen} from './services/crashReporting';
 // LoginScreen stays eager: it is what a signed-out visitor sees first, and
 // making the very first paint wait on a second round-trip would be a
 // pessimisation, not an optimisation.
@@ -120,6 +122,24 @@ interface TabDef {
   headerTitle: string | null; // null = headerShown: false
 }
 
+/*
+ * Where the creature may wander, by role.
+ *
+ * Opt-in and deliberately short. Several tabs host their own internal
+ * sub-views in local state — ValetHomeScreen switches between scan, assign,
+ * visitor and retrievals without the tab ever changing — so roaming on the
+ * strength of a tab name would put a drifting character over exactly the
+ * work it must never cover. Valet therefore keeps the creature everywhere,
+ * corner-anchored and still reporting, and wanders only on Analytics.
+ */
+const ROAMS_ON: Record<string, readonly TabKey[]> = {
+  valet: ['Analytics'],
+  driver: ['DriverDashboard'],
+  admin: ['Dashboard', 'Analytics'],
+  doctor: ['Home'],
+  staff: ['Home'],
+};
+
 // Which chunk backs each tab. Only used for prefetching — the render path
 // below still picks the component directly.
 const LOADER_FOR_TAB: Record<TabKey, () => Promise<unknown>> = {
@@ -200,6 +220,10 @@ function RoleRouter() {
 
   const tabs = tabsForRole(user?.role);
   const activeTab = tabs.find(t => t.key === tab);
+
+  // Gives every crash report a screen name, so a fault arrives as
+  // "Records" rather than an anonymous minified stack.
+  useEffect(() => { setCurrentScreen(tab); }, [tab]);
 
   /*
    * Once the first screen is up and the browser is idle, quietly fetch the
@@ -296,6 +320,22 @@ function RoleRouter() {
         </ErrorBoundary>
       </div>
 
+      {/* Only once signed in, and never over the login screen: there is
+          nothing to observe there and no session to report against. */}
+      <CopilotOverlay
+        idleScreen={(ROAMS_ON[user?.role ?? ''] ?? []).includes(tab)}
+        onNavigate={insight => {
+          const target = insight.action?.target;
+          if (!target) return;
+          setTab(
+            target === 'records' ? (user?.role === 'valet' ? 'Records' : 'Home')
+            : target === 'dashboard' ? (user?.role === 'valet' ? 'Queue' : 'Dashboard')
+            : target === 'map' ? (user?.role === 'valet' ? 'ValetMap' : 'Map')
+            : 'Home',
+          );
+        }}
+      />
+
       {/* Bottom tab bar */}
       <div style={{
         display: 'flex', height: 62, flexShrink: 0,
@@ -362,6 +402,13 @@ function AppInner() {
     ? <Suspense fallback={<ScreenFallback />}><SignUpScreen onBackToLogin={() => setShowSignUp(false)} /></Suspense>
     : <LoginScreen onSignUp={() => setShowSignUp(true)} />;
 }
+
+/*
+ * Installed at module scope, not in an effect: a fault thrown during the
+ * first render happens before any effect runs, and an app that dies on
+ * launch otherwise reports nothing at all.
+ */
+installCrashReporting();
 
 export default function App() {
   return (

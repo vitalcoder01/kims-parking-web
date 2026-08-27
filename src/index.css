@@ -183,3 +183,58 @@ input:focus {
 .screen-enter {
   animation: kims-fade-in 0.18s ease-out;
 }
+
+/* ── Co-pilot creature ─────────────────────────────────────────────────────
+ *
+ * Animation lives here, in CSS, rather than in React state.
+ *
+ * transform and opacity are compositor-only properties: the browser animates
+ * them off the main thread, so a breathing, blinking creature costs no
+ * JavaScript per frame and triggers no React re-renders. Driving this from
+ * requestAnimationFrame and setState would re-render a subtree sixty times a
+ * second forever — which is exactly the pattern this app spent a session
+ * removing from its valet and doctor screens.
+ *
+ * prefers-reduced-motion is honoured at the bottom: someone who has asked
+ * their system to stop things moving should not be given a wandering pet.
+ */
+@keyframes kp-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.045); }
+}
+@keyframes kp-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95%           { transform: scaleY(0.1); }
+}
+@keyframes kp-hop {
+  0%   { transform: translateY(0); }
+  35%  { transform: translateY(-28%); }
+  100% { transform: translateY(0); }
+}
+@keyframes kp-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+.kp-creature       { animation: kp-breathe 3.6s ease-in-out infinite; will-change: transform; }
+.kp-creature-eyes  { animation: kp-blink 6s ease-in-out infinite; will-change: transform; }
+.kp-creature-hop   { animation: kp-hop 0.62s cubic-bezier(.34,1.56,.64,1) 1; }
+.kp-creature-pulse { animation: kp-pulse 1s ease-in-out infinite; }
+.kp-creature-asleep, .kp-creature-asleep .kp-creature-eyes { animation: none; }
+
+/* The wander. A slow drift confined to the right-hand band — it reads as
+ * alive without ever crossing the middle, where content lives. Slow on
+ * purpose: quick movement in peripheral vision reads as an alert. */
+@keyframes kp-roam {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(-22px, -120px); }
+  50%  { transform: translate(-6px, -240px); }
+  75%  { transform: translate(-30px, -110px); }
+  100% { transform: translate(0, 0); }
+}
+.kp-roaming { animation: kp-roam 34s ease-in-out infinite; will-change: transform; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kp-creature, .kp-creature-eyes, .kp-creature-hop,
+  .kp-creature-pulse, .kp-roaming { animation: none !important; }
+}

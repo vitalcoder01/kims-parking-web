@@ -277,6 +277,33 @@ export interface OpsSettings {
   retrievalLeadTimeMinutes: string;
 }
 
+// ── Diagnostics ──────────────────────────────────────────────────────────
+export const diagnosticsApi = {
+  /*
+   * Fire-and-forget crash intake. Answers 202 whether or not a row was
+   * written (duplicates from a looping client are dropped), so there is
+   * deliberately nothing here to branch on: a reporter that hands the app a
+   * result to handle is a second failure waiting inside the error path of
+   * the first.
+   */
+  reportError: (report: {
+    fingerprint: string;
+    platform: 'android' | 'web';
+    appVersion: string;
+    name: string;
+    message: string;
+    stack?: string;
+    screen?: string;
+  }): Promise<void> =>
+    client.post('/diagnostics/errors', report).then(() => undefined),
+
+  listErrors: (includeResolved = false) =>
+    client.get('/diagnostics/errors', {params: {includeResolved}}).then(r => r.data.errors),
+
+  resolveError: (id: number) =>
+    client.patch(`/diagnostics/errors/${id}/resolve`).then(r => r.data.error),
+};
+
 export const adminApi = {
   dashboard: () => client.get('/admin/dashboard').then(r => r.data),
   listUsers: () => client.get('/admin/users').then(r => r.data.users),

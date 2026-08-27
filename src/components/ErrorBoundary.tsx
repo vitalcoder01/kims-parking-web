@@ -1,4 +1,5 @@
 import React from 'react';
+import {report} from '../services/crashReporting';
 
 /*
  * Catches render-time exceptions so one broken screen stops being a blank
@@ -16,15 +17,17 @@ import React from 'react';
  * And whoever is debugging gets the actual error and component stack on
  * screen -- on the phone, in the field, without a laptop attached.
  *
- * Deliberately NOT reported to a backend. There is no error-tracking
- * service wired up here, and inventing a silent network call from a crash
- * handler is how you turn one bug into two.
+ * It also reports the fault (see services/crashReporting), so it reaches
+ * whoever can fix it without waiting for someone to notice, photograph it
+ * and describe it -- which is exactly how the valet crash above was found,
+ * hours late.
  *
  * Note this cannot catch everything. React error boundaries see render,
  * lifecycle and constructor errors -- not event handlers, not async
- * callbacks, not anything inside setTimeout. Those still surface as
- * unhandled rejections in the console. What it does cover is the class
- * that blanks the screen.
+ * callbacks, not anything inside setTimeout. In this codebase that second
+ * group is the common shape, which is why crashReporting also installs
+ * window 'error' and 'unhandledrejection' handlers; a boundary alone was
+ * never going to be enough.
  */
 
 interface Props {
@@ -49,6 +52,9 @@ export class ErrorBoundary extends React.Component<Props, State> {
     // Keep it in the console too — the on-screen copy is truncated for
     // readability, and the console keeps the full stack and the source map.
     console.error('[ErrorBoundary]', error, info.componentStack);
+    // And send it, so a fault reaches whoever can fix it without waiting for
+    // someone to notice and describe it by hand.
+    report(error);
     this.setState({componentStack: info.componentStack ?? null});
   }
 

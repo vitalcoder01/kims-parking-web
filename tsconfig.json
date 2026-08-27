@@ -16,5 +16,9 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Specs run under scripts/run-copilot-tests.ts (see its header), not as
+  // part of the app build — keeping them here would mean pulling jest types
+  // into the shipped app's typecheck for no benefit.
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }
