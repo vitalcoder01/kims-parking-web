@@ -320,19 +320,37 @@ function RoleRouter() {
         </ErrorBoundary>
       </div>
 
-      {/* Only once signed in, and never over the login screen: there is
-          nothing to observe there and no session to report against. */}
+      {/* Rendered inside RoleRouter, so it only ever exists once signed in —
+          there is nothing to observe on the login screen and no session to
+          report a crash against. */}
       <CopilotOverlay
         idleScreen={(ROAMS_ON[user?.role ?? ''] ?? []).includes(tab)}
         onNavigate={insight => {
           const target = insight.action?.target;
           if (!target) return;
-          setTab(
-            target === 'records' ? (user?.role === 'valet' ? 'Records' : 'Home')
-            : target === 'dashboard' ? (user?.role === 'valet' ? 'Queue' : 'Dashboard')
-            : target === 'map' ? (user?.role === 'valet' ? 'ValetMap' : 'Map')
-            : 'Home',
-          );
+          /*
+           * An insight names a PLACE ('dashboard'), not a tab key, because
+           * the same rule serves every role and the key differs per role —
+           * a valet's dashboard is 'Queue', a driver's is 'DriverDashboard',
+           * an admin's is 'Dashboard'. Resolving that here rather than in
+           * the engine keeps the rules free of routing.
+           *
+           * The result is then checked against the tabs this role actually
+           * has. Without that check a driver tapping "Open" on their own
+           * unaccepted job landed on 'Dashboard' — the ADMIN dashboard —
+           * because a driver has no tab by that name. Falling back to the
+           * role's first tab means a wrong mapping is a harmless
+           * no-op instead of showing someone another role's screen.
+           */
+          const wanted =
+              target === 'records'   ? (user?.role === 'valet' ? 'Records' : 'Home')
+            : target === 'dashboard' ? (user?.role === 'valet' ? 'Queue'
+                                      : user?.role === 'driver' ? 'DriverDashboard'
+                                      : 'Dashboard')
+            : target === 'map'       ? (user?.role === 'valet' ? 'ValetMap' : 'Map')
+            : 'Home';
+          const reachable = tabs.some(t => t.key === wanted);
+          setTab(reachable ? (wanted as TabKey) : tabs[0].key);
         }}
       />
 
