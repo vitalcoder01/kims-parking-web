@@ -179,6 +179,22 @@ export function ValetRecordsScreen() {
   // Detail sheet — shared by both tabs, holds whichever ticket was tapped.
   const [detailVisitor, setDetailVisitor] = useState<Visitor | null>(null);
   const [detailTask, setDetailTask] = useState<ParkingTask | null>(null);
+
+  const closeDetail = () => { setDetailVisitor(null); setDetailTask(null); };
+  /*
+   * Has to stay ABOVE every early return in this component, not next to the
+   * detail sheet it belongs to.
+   *
+   * It used to sit just before the main return, below the assign-driver
+   * step's `if (pendingVisitor || pendingDoctorTask) return`. That branch is
+   * taken the moment a valet opens a retrieval request, so this hook ran on
+   * the previous render and not on that one -- fewer hooks than React saw
+   * last time, which is React error #300 and takes the whole screen down.
+   *
+   * The condition it is given already handles "no detail sheet open"; a hook
+   * must be called unconditionally and decide internally, never be skipped.
+   */
+  useBackStep(!!(detailVisitor || detailTask), closeDetail);
   // Every staff/doctor session ever, not just each doctor's single current
   // one — the live `tasks` array is deliberately bounded to "at most one row
   // per doctor" now, so this tab's actual record view needs its own fetch.
@@ -671,9 +687,6 @@ export function ValetRecordsScreen() {
     ...(detailTask.assignedAt ? [['Assigned', fmtTime(detailTask.assignedAt)!]] as [string, string][] : []),
     ...(detailTask.completedAt ? [['Completed', fmtTime(detailTask.completedAt)!]] as [string, string][] : []),
   ] : null;
-
-  const closeDetail = () => { setDetailVisitor(null); setDetailTask(null); };
-  useBackStep(!!(detailVisitor || detailTask), closeDetail);
 
   return (
     <div style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, backgroundColor: colors.background}}>
