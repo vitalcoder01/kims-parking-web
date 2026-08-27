@@ -199,8 +199,26 @@ input:focus {
  * their system to stop things moving should not be given a wandering pet.
  */
 @keyframes kp-breathe {
+  0%, 100% { transform: scale(1) translateY(0); }
+  50%      { transform: scale(1.075) translateY(-4%); }
+}
+
+/* A second, slower breath for the resting state. The first version killed
+ * all animation when there was nothing to report, and a flat circle at 40%
+ * that never moves reads as a rendering bug rather than a resting animal.
+ * Something asleep still breathes. */
+@keyframes kp-breathe-slow {
   0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.045); }
+  50%      { transform: scale(1.035); }
+}
+
+/* Glancing about — irregular by construction (the keyframe stops are not
+ * evenly spaced), which is the single strongest cue that something is
+ * paying attention rather than animating on a timer. */
+@keyframes kp-glance {
+  0%, 34%, 100% { transform: translateX(0); }
+  42%, 52%      { transform: translateX(-7%); }
+  68%, 78%      { transform: translateX(7%); }
 }
 @keyframes kp-blink {
   0%, 92%, 100% { transform: scaleY(1); }
@@ -216,11 +234,13 @@ input:focus {
   50%      { opacity: 0.55; }
 }
 
-.kp-creature       { animation: kp-breathe 3.6s ease-in-out infinite; will-change: transform; }
-.kp-creature-eyes  { animation: kp-blink 6s ease-in-out infinite; will-change: transform; }
+.kp-creature       { animation: kp-breathe 3.4s ease-in-out infinite; will-change: transform; }
+.kp-creature-eyes  { animation: kp-blink 6s ease-in-out infinite, kp-glance 11s ease-in-out infinite; will-change: transform; }
 .kp-creature-hop   { animation: kp-hop 0.62s cubic-bezier(.34,1.56,.64,1) 1; }
 .kp-creature-pulse { animation: kp-pulse 1s ease-in-out infinite; }
-.kp-creature-asleep, .kp-creature-asleep .kp-creature-eyes { animation: none; }
+/* Asleep still breathes, just slower and shallower, and stops glancing. */
+.kp-creature-asleep      { animation: kp-breathe-slow 6.4s ease-in-out infinite; }
+.kp-creature-asleep .kp-creature-eyes { animation: kp-blink 9s ease-in-out infinite; }
 
 /* The wander. A slow drift confined to the right-hand band — it reads as
  * alive without ever crossing the middle, where content lives. Slow on

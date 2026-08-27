@@ -4,6 +4,7 @@ import {PressableScale} from '../PressableScale';
 import {Icon} from '../Icon';
 import {Creature} from './Creature';
 import {useCopilot} from './useCopilot';
+import {CopilotPanel} from './CopilotPanel';
 import type {Insight} from '../../core/copilot/insights';
 
 /*
@@ -38,9 +39,10 @@ interface Props {
 
 export function CopilotOverlay({idleScreen = false, onNavigate}: Props) {
   const {colors} = useTheme();
-  const {top, mood, dismiss, disabled} = useCopilot();
+  const {insights, top, mood, dismiss, disabled} = useCopilot();
 
   const [expanded, setExpanded] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [canRoam, setCanRoam] = useState(false);
   const [idleSince, setIdleSince] = useState(() => Date.now());
 
@@ -66,13 +68,33 @@ export function CopilotOverlay({idleScreen = false, onNavigate}: Props) {
   }, [idleScreen, expanded, top?.severity, idleSince]);
 
   if (disabled) return null;
-  // Nothing to say and nowhere interesting to be: render nothing rather than
-  // park a decoration on top of someone's work.
-  if (!top && !idleScreen) return null;
+  /*
+   * Rendered even with nothing to report. The earlier version hid itself on
+   * non-idle screens when quiet, which also hid the panel — and the panel is
+   * most of the value. Dimmed and breathing slowly when idle, so it costs a
+   * corner rather than attention.
+   */
 
   const sev = top?.severity ?? null;
 
   return (
+    <>
+    {/*
+      * The panel is a SIBLING of the creature, never a child.
+      *
+      * The creature's container is position:absolute, pointer-events:none and
+      * animated while roaming. Nesting the panel inside it made inset:0 size
+      * to the 46px creature instead of the frame, left the sheet
+      * unclickable, and dragged the whole panel along with the wander.
+      */}
+    <CopilotPanel
+      visible={panelOpen}
+      onClose={() => setPanelOpen(false)}
+      insights={insights}
+      onAct={i => onNavigate?.(i)}
+      onDismiss={dismiss}
+    />
+
     <div
       className={canRoam ? 'kp-roaming' : undefined}
       style={{
@@ -124,7 +146,8 @@ export function CopilotOverlay({idleScreen = false, onNavigate}: Props) {
 
       <div style={{display: 'flex', alignItems: 'flex-end', gap: 6, pointerEvents: 'auto'}}>
         {!expanded && top && (
-          <span
+          <PressableScale
+            onClick={() => setExpanded(true)}
             style={{
               width: 18, height: 18, borderRadius: 9,
               border: `1px solid ${colors.border}`, background: colors.surface,
@@ -132,12 +155,18 @@ export function CopilotOverlay({idleScreen = false, onNavigate}: Props) {
             }}
           >
             <Icon name="alert" size={11} color={sev === 'critical' ? '#E5484D' : colors.textSecondary} />
-          </span>
+          </PressableScale>
         )}
+        {/*
+          * Always tappable now, insight or not. It used to be disabled with
+          * nothing to report, which made the creature dead weight most of the
+          * day — and everything behind the tap (health check, shift summary,
+          * find a car, report a problem) is exactly as useful on a quiet
+          * shift as a busy one.
+          */}
         <PressableScale
-          onClick={() => { if (top) setExpanded(v => !v); }}
-          disabled={!top}
-          style={{background: 'transparent', border: 'none', padding: 0, cursor: top ? 'pointer' : 'default'}}
+          onClick={() => setPanelOpen(true)}
+          style={{background: 'transparent', border: 'none', padding: 0, cursor: 'pointer'}}
         >
           <Creature
             mood={mood}
@@ -149,5 +178,6 @@ export function CopilotOverlay({idleScreen = false, onNavigate}: Props) {
         </PressableScale>
       </div>
     </div>
+    </>
   );
 }

@@ -4,6 +4,7 @@ import {connectSocket, disconnectSocket, emitDriverLocation} from '../services/s
 import {ringAlarm, stopAlarm, playChime} from '../services/alarm';
 import {initWebPush} from '../services/webPush';
 import {getSwRegistration} from '../services/swRegistration';
+import {markSynced, markSyncFailed} from '../services/syncClock';
 import {getCurrentPositionSafe} from '../utils/location';
 import {useAuth} from './AuthContext';
 
@@ -385,6 +386,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     if (visitorRows) setVisitors(visitorRows);
     if (a) setArrivals(a.map(mapArrival));
     setHydrated(true);
+    markSynced();
 
     // A socket event overtook this snapshot while it was in flight, so what
     // we just applied is stale for whatever that event touched. One more
@@ -480,7 +482,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     if (!token) return;
     const socket = connectSocket(token);
 
-    socket.on('connect', () => { fetchAll().catch(() => {}); });
+    socket.on('connect', () => { fetchAll().catch(() => markSyncFailed()); });
 
     socket.on('task:upsert', (raw: any) => {
       bumpMutation(); // snapshot in flight is now stale — see mutationSeqRef
@@ -631,7 +633,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
   useEffect(() => {
     if (!user) return;
     const onVisible = () => {
-      if (document.visibilityState === 'visible') fetchAll().catch(() => {});
+      if (document.visibilityState === 'visible') fetchAll().catch(() => markSyncFailed());
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);

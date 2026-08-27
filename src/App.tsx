@@ -133,7 +133,7 @@ interface TabDef {
  * corner-anchored and still reporting, and wanders only on Analytics.
  */
 const ROAMS_ON: Record<string, readonly TabKey[]> = {
-  valet: ['Analytics'],
+  valet: ['Queue', 'Analytics'],
   driver: ['DriverDashboard'],
   admin: ['Dashboard', 'Analytics'],
   doctor: ['Home'],

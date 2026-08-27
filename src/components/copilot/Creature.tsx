@@ -59,7 +59,7 @@ export function Creature({mood, severity, size = 46, restColor, eyeColor}: Props
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: mood === 'asleep' ? 0.4 : 1,
+        opacity: mood === 'asleep' ? 0.55 : 1,
         transition: 'opacity 400ms ease, background 300ms ease',
         flexShrink: 0,
       }}
