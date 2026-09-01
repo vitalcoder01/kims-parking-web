@@ -100,7 +100,11 @@ export function CopilotOverlay({idleScreen = false, onNavigate}: Props) {
       style={{
         position: 'absolute',
         right: 16,
-        bottom: 78, // clear of the bottom tab bar
+        // Clear of the bottom tab bar (62px tall). The previous 78px left
+        // only ~16px of gap above it, which put the creature's tap target
+        // right against — and on some phones over — the last tab
+        // (Settings, since it's rightmost and the creature anchors right).
+        bottom: 104,
         zIndex: 40,
         display: 'flex',
         flexDirection: 'column',
