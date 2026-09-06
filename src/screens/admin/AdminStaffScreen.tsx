@@ -2,13 +2,14 @@ import React, {useState, useEffect, useCallback} from 'react';
 import {PressableScale} from '../../components/PressableScale';
 import {useDialog} from '../../components/AppDialog';
 import {useBackStep} from '../../hooks/useBackStep';
-import {useTheme} from '../../context/ThemeContext';
 import {adminApi} from '../../services/api';
-import {Badge} from '../../components/Badge';
 import {Icon, IconName} from '../../components/Icon';
 import {spacing, radius, typography} from '../../theme';
+import {dark, darkCard, DarkPill} from './adminDarkTheme';
 
-// Direct port of the mobile app's AdminStaffScreen.
+// Direct port of the mobile app's AdminStaffScreen, restyled onto the
+// shared dark ops-console tokens (see ./adminDarkTheme) — same logic and
+// data, only the surface changed.
 type Filter = 'all' | 'doctor' | 'staff' | 'valet' | 'driver' | 'admin';
 type Role = 'doctor' | 'staff' | 'valet' | 'driver' | 'admin';
 
@@ -51,7 +52,6 @@ function genPassword() {
 const roleLabel = (r: Role) => ({doctor: 'Doctor', staff: 'Staff', valet: 'Valet', driver: 'Driver', admin: 'Admin'}[r]);
 
 export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filter} = {}) {
-  const {colors} = useTheme();
   const dialog = useDialog();
   const [filter, setFilter] = useState<Filter>(initialFilter);
   const [query, setQuery] = useState('');
@@ -207,17 +207,17 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
 
   const statusBadge = (u: AdminUser) => {
     if (u.role !== 'driver') return null;
-    if (u.driverStatus === 'busy') return <Badge label="On Task" variant="warning" dot />;
-    if (u.driverStatus === 'available') return <Badge label="Ready" variant="success" dot />;
-    return <Badge label="Off Duty" variant="muted" />;
+    if (u.driverStatus === 'busy') return <DarkPill label="On Task" color={dark.warning} />;
+    if (u.driverStatus === 'available') return <DarkPill label="Ready" color={dark.success} />;
+    return <DarkPill label="Off Duty" color={dark.textMuted} />;
   };
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', border: `1.5px solid ${colors.border}`, borderRadius: 12, padding: '0 14px',
-    height: 50, fontSize: 15, fontWeight: 600, backgroundColor: colors.surface, color: colors.textPrimary,
+    width: '100%', border: `1.5px solid ${dark.border}`, borderRadius: 12, padding: '0 14px',
+    height: 50, fontSize: 15, fontWeight: 600, backgroundColor: dark.surface, color: dark.textPrimary,
     boxSizing: 'border-box',
   };
-  const fieldLabel: React.CSSProperties = {fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 8, marginTop: 16, color: colors.textMuted};
+  const fieldLabel: React.CSSProperties = {fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 8, marginTop: 16, color: dark.textMuted};
 
   // ── Add/Edit Staff form ──────────────────────────────────────────────
   if (showAdd) {
@@ -228,12 +228,12 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
     const canSubmit = name.trim() && employeeId.trim() && (isEdit || password.trim()) && !submitting;
 
     return (
-      <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 40}}>
+      <div className="screen-scroll" style={{backgroundColor: dark.bg, paddingBottom: 40}}>
         <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 0'}}>
-          <PressableScale onClick={closeForm} style={{borderRadius: 10, border: `1px solid ${colors.border}`, padding: '8px 12px', backgroundColor: colors.surface}}>
-            <span style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>← Back</span>
+          <PressableScale onClick={closeForm} style={{borderRadius: 10, border: `1px solid ${dark.border}`, padding: '8px 12px', backgroundColor: dark.surface}}>
+            <span style={{fontSize: 13, fontWeight: 700, color: dark.textPrimary}}>← Back</span>
           </PressableScale>
-          <span style={{fontSize: 17, fontWeight: 900, color: colors.textPrimary}}>{isEdit ? 'Edit Staff' : 'Add Staff'}</span>
+          <span style={{fontSize: 17, fontWeight: 900, color: dark.textPrimary}}>{isEdit ? 'Edit Staff' : 'Add Staff'}</span>
           <div style={{width: 70}} />
         </div>
 
@@ -244,9 +244,9 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
               const on = role === r.key;
               return (
                 <PressableScale key={r.key} onClick={() => setRole(r.key)}
-                  style={{display: 'flex', alignItems: 'center', gap: 6, border: `1.5px solid ${on ? colors.primary : colors.border}`, borderRadius: radius.full, padding: '10px 14px', backgroundColor: on ? colors.primary : colors.surface}}>
-                  <Icon name={r.icon} size={18} color={on ? colors.textOnPrimary : colors.textMuted} />
-                  <span style={{fontSize: 12, fontWeight: 700, color: on ? colors.textOnPrimary : colors.textSecondary}}>{r.label}</span>
+                  style={{display: 'flex', alignItems: 'center', gap: 6, border: `1.5px solid ${on ? dark.accent : dark.border}`, borderRadius: radius.full, padding: '10px 14px', backgroundColor: on ? dark.accent : dark.surface}}>
+                  <Icon name={r.icon} size={18} color={on ? '#fff' : dark.textMuted} />
+                  <span style={{fontSize: 12, fontWeight: 700, color: on ? '#fff' : dark.textSecondary}}>{r.label}</span>
                 </PressableScale>
               );
             })}
@@ -256,20 +256,20 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
           <input style={inputStyle} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Kavita Reddy" />
 
           {isEdit && editingUser && (
-            <div style={{borderRadius: 12, border: `1px solid ${colors.primary}30`, padding: 12, marginTop: 14, backgroundColor: colors.primary + '10'}}>
-              <div style={{fontSize: 9, fontWeight: 800, letterSpacing: 1, color: colors.textMuted}}>LOGS IN AS</div>
-              <div style={{fontSize: 15, fontWeight: 900, marginTop: 3, color: colors.primary}}>{editingUser.username}</div>
+            <div style={{borderRadius: 12, border: `1px solid ${dark.accent}30`, padding: 12, marginTop: 14, backgroundColor: dark.accent + '10'}}>
+              <div style={{fontSize: 9, fontWeight: 800, letterSpacing: 1, color: dark.textMuted}}>LOGS IN AS</div>
+              <div style={{fontSize: 15, fontWeight: 900, marginTop: 3, color: dark.accent}}>{editingUser.username}</div>
             </div>
           )}
           {!isEdit && (
-            <div style={{fontSize: 11, marginTop: 10, lineHeight: '16px', color: colors.textMuted}}>
+            <div style={{fontSize: 11, marginTop: 10, lineHeight: '16px', color: dark.textMuted}}>
               Their username is generated automatically — they'll sign in as "{previewUsername}".
             </div>
           )}
 
           <div style={fieldLabel}>EMPLOYEE ID{isEdit ? ' (FIXED)' : ''} — internal reference only</div>
           <input
-            style={{...inputStyle, backgroundColor: isEdit ? colors.background : colors.surface, color: isEdit ? colors.textMuted : colors.textPrimary}}
+            style={{...inputStyle, backgroundColor: isEdit ? dark.bg : dark.surface, color: isEdit ? dark.textMuted : dark.textPrimary}}
             value={employeeId} onChange={e => setEmployeeId(e.target.value.toUpperCase())} placeholder="e.g. DOC010"
             disabled={isEdit}
           />
@@ -294,14 +294,14 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
           {!isEdit && (
             <>
               <div style={fieldLabel}>PASSWORD</div>
-              <div style={{display: 'flex', alignItems: 'center', border: `1.5px solid ${colors.border}`, borderRadius: 12, padding: '0 14px', height: 50, backgroundColor: colors.surface}}>
-                <input style={{flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 15, fontWeight: 700, color: colors.textPrimary}}
+              <div style={{display: 'flex', alignItems: 'center', border: `1.5px solid ${dark.border}`, borderRadius: 12, padding: '0 14px', height: 50, backgroundColor: dark.surface}}>
+                <input style={{flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 15, fontWeight: 700, color: dark.textPrimary}}
                   value={password} onChange={e => setPassword(e.target.value)} />
                 <PressableScale onClick={() => setPassword(genPassword())} style={{paddingLeft: 10}}>
-                  <span style={{fontSize: 12, fontWeight: 700, color: colors.primary}}>Regenerate</span>
+                  <span style={{fontSize: 12, fontWeight: 700, color: dark.accent}}>Regenerate</span>
                 </PressableScale>
               </div>
-              <div style={{fontSize: 11, marginTop: 8, lineHeight: '16px', color: colors.textMuted}}>
+              <div style={{fontSize: 11, marginTop: 8, lineHeight: '16px', color: dark.textMuted}}>
                 {password.length > 0 && password.length < 8
                   ? '⚠ Password must be at least 8 characters.'
                   : "Share this with the new hire directly — it won't be shown again after creating the account."}
@@ -310,7 +310,7 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
           )}
 
           <PressableScale
-            style={{width: '100%', borderRadius: radius.full, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 28, backgroundColor: colors.primary, opacity: canSubmit ? 1 : 0.4}}
+            style={{width: '100%', borderRadius: radius.full, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 28, backgroundColor: dark.accent, opacity: canSubmit ? 1 : 0.4}}
             onClick={isEdit ? handleSaveEdit : handleCreate}
             disabled={!canSubmit}
           >
@@ -320,20 +320,20 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
           {isEdit && (
             <>
               <PressableScale
-                style={{width: '100%', borderRadius: radius.full, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1.5px solid ${colors.border}`, backgroundColor: 'transparent', opacity: resettingPassword ? 0.6 : 1}}
+                style={{width: '100%', borderRadius: radius.full, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1.5px solid ${dark.border}`, backgroundColor: 'transparent', opacity: resettingPassword ? 0.6 : 1}}
                 disabled={resettingPassword || deleting}
                 onClick={handleResetPassword}>
                 {resettingPassword
-                  ? <span className="spinner" style={{width: 16, height: 16, borderColor: colors.border, borderTopColor: colors.textPrimary}} />
-                  : <span style={{fontSize: 14, fontWeight: 700, color: colors.textPrimary}}>Reset Password</span>}
+                  ? <span className="spinner" style={{width: 16, height: 16, borderColor: dark.border, borderTopColor: dark.textPrimary}} />
+                  : <span style={{fontSize: 14, fontWeight: 700, color: dark.textPrimary}}>Reset Password</span>}
               </PressableScale>
               <PressableScale
-                style={{width: '100%', borderRadius: radius.full, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1.5px solid ${colors.error}40`, backgroundColor: 'transparent', opacity: deleting ? 0.6 : 1}}
+                style={{width: '100%', borderRadius: radius.full, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 12, border: `1.5px solid ${dark.danger}40`, backgroundColor: 'transparent', opacity: deleting ? 0.6 : 1}}
                 disabled={deleting || resettingPassword}
                 onClick={handleDelete}>
                 {deleting
-                  ? <span className="spinner" style={{width: 16, height: 16, borderColor: colors.error + '40', borderTopColor: colors.error}} />
-                  : <span style={{fontSize: 14, fontWeight: 700, color: colors.error}}>Delete Account</span>}
+                  ? <span className="spinner" style={{width: 16, height: 16, borderColor: dark.danger + '40', borderTopColor: dark.danger}} />
+                  : <span style={{fontSize: 14, fontWeight: 700, color: dark.danger}}>Delete Account</span>}
               </PressableScale>
             </>
           )}
@@ -344,23 +344,23 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
 
   // ── Staff list ─────────────────────────────────────────────────────────
   return (
-    <div className="screen-scroll" style={{backgroundColor: colors.background, padding: 16, paddingBottom: 40}}>
-      <PressableScale style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radius.full, padding: '16px 0', marginBottom: spacing.base, backgroundColor: colors.primary}} onClick={() => setShowAdd(true)}>
-        <Icon name="plus" size={18} color={colors.textOnPrimary} />
-        <span style={{color: colors.textOnPrimary, fontSize: 14, fontWeight: 700}}>Add Staff</span>
+    <div className="screen-scroll" style={{backgroundColor: dark.bg, padding: 16, paddingBottom: 40}}>
+      <PressableScale style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: radius.full, padding: '16px 0', marginBottom: spacing.base, backgroundColor: dark.accent}} onClick={() => setShowAdd(true)}>
+        <Icon name="plus" size={18} color="#fff" />
+        <span style={{color: '#fff', fontSize: 14, fontWeight: 700}}>Add Staff</span>
       </PressableScale>
 
       <div style={{display: 'flex', gap: 10, marginBottom: spacing.md}}>
         {[
-          {n: String(onDuty), l: 'Drivers Ready', c: colors.success},
-          {n: String(onTask), l: 'On Task', c: colors.warning},
-          {n: String(offDuty), l: 'Off Duty', c: colors.textMuted},
+          {n: String(onDuty), l: 'Drivers Ready', c: dark.success},
+          {n: String(onTask), l: 'On Task', c: dark.warning},
+          {n: String(offDuty), l: 'Off Duty', c: dark.textMuted},
         ].map(st => (
-          <div key={st.l} style={{flex: 1, textAlign: 'center', padding: '18px 0', borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, backgroundColor: colors.card}}>
-            <div style={{fontSize: typography.sizes['2xl'], fontWeight: typography.weights.black, color: colors.textPrimary}}>{st.n}</div>
+          <div key={st.l} style={{...darkCard, flex: 1, textAlign: 'center', padding: '18px 0'}}>
+            <div style={{fontSize: typography.sizes['2xl'], fontWeight: typography.weights.black, color: dark.textPrimary}}>{st.n}</div>
             <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 3}}>
               <span style={{width: 6, height: 6, borderRadius: 3, backgroundColor: st.c}} />
-              <span style={{fontSize: 11, fontWeight: 600, color: colors.textMuted}}>{st.l}</span>
+              <span style={{fontSize: 11, fontWeight: 600, color: dark.textMuted}}>{st.l}</span>
             </div>
           </div>
         ))}
@@ -370,17 +370,17 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
           this closes: with only role filter chips, finding one specific
           person in a roster of dozens meant scrolling and reading every
           row. */}
-      <div style={{display: 'flex', alignItems: 'center', gap: 10, borderRadius: radius.lg, border: `1px solid ${colors.border}`, padding: '0 15px', height: 48, marginBottom: spacing.md, backgroundColor: colors.surface}}>
-        <Icon name="search" size={17} color={colors.textMuted} />
+      <div style={{display: 'flex', alignItems: 'center', gap: 10, borderRadius: radius.lg, border: `1px solid ${dark.border}`, padding: '0 15px', height: 48, marginBottom: spacing.md, backgroundColor: dark.surface}}>
+        <Icon name="search" size={17} color={dark.textMuted} />
         <input
-          style={{flex: 1, fontSize: 15, fontWeight: 500, padding: 0, border: 'none', outline: 'none', background: 'transparent', color: colors.textPrimary}}
+          style={{flex: 1, fontSize: 15, fontWeight: 500, padding: 0, border: 'none', outline: 'none', background: 'transparent', color: dark.textPrimary}}
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="Search name, username, ID"
         />
         {!!query && (
           <PressableScale onClick={() => setQuery('')} style={{background: 'transparent', border: 'none', padding: 0}}>
-            <Icon name="close" size={15} color={colors.textMuted} />
+            <Icon name="close" size={15} color={dark.textMuted} />
           </PressableScale>
         )}
       </div>
@@ -390,8 +390,8 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
           const on = filter === tab.key;
           return (
             <PressableScale key={tab.key} onClick={() => setFilter(tab.key)}
-              style={{flexShrink: 0, padding: '9px 16px', borderRadius: radius.full, border: `1.5px solid ${on ? colors.primary : colors.border}`, backgroundColor: on ? colors.primary : colors.surface}}>
-              <span style={{fontSize: 13, fontWeight: 700, color: on ? colors.textOnPrimary : colors.textSecondary}}>{tab.label}</span>
+              style={{flexShrink: 0, padding: '9px 16px', borderRadius: radius.full, border: `1.5px solid ${on ? dark.accent : dark.border}`, backgroundColor: on ? dark.accent : dark.surface}}>
+              <span style={{fontSize: 13, fontWeight: 700, color: on ? '#fff' : dark.textSecondary}}>{tab.label}</span>
             </PressableScale>
           );
         })}
@@ -399,30 +399,30 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
 
       {loading ? (
         <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: spacing.md, padding: '40px 0'}}>
-          <span className="spinner" style={{borderColor: colors.border, borderTopColor: colors.primary}} />
-          <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Loading staff…</span>
+          <span className="spinner" style={{borderColor: dark.border, borderTopColor: dark.accent}} />
+          <span style={{fontSize: 12, fontWeight: 600, color: dark.textMuted}}>Loading staff…</span>
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{borderRadius: radius['2xl'], border: `1px dashed ${colors.border}`, padding: 32, textAlign: 'center', backgroundColor: colors.card}}>
-          <Icon name="people" size={26} color={colors.textMuted} />
-          <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: colors.textMuted}}>{q ? `No match for "${query.trim()}"` : 'No staff in this category yet'}</div>
+        <div style={{borderRadius: radius['2xl'], border: `1px dashed ${dark.border}`, padding: 32, textAlign: 'center', backgroundColor: dark.card}}>
+          <Icon name="people" size={26} color={dark.textMuted} />
+          <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: dark.textMuted}}>{q ? `No match for "${query.trim()}"` : 'No staff in this category yet'}</div>
         </div>
       ) : (
-        <div style={{borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.card}}>
+        <div style={{...darkCard, overflow: 'hidden'}}>
           {filtered.map((u, i) => (
             <PressableScale key={u.id} onClick={() => openEdit(u)}
-              style={{width: '100%', display: 'flex', alignItems: 'center', gap: spacing.md, padding: 14, borderBottom: i === filtered.length - 1 ? 'none' : `1px solid ${colors.divider}`}}>
-              <div style={{width: 42, height: 42, borderRadius: radius.full, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.cardAlt}}>
-                <span style={{fontSize: 13, fontWeight: 800, color: colors.textPrimary}}>{u.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
+              style={{width: '100%', display: 'flex', alignItems: 'center', gap: spacing.md, padding: 14, borderBottom: i === filtered.length - 1 ? 'none' : `1px solid ${dark.divider}`}}>
+              <div style={{width: 42, height: 42, borderRadius: radius.full, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: dark.cardAlt}}>
+                <span style={{fontSize: 13, fontWeight: 800, color: dark.textPrimary}}>{u.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
               </div>
               <div style={{flex: 1, textAlign: 'left', minWidth: 0}}>
-                <div style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>{u.username}</div>
-                <div style={{fontSize: 11, marginTop: 2, color: colors.textSecondary}}>{roleLabel(u.role)} · ID {u.employeeId}</div>
-                {!!(u.department || u.phone) && <div style={{fontSize: 11, marginTop: 1, color: colors.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{u.department || u.phone}</div>}
+                <div style={{fontSize: 13, fontWeight: 700, color: dark.textPrimary}}>{u.username}</div>
+                <div style={{fontSize: 11, marginTop: 2, color: dark.textSecondary}}>{roleLabel(u.role)} · ID {u.employeeId}</div>
+                {!!(u.department || u.phone) && <div style={{fontSize: 11, marginTop: 1, color: dark.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{u.department || u.phone}</div>}
               </div>
               <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0}}>
                 {statusBadge(u)}
-                <Icon name="arrowRight" size={14} color={colors.textMuted} />
+                <Icon name="arrowRight" size={14} color={dark.textMuted} />
               </div>
             </PressableScale>
           ))}

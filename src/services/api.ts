@@ -355,12 +355,78 @@ export type AnalyticsOverview = {
   generatedAt: string;
   period: AnalyticsPeriod;
 };
+// ── Intelligence (admin-only) ───────────────────────────────────────────
+// Everything here is real, computed from the same database — see backend
+// analytics.service.js. Nothing in this shape is a guess: a field the
+// backend can't compute (e.g. slot occupied-duration) is simply absent
+// rather than estimated, and callers should render "not available" for
+// stats that come back null/empty rather than substituting a placeholder.
+export type SlotClassification = 'HIGH' | 'NORMAL' | 'UNDERUTILIZED' | 'OVERLOADED' | 'NO_DATA';
+export type SlotIntelligence = {
+  meanUsage: number;
+  totalSlots: number;
+  slots: {
+    id: string; block: string; number: number; currentStatus: 'free' | 'occupied' | 'reserved';
+    usageCount: number; lastUsedAt: string | null; classification: SlotClassification;
+  }[];
+  underutilizedCount: number;
+  overloadedCount: number;
+  note: string;
+};
+export type FunnelStage = {key: string; label: string; avgMinutes: number | null; sampleSize: number};
+export type TaskFunnel = {
+  park: {stages: FunnelStage[]; sampleSize: number; bottleneck: FunnelStage | null};
+  retrieve: {stages: FunnelStage[]; sampleSize: number; bottleneck: FunnelStage | null};
+};
+export type NotificationIntelligence = {
+  total: number;
+  byType: Record<string, number>;
+  byRole: Record<string, number>;
+  dailyCounts: {date: string; count: number}[];
+  meanPerDay: number;
+  spikes: {date: string; count: number}[];
+};
+export type DataQuality = {
+  openClientErrors: number;
+  topClientErrors: {id: number; name: string; message: string; screen: string | null; count: number; roles: string[]; lastSeenAt: string}[];
+  impossibleTimestampCount: number;
+  orphanSlotReferenceCount: number;
+  orphanSlotIds: string[];
+};
+export type DemandAnomalies = {
+  lookbackDays: number;
+  days: {date: string; count: number}[];
+  mean: number | null;
+  stddev: number | null;
+  anomalies: {date: string; count: number; direction: 'high' | 'low'; deviationStdDevs: number}[];
+  note?: string;
+};
+export type InsightSeverity = 'warn' | 'info';
+export type InsightCard = {
+  id: string; severity: InsightSeverity; title: string;
+  observation: string; evidence: string; impact: string; recommendation: string;
+};
+export type IntelligenceBundle = {
+  period: AnalyticsPeriod;
+  overview: AnalyticsOverview;
+  slots: SlotIntelligence;
+  taskFunnel: TaskFunnel;
+  notifications: NotificationIntelligence;
+  dataQuality: DataQuality;
+  anomalies: DemandAnomalies;
+  insights: InsightCard[];
+};
+
 export const analyticsApi = {
   // period omitted (or 'all') is the original all-time overview — same
   // response shape either way, just scoped to completedAt falling in the
   // period when one is given (see backend analytics.controller.js).
   overview: (period?: AnalyticsPeriod): Promise<AnalyticsOverview> =>
     client.get('/analytics/overview', {params: period && period !== 'all' ? {period} : undefined}).then(r => r.data),
+  // Admin-only bundle: slot/task/notification intelligence, data quality,
+  // anomalies and the computed insight cards, in one fetch.
+  intelligence: (period?: AnalyticsPeriod): Promise<IntelligenceBundle> =>
+    client.get('/analytics/intelligence', {params: period && period !== 'all' ? {period} : undefined}).then(r => r.data),
 };
 
 export default client;

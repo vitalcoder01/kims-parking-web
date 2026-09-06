@@ -1,20 +1,20 @@
 import React, {useState} from 'react';
-import {useTheme} from '../../context/ThemeContext';
 import {useAuth} from '../../context/AuthContext';
 import {useAppState} from '../../context/AppStateContext';
 import {PressableScale} from '../../components/PressableScale';
 import {Icon, IconName} from '../../components/Icon';
-import {spacing, radius, typography} from '../../theme';
+import {spacing, typography} from '../../theme';
+import {dark, darkCard} from './adminDarkTheme';
 
-// Redesigned per the Mobbin-researched brief: "understand the whole
-// operation in 3-5 seconds, details only after tapping." The old version put
-// a 2x2 metric grid, a full block-by-block progress list AND a full driver
-// list on this one screen — all real data, but arranged so nothing read
-// faster than scrolling to the bottom. This version shows one compact
-// occupancy card (overall + per-block chips, no 90-slot render), two
-// prominent primary actions, at most 3 live operations with a way to see
-// more, and a compact driver strip — everything else lives one tap away
-// (Map for the full slot grid, Staff for the full driver list).
+// Shows "understand the whole operation in 3-5 seconds, details only
+// after tapping": one compact occupancy card (overall + per-block chips,
+// no 90-slot render), at most 3 live operations with a way to see more,
+// and a compact driver strip — everything else lives one tap away (Map
+// for the full slot grid, Staff for the full driver list).
+//
+// Restyled onto the same dark ops-console tokens as Guard/Staff/
+// Attendance/Map (see ./adminDarkTheme) — same logic and data as before,
+// only the surface changed.
 type StatusTone = 'success' | 'info' | 'warning' | 'muted';
 
 function taskStatusLabel(t: {type: string; status: string}): {label: string; tone: StatusTone; isLive: boolean} {
@@ -60,7 +60,6 @@ const RECENT_COMPLETION_MS = 2 * 60 * 60 * 1000;
 // version put Park/Retrieve action cards and a driver-assignment picker
 // here; removed at the user's explicit correction.
 export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (block?: string) => void; onOpenDrivers: () => void}) {
-  const {colors} = useTheme();
   const {user} = useAuth();
   const {tasks, drivers, slots} = useAppState();
 
@@ -80,7 +79,7 @@ export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (bl
   const total = slots.length;
   const free = total - occupied;
   const occupancyPct = total ? Math.round((occupied / total) * 100) : 0;
-  const fillColor = occupancyPct > 90 ? colors.error : occupancyPct > 70 ? colors.warning : colors.success;
+  const fillColor = occupancyPct > 90 ? dark.danger : occupancyPct > 70 ? dark.warning : dark.success;
 
   const blockStats = React.useMemo(() => {
     const byBlock = new Map<string, {total: number; used: number}>();
@@ -96,25 +95,21 @@ export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (bl
   const availableDrivers = drivers.filter(d => d.status === 'available');
   const today = new Date().toLocaleDateString(undefined, {weekday: 'long', month: 'long', day: 'numeric'});
 
-  const sec: React.CSSProperties = {fontSize: typography.sizes.base, fontWeight: typography.weights.black, letterSpacing: -0.2, color: colors.textPrimary, display: 'flex', alignItems: 'center', justifyContent: 'space-between'};
-  const card: React.CSSProperties = {borderRadius: radius['2xl'], border: `1px solid ${colors.border}`, backgroundColor: colors.card};
+  const sec: React.CSSProperties = {fontSize: typography.sizes.base, fontWeight: typography.weights.black, letterSpacing: -0.2, color: dark.textPrimary, display: 'flex', alignItems: 'center', justifyContent: 'space-between'};
+  const card: React.CSSProperties = {...darkCard};
 
   return (
-    <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 40}}>
+    <div className="screen-scroll" style={{backgroundColor: dark.bg, paddingBottom: 40}}>
       {/* Header */}
       <div style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '20px 16px 16px'}}>
-        <div style={{width: 44, height: 44, borderRadius: radius.full, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary}}>
-          <span style={{fontSize: typography.sizes.base, fontWeight: typography.weights.bold, color: colors.textOnPrimary}}>
+        <div style={{width: 44, height: 44, borderRadius: 999, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: dark.accent}}>
+          <span style={{fontSize: typography.sizes.base, fontWeight: typography.weights.bold, color: '#fff'}}>
             {(user?.name ?? 'Admin').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
           </span>
         </div>
         <div style={{flex: 1, minWidth: 0}}>
-          <div style={{fontSize: typography.sizes['2xl'], fontWeight: typography.weights.black, letterSpacing: -0.5, color: colors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{user?.name ?? 'Admin'}</div>
-          <div style={{fontSize: typography.sizes.sm, marginTop: 2, color: colors.textMuted}}>{today}</div>
-        </div>
-        <div style={{display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: radius.full, backgroundColor: colors.card, border: `1px solid ${colors.border}`}}>
-          <span style={{width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success}} />
-          <span style={{fontSize: typography.sizes.xs, fontWeight: typography.weights.bold, color: colors.textSecondary}}>Live</span>
+          <div style={{fontSize: typography.sizes['2xl'], fontWeight: typography.weights.black, letterSpacing: -0.5, color: dark.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{user?.name ?? 'Admin'}</div>
+          <div style={{fontSize: typography.sizes.sm, marginTop: 2, color: dark.textMuted}}>{today}</div>
         </div>
       </div>
 
@@ -124,22 +119,22 @@ export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (bl
         <PressableScale onClick={() => onOpenMap()} style={{width: '100%', display: 'block', textAlign: 'left', ...card, padding: 20, marginBottom: spacing.md}}>
           <div style={{display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16}}>
             <div>
-              <div style={{fontSize: 11, fontWeight: 700, letterSpacing: 1, color: colors.textMuted, marginBottom: 4}}>PARKING</div>
+              <div style={{fontSize: 11, fontWeight: 700, letterSpacing: 1, color: dark.textMuted, marginBottom: 4}}>PARKING</div>
               <div style={{display: 'flex', alignItems: 'baseline', gap: 10}}>
-                <span style={{fontSize: typography.sizes['4xl'], fontWeight: typography.weights.black, color: colors.success, lineHeight: 1}}>{free}</span>
-                <span style={{fontSize: 12, fontWeight: 700, color: colors.textMuted}}>FREE</span>
+                <span style={{fontSize: typography.sizes['4xl'], fontWeight: typography.weights.black, color: dark.success, lineHeight: 1}}>{free}</span>
+                <span style={{fontSize: 12, fontWeight: 700, color: dark.textMuted}}>FREE</span>
               </div>
               <div style={{display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 2}}>
-                <span style={{fontSize: typography.sizes.xl, fontWeight: typography.weights.black, color: colors.textPrimary, lineHeight: 1}}>{occupied}</span>
-                <span style={{fontSize: 12, fontWeight: 700, color: colors.textMuted}}>OCCUPIED</span>
+                <span style={{fontSize: typography.sizes.xl, fontWeight: typography.weights.black, color: dark.textPrimary, lineHeight: 1}}>{occupied}</span>
+                <span style={{fontSize: 12, fontWeight: 700, color: dark.textMuted}}>OCCUPIED</span>
               </div>
             </div>
             <div style={{textAlign: 'right'}}>
               <div style={{fontSize: typography.sizes['2xl'], fontWeight: typography.weights.black, color: fillColor}}>{occupancyPct}%</div>
-              <div style={{fontSize: 10, fontWeight: 700, color: colors.textMuted}}>FULL</div>
+              <div style={{fontSize: 10, fontWeight: 700, color: dark.textMuted}}>FULL</div>
             </div>
           </div>
-          <div style={{height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: colors.cardAlt, display: 'flex', marginBottom: 14}}>
+          <div style={{height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: dark.cardAlt, display: 'flex', marginBottom: 14}}>
             {blockStats.map(b => (
               <div key={b.name} style={{width: `${total ? (b.total / total) * 100 : 0}%`, position: 'relative'}}>
                 <div style={{position: 'absolute', inset: 0, width: `${b.total ? (b.used / b.total) * 100 : 0}%`, backgroundColor: fillColor}} />
@@ -147,13 +142,13 @@ export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (bl
             ))}
           </div>
           {blockStats.length === 0 ? (
-            <div style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>No parking slots configured yet</div>
+            <div style={{fontSize: 12, fontWeight: 600, color: dark.textMuted}}>No parking slots configured yet</div>
           ) : (
             <div className="hscroll" style={{gap: 8}}>
               {blockStats.map(b => (
-                <span key={b.name} style={{flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: radius.full, backgroundColor: colors.cardAlt}}>
-                  <span style={{fontSize: 12, fontWeight: 800, color: colors.textPrimary}}>Block {b.name}</span>
-                  <span style={{fontSize: 11, fontWeight: 700, color: colors.textMuted, fontVariantNumeric: 'tabular-nums'}}>{b.used}/{b.total}</span>
+                <span key={b.name} style={{flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 999, backgroundColor: dark.cardAlt}}>
+                  <span style={{fontSize: 12, fontWeight: 800, color: dark.textPrimary}}>Block {b.name}</span>
+                  <span style={{fontSize: 11, fontWeight: 700, color: dark.textMuted, fontVariantNumeric: 'tabular-nums'}}>{b.used}/{b.total}</span>
                 </span>
               ))}
             </div>
@@ -165,30 +160,30 @@ export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (bl
           <span>Live Operations</span>
           {liveTasks.length > 3 && (
             <PressableScale onClick={() => setShowAllOps(v => !v)} style={{background: 'none', border: 'none', padding: 0}}>
-              <span style={{fontSize: 12, fontWeight: 700, color: colors.primary}}>{showAllOps ? 'Show less' : `View all (${liveTasks.length}) →`}</span>
+              <span style={{fontSize: 12, fontWeight: 700, color: dark.accent2}}>{showAllOps ? 'Show less' : `View all (${liveTasks.length}) →`}</span>
             </PressableScale>
           )}
         </div>
         <div style={{...card, overflow: 'hidden', marginBottom: spacing.lg}}>
           {liveTasks.length === 0 ? (
-            <div style={{padding: spacing.xl, textAlign: 'center', fontSize: 13, fontWeight: 600, color: colors.textMuted}}>No active operations right now</div>
+            <div style={{padding: spacing.xl, textAlign: 'center', fontSize: 13, fontWeight: 600, color: dark.textMuted}}>No active operations right now</div>
           ) : (showAllOps ? liveTasks : liveTasks.slice(0, 3)).map((t, i, arr) => {
             const st = taskStatusLabel(t);
-            const toneColor = st.tone === 'success' ? colors.success : st.tone === 'info' ? colors.info : st.tone === 'warning' ? colors.warning : colors.textMuted;
+            const toneColor = st.tone === 'success' ? dark.success : st.tone === 'info' ? dark.accent2 : st.tone === 'warning' ? dark.warning : dark.textMuted;
             const ago = relativeAgo(taskActivityTime(t));
             return (
-              <div key={t.id} style={{display: 'flex', alignItems: 'stretch', gap: spacing.md, padding: '13px 16px', borderBottom: i === arr.length - 1 ? 'none' : `1px solid ${colors.divider}`}}>
+              <div key={t.id} style={{display: 'flex', alignItems: 'stretch', gap: spacing.md, padding: '13px 16px', borderBottom: i === arr.length - 1 ? 'none' : `1px solid ${dark.divider}`}}>
                 {/* Left accent bar, colored by status tone — the same
                     "scan the color, not the words" pattern Analytics'
                     stat cards already use, so a valet can read the state
                     of the whole list at a glance before reading any text. */}
                 <span style={{width: 3, borderRadius: 2, backgroundColor: toneColor, flexShrink: 0}} />
-                <div style={{width: 34, height: 34, borderRadius: radius.full, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.cardAlt, alignSelf: 'center'}}>
-                  <Icon name={t.type === 'park' ? 'car' : 'refresh'} size={15} color={colors.textPrimary} />
+                <div style={{width: 34, height: 34, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: dark.cardAlt, alignSelf: 'center'}}>
+                  <Icon name={t.type === 'park' ? 'car' : 'refresh'} size={15} color={dark.textPrimary} />
                 </div>
                 <div style={{flex: 1, minWidth: 0, alignSelf: 'center'}}>
-                  <div style={{fontSize: 13, fontWeight: 800, color: colors.textPrimary, letterSpacing: 0.3}}>{t.carNumber}</div>
-                  <div style={{fontSize: 11, marginTop: 2, color: colors.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                  <div style={{fontSize: 13, fontWeight: 800, color: dark.textPrimary, letterSpacing: 0.3}}>{t.carNumber}</div>
+                  <div style={{fontSize: 11, marginTop: 2, color: dark.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
                     {t.doctorName}{t.slotId ? ` · ${t.slotId}` : ''}{t.driverName ? ` · ${t.driverName}` : ''}
                   </div>
                 </div>
@@ -206,7 +201,7 @@ export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (bl
                     )}
                     <span style={{fontSize: 10.5, fontWeight: 800, color: toneColor}}>{st.label.toUpperCase()}</span>
                   </span>
-                  {!!ago && <span style={{fontSize: 10, fontWeight: 600, color: colors.textMuted}}>{ago}</span>}
+                  {!!ago && <span style={{fontSize: 10, fontWeight: 600, color: dark.textMuted}}>{ago}</span>}
                 </div>
               </div>
             );
@@ -217,31 +212,31 @@ export function AdminDashboardScreen({onOpenMap, onOpenDrivers}: {onOpenMap: (bl
         <div style={{...sec, marginBottom: spacing.sm}}>
           <span>Drivers</span>
           <PressableScale onClick={onOpenDrivers} style={{background: 'none', border: 'none', padding: 0}}>
-            <span style={{fontSize: 12, fontWeight: 700, color: colors.primary}}>View all →</span>
+            <span style={{fontSize: 12, fontWeight: 700, color: dark.accent2}}>View all →</span>
           </PressableScale>
         </div>
         <div style={{...card, padding: 14, marginBottom: 8}}>
           {drivers.length === 0 ? (
-            <div style={{fontSize: 12, fontWeight: 600, color: colors.textMuted, textAlign: 'center', padding: '8px 0'}}>No drivers added yet</div>
+            <div style={{fontSize: 12, fontWeight: 600, color: dark.textMuted, textAlign: 'center', padding: '8px 0'}}>No drivers added yet</div>
           ) : (
             <>
               <div className="hscroll" style={{gap: 14, paddingBottom: 4}}>
                 {drivers.map(d => {
-                  const tone = d.status === 'off' ? colors.textMuted : d.status === 'busy' ? colors.warning : colors.success;
+                  const tone = d.status === 'off' ? dark.textMuted : d.status === 'busy' ? dark.warning : dark.success;
                   return (
                     <div key={d.id} style={{flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, width: 56}}>
                       <div style={{position: 'relative'}}>
-                        <div style={{width: 40, height: 40, borderRadius: radius.full, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt}}>
-                          <span style={{fontSize: 12, fontWeight: 800, color: colors.textPrimary}}>{d.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
+                        <div style={{width: 40, height: 40, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: dark.cardAlt}}>
+                          <span style={{fontSize: 12, fontWeight: 800, color: dark.textPrimary}}>{d.name.split(' ').map(w => w[0]).join('').slice(0, 2)}</span>
                         </div>
-                        <span style={{position: 'absolute', bottom: -1, right: -1, width: 12, height: 12, borderRadius: 6, backgroundColor: tone, border: `2px solid ${colors.card}`}} />
+                        <span style={{position: 'absolute', bottom: -1, right: -1, width: 12, height: 12, borderRadius: 6, backgroundColor: tone, border: `2px solid ${dark.card}`}} />
                       </div>
-                      <span style={{fontSize: 10.5, fontWeight: 700, color: colors.textSecondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 56}}>{d.name.split(' ')[0]}</span>
+                      <span style={{fontSize: 10.5, fontWeight: 700, color: dark.textSecondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 56}}>{d.name.split(' ')[0]}</span>
                     </div>
                   );
                 })}
               </div>
-              <div style={{fontSize: 11.5, fontWeight: 700, color: colors.textMuted, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${colors.divider}`}}>
+              <div style={{fontSize: 11.5, fontWeight: 700, color: dark.textMuted, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${dark.divider}`}}>
                 {availableDrivers.length} of {drivers.length} available
               </div>
             </>

@@ -70,6 +70,8 @@ const load = {
   AdminStaffScreen:      () => import('./screens/admin/AdminStaffScreen'),
   AdminAttendanceScreen: () => import('./screens/admin/AdminAttendanceScreen'),
   AdminMapScreen:        () => import('./screens/admin/AdminMapScreen'),
+  AdminGuardScreen:      () => import('./screens/admin/AdminGuardScreen'),
+  AdminIntelligenceScreen: () => import('./screens/admin/AdminIntelligenceScreen'),
   ValetHomeScreen:       () => import('./screens/valet/ValetHomeScreen'),
   ValetRecordsScreen:    () => import('./screens/valet/ValetRecordsScreen'),
   ValetMapScreen:        () => import('./screens/valet/ValetMapScreen'),
@@ -90,6 +92,8 @@ const AdminDashboardScreen  = lazyScreen(load.AdminDashboardScreen, 'AdminDashbo
 const AdminStaffScreen      = lazyScreen(load.AdminStaffScreen, 'AdminStaffScreen');
 const AdminAttendanceScreen = lazyScreen(load.AdminAttendanceScreen, 'AdminAttendanceScreen');
 const AdminMapScreen        = lazyScreen(load.AdminMapScreen, 'AdminMapScreen');
+const AdminGuardScreen      = lazyScreen(load.AdminGuardScreen, 'AdminGuardScreen');
+const AdminIntelligenceScreen = lazyScreen(load.AdminIntelligenceScreen, 'AdminIntelligenceScreen');
 const ValetHomeScreen       = lazyScreen(load.ValetHomeScreen, 'ValetHomeScreen');
 const ValetRecordsScreen    = lazyScreen(load.ValetRecordsScreen, 'ValetRecordsScreen');
 const ValetMapScreen        = lazyScreen(load.ValetMapScreen, 'ValetMapScreen');
@@ -111,7 +115,7 @@ const AnalyticsScreen       = lazyScreen(load.AnalyticsScreen, 'AnalyticsScreen'
 
 type TabKey =
   | 'Home' | 'Card' | 'History' | 'Setup' | 'Settings'
-  | 'Dashboard' | 'Staff' | 'Attendance' | 'Map' | 'Analytics'
+  | 'Dashboard' | 'Staff' | 'Attendance' | 'Map' | 'Guard' | 'Intelligence' | 'Analytics'
   | 'Queue' | 'Records' | 'ValetMap'
   | 'DriverDashboard' | 'Jobs';
 
@@ -152,6 +156,8 @@ const LOADER_FOR_TAB: Record<TabKey, () => Promise<unknown>> = {
   Staff: load.AdminStaffScreen,
   Attendance: load.AdminAttendanceScreen,
   Map: load.AdminMapScreen,
+  Guard: load.AdminGuardScreen,
+  Intelligence: load.AdminIntelligenceScreen,
   Analytics: load.AnalyticsScreen,
   Queue: load.ValetHomeScreen,
   Records: load.ValetRecordsScreen,
@@ -167,6 +173,8 @@ function tabsForRole(role: string | undefined): TabDef[] {
       {key: 'Staff', label: 'Staff', icon: 'staff', headerTitle: 'Staff'},
       {key: 'Attendance', label: 'Attendance', icon: 'calendar', headerTitle: 'Attendance'},
       {key: 'Map', label: 'Map', icon: 'map', headerTitle: 'Live Map'},
+      {key: 'Guard', label: 'Guard', icon: 'shield', headerTitle: null},
+      {key: 'Intelligence', label: 'Intelligence', icon: 'sparkle', headerTitle: null},
       {key: 'Analytics', label: 'Analytics', icon: 'analytics', headerTitle: null},
       {key: 'Settings', label: 'Settings', icon: 'settings', headerTitle: 'Settings'},
     ];
@@ -282,6 +290,8 @@ function RoleRouter() {
     : tab === 'Staff'       ? <AdminStaffScreen initialFilter={staffInitialFilter} />
     : tab === 'Attendance'  ? <AdminAttendanceScreen />
     : tab === 'Map'         ? <AdminMapScreen focusBlock={mapFocusBlock} />
+    : tab === 'Guard'       ? <AdminGuardScreen />
+    : tab === 'Intelligence' ? <AdminIntelligenceScreen />
     : tab === 'Analytics'   ? <AnalyticsScreen />
     : tab === 'Queue'       ? <ValetHomeScreen />
     : tab === 'Records'     ? <ValetRecordsScreen />
