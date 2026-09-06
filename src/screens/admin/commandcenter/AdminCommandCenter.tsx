@@ -14,11 +14,9 @@ import {
 // bespoke desktop layout — see the brief's "reuse existing architecture,
 // don't destroy existing functionality". Only the Dashboard section below
 // is the bespoke, reference-matched build.
-import {AdminGuardScreen} from '../AdminGuardScreen';
 import {AdminMapScreen} from '../AdminMapScreen';
 import {AdminStaffScreen} from '../AdminStaffScreen';
 import {AdminAttendanceScreen} from '../AdminAttendanceScreen';
-import {AdminIntelligenceScreen} from '../AdminIntelligenceScreen';
 import {AnalyticsScreen} from '../../AnalyticsScreen';
 import {SettingsScreen} from '../../SettingsScreen';
 
@@ -45,12 +43,16 @@ import {SettingsScreen} from '../../SettingsScreen';
  * By request, the Dashboard section itself was pared back from the
  * original reference's full 12-panel layout: Visitor Analytics, Visitor
  * Types, Anomaly Radar, Ask Your Parking System, Realtime Operations and
- * the Operational Health KPI were all removed, and the AI Insights preview
- * panel is no longer shown here (the full AI Insights screen is still
- * reachable from the sidebar, untouched — only this Dashboard preview of
- * it was dropped). Six panels remain: the 5-card KPI row, Parking Activity
- * Trends, Hourly Demand Heatmap, Slot Utilization, Parking Slot Map, Task
- * Funnel and Top Drivers.
+ * the Operational Health KPI were all removed. Six panels remain: the
+ * 5-card KPI row, Parking Activity Trends, Hourly Demand Heatmap, Slot
+ * Utilization, Parking Slot Map, Task Funnel and Top Drivers.
+ *
+ * The "Live View" (Guard) and "AI Insights" (Intelligence) sidebar
+ * sections — and their mobile tab-bar equivalents — were removed entirely
+ * by request, not just hidden: see Sidebar.tsx's CcSection type and
+ * App.tsx's TabKey, neither of which has a slot for them anymore. The
+ * underlying AdminGuardScreen.tsx / AdminIntelligenceScreen.tsx files were
+ * deleted outright, not left dead in the tree.
  */
 export function AdminCommandCenter({userName}: {userName: string}) {
   const {notifications} = useAppState();
@@ -95,11 +97,9 @@ export function AdminCommandCenter({userName}: {userName: string}) {
           />
           <div style={{flex: 1, minHeight: 0, overflowY: 'auto'}}>
             {section === 'dashboard' && <DashboardSection period={period} refreshKey={refreshKey} onNavigate={setSection} />}
-            {section === 'liveview' && <ScreenPane><AdminGuardScreen /></ScreenPane>}
             {section === 'slots' && <ScreenPane><AdminMapScreen /></ScreenPane>}
             {section === 'drivers' && <ScreenPane><AdminStaffScreen initialFilter="driver" /></ScreenPane>}
             {section === 'staff' && <ScreenPane><AdminAttendanceScreen /></ScreenPane>}
-            {section === 'insights' && <ScreenPane><AdminIntelligenceScreen /></ScreenPane>}
             {section === 'explorer' && <ScreenPane><AnalyticsScreen /></ScreenPane>}
             {section === 'settings' && <ScreenPane><SettingsScreen /></ScreenPane>}
           </div>
@@ -158,8 +158,8 @@ function DashboardSection({period, refreshKey, onNavigate}: {period: AnalyticsPe
   return (
     <div style={{padding: 20}}>
       <div style={{display: 'flex', gap: 12, marginBottom: 16}}>
-        <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" deltaPct={kpiComparison.tasks.pctChange} onClick={() => onNavigate('liveview')} />
-        <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" deltaPct={kpiComparison.visitors.pctChange} onClick={() => onNavigate('liveview')} />
+        <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" deltaPct={kpiComparison.tasks.pctChange} />
+        <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" deltaPct={kpiComparison.visitors.pctChange} />
         <SlotsKpiCard occPct={occPct} occupied={occupiedNow} available={totalSlotsNow - occupiedNow} total={totalSlotsNow} onClick={() => onNavigate('slots')} />
         <KpiCard icon="car" variant={cc.kpi.drivers} value={String(kpiComparison.drivers.current)} label="Drivers" deltaPct={kpiComparison.drivers.pctChange} onClick={() => onNavigate('drivers')} />
         <KpiCard icon="userCard" variant={cc.kpi.users} value={String(kpiComparison.users.current)} label="Users" deltaPct={kpiComparison.users.pctChange} onClick={() => onNavigate('staff')} />

@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 48;
-export const APP_VERSION_NAME = '1.9.2';
+export const APP_VERSION_CODE = 49;
+export const APP_VERSION_NAME = '1.9.3';
 export const RELEASE_NOTES =
-  'Admin Dashboard: added a light/dark toggle, and trimmed the view down to the essentials (Tasks, Visitors, Slots, Drivers, Users, trends, heatmap, slot map, task funnel, top drivers).';
+  'Admin console: removed the Guard and AI Insights tabs. Staff, Attendance and Parking Slots now share the same light/dark theme as the Dashboard, with light as the default.';

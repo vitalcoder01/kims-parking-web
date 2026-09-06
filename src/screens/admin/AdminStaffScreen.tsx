@@ -5,7 +5,7 @@ import {useBackStep} from '../../hooks/useBackStep';
 import {adminApi} from '../../services/api';
 import {Icon, IconName} from '../../components/Icon';
 import {spacing, radius, typography} from '../../theme';
-import {dark, darkCard, DarkPill} from './adminDarkTheme';
+import {useAdminOpsTheme, darkCard, DarkPill} from './adminDarkTheme';
 
 // Direct port of the mobile app's AdminStaffScreen, restyled onto the
 // shared dark ops-console tokens (see ./adminDarkTheme) — same logic and
@@ -52,6 +52,7 @@ function genPassword() {
 const roleLabel = (r: Role) => ({doctor: 'Doctor', staff: 'Staff', valet: 'Valet', driver: 'Driver', admin: 'Admin'}[r]);
 
 export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filter} = {}) {
+  const dark = useAdminOpsTheme();
   const dialog = useDialog();
   const [filter, setFilter] = useState<Filter>(initialFilter);
   const [query, setQuery] = useState('');
@@ -356,7 +357,7 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
           {n: String(onTask), l: 'On Task', c: dark.warning},
           {n: String(offDuty), l: 'Off Duty', c: dark.textMuted},
         ].map(st => (
-          <div key={st.l} style={{...darkCard, flex: 1, textAlign: 'center', padding: '18px 0'}}>
+          <div key={st.l} style={{...darkCard(dark), flex: 1, textAlign: 'center', padding: '18px 0'}}>
             <div style={{fontSize: typography.sizes['2xl'], fontWeight: typography.weights.black, color: dark.textPrimary}}>{st.n}</div>
             <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 3}}>
               <span style={{width: 6, height: 6, borderRadius: 3, backgroundColor: st.c}} />
@@ -408,7 +409,7 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
           <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: dark.textMuted}}>{q ? `No match for "${query.trim()}"` : 'No staff in this category yet'}</div>
         </div>
       ) : (
-        <div style={{...darkCard, overflow: 'hidden'}}>
+        <div style={{...darkCard(dark), overflow: 'hidden'}}>
           {filtered.map((u, i) => (
             <PressableScale key={u.id} onClick={() => openEdit(u)}
               style={{width: '100%', display: 'flex', alignItems: 'center', gap: spacing.md, padding: 14, borderBottom: i === filtered.length - 1 ? 'none' : `1px solid ${dark.divider}`}}>

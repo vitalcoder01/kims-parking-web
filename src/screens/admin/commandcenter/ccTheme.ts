@@ -118,15 +118,17 @@ export function useCc(): CcPalette {
 const STORAGE_KEY = 'kims-cc-theme-mode';
 export type CcThemeMode = 'light' | 'dark';
 
-/** Reads the persisted command-center theme preference. Falls back to
- *  'dark' (the original design) if nothing is stored yet, or storage is
- *  unavailable (private browsing, etc.) — never throws. */
+/** Reads the persisted admin theme preference (shared by the command
+ *  center AND the ops-console screens — see adminDarkTheme.tsx's
+ *  useAdminOpsTheme, which reads this same key). Defaults to 'light' per
+ *  explicit request — falls back to it if nothing is stored yet, or
+ *  storage is unavailable (private browsing, etc.); never throws. */
 export function readCcThemeMode(): CcThemeMode {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    return v === 'light' ? 'light' : 'dark';
+    return v === 'dark' ? 'dark' : 'light';
   } catch {
-    return 'dark';
+    return 'light';
   }
 }
 

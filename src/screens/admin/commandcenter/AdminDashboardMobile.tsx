@@ -29,14 +29,15 @@ const PERIODS: {key: AnalyticsPeriod; label: string}[] = [
  * the 5-card KPI row, Parking Activity Trends, Hourly Demand Heatmap,
  * Slot Utilization, Parking Slot Map, Task Funnel and Top Drivers. Visitor
  * Analytics/Types, Anomaly Radar, Ask Your Parking System, Realtime
- * Operations, the Operational Health KPI and the AI Insights preview were
- * all removed from this view — the full AI Insights screen is still one
- * tap away on the Intelligence tab, untouched.
+ * Operations and the Operational Health KPI were all removed from this
+ * view. The Guard and Intelligence tabs (and their AI Insights preview
+ * here) were removed from the admin console entirely, by request — the
+ * Tasks/Visitors KPI cards above are display-only now that Guard is gone,
+ * with nowhere sensible left to navigate to.
  */
-export function AdminDashboardMobile({onOpenMap, onOpenDrivers, onOpenGuard, onOpenAttendance}: {
+export function AdminDashboardMobile({onOpenMap, onOpenDrivers, onOpenAttendance}: {
   onOpenMap: (block?: string) => void;
   onOpenDrivers: () => void;
-  onOpenGuard: () => void;
   onOpenAttendance: () => void;
 }) {
   const [themeMode, setThemeMode] = useState<CcThemeMode>(() => readCcThemeMode());
@@ -52,15 +53,15 @@ export function AdminDashboardMobile({onOpenMap, onOpenDrivers, onOpenGuard, onO
   return (
     <CcThemeContext.Provider value={palette}>
       <DashboardBody
-        onOpenMap={onOpenMap} onOpenDrivers={onOpenDrivers} onOpenGuard={onOpenGuard} onOpenAttendance={onOpenAttendance}
+        onOpenMap={onOpenMap} onOpenDrivers={onOpenDrivers} onOpenAttendance={onOpenAttendance}
         themeMode={themeMode} onToggleTheme={toggleTheme}
       />
     </CcThemeContext.Provider>
   );
 }
 
-function DashboardBody({onOpenMap, onOpenDrivers, onOpenGuard, onOpenAttendance, themeMode, onToggleTheme}: {
-  onOpenMap: (block?: string) => void; onOpenDrivers: () => void; onOpenGuard: () => void; onOpenAttendance: () => void;
+function DashboardBody({onOpenMap, onOpenDrivers, onOpenAttendance, themeMode, onToggleTheme}: {
+  onOpenMap: (block?: string) => void; onOpenDrivers: () => void; onOpenAttendance: () => void;
   themeMode: CcThemeMode; onToggleTheme: () => void;
 }) {
   const cc = useCc();
@@ -143,8 +144,8 @@ function DashboardBody({onOpenMap, onOpenDrivers, onOpenGuard, onOpenAttendance,
 
       {/* KPI row — 2 columns; the odd 5th card (Users) spans the full width. */}
       <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16}}>
-        <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" deltaPct={kpiComparison.tasks.pctChange} onClick={onOpenGuard} />
-        <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" deltaPct={kpiComparison.visitors.pctChange} onClick={onOpenGuard} />
+        <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" deltaPct={kpiComparison.tasks.pctChange} />
+        <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" deltaPct={kpiComparison.visitors.pctChange} />
         <SlotsKpiCard occPct={occPct} occupied={occupiedNow} available={totalSlotsNow - occupiedNow} total={totalSlotsNow} onClick={() => onOpenMap()} />
         <KpiCard icon="car" variant={cc.kpi.drivers} value={String(kpiComparison.drivers.current)} label="Drivers" deltaPct={kpiComparison.drivers.pctChange} onClick={onOpenDrivers} />
         <div style={{gridColumn: 'span 2'}}>

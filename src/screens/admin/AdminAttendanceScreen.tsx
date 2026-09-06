@@ -3,7 +3,7 @@ import {PressableScale} from '../../components/PressableScale';
 import {adminApi} from '../../services/api';
 import {Icon, IconName} from '../../components/Icon';
 import {spacing, radius, typography} from '../../theme';
-import {dark, darkCard, darkSectionLabel, DarkPill} from './adminDarkTheme';
+import {useAdminOpsTheme, darkCard, darkSectionLabel, DarkPill} from './adminDarkTheme';
 
 // Direct port of the mobile app's AdminAttendanceScreen, restyled onto the
 // shared dark ops-console tokens (see ./adminDarkTheme) — same logic and
@@ -47,6 +47,7 @@ function currentMonthStr() {
 }
 
 function UserCalendar({user, monthStr}: {user: MonthlyUser; monthStr: string}) {
+  const dark = useAdminOpsTheme();
   const [y, m] = monthStr.split('-').map(Number);
   const daysInMonth = new Date(y, m, 0).getDate();
   const firstWeekday = new Date(y, m - 1, 1).getDay();
@@ -56,7 +57,7 @@ function UserCalendar({user, monthStr}: {user: MonthlyUser; monthStr: string}) {
   const cells: (number | null)[] = [...Array(firstWeekday).fill(null), ...Array.from({length: daysInMonth}, (_, i) => i + 1)];
 
   return (
-    <div style={{...darkCard, padding: spacing.md, marginBottom: spacing.md}}>
+    <div style={{...darkCard(dark), padding: spacing.md, marginBottom: spacing.md}}>
       <div style={{display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md}}>
         <div style={{width: 36, height: 36, borderRadius: radius.full, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: dark.cardAlt}}>
           <span style={{fontSize: 12, fontWeight: 800, color: dark.textPrimary}}>{user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
@@ -108,6 +109,7 @@ function UserCalendar({user, monthStr}: {user: MonthlyUser; monthStr: string}) {
 // scannable roster with each person's summary, drilling into their own
 // calendar only on tap — see the modal below, reusing UserCalendar as-is.
 function RosterRow({user, monthStr, onClick, isLast}: {user: MonthlyUser; monthStr: string; onClick: () => void; isLast: boolean}) {
+  const dark = useAdminOpsTheme();
   const [y, m] = monthStr.split('-').map(Number);
   const daysInMonth = new Date(y, m, 0).getDate();
   const presentDates = new Set(user.days.filter(d => d.checkIn).map(d => d.date));
@@ -156,6 +158,7 @@ function RosterRow({user, monthStr, onClick, isLast}: {user: MonthlyUser; monthS
 }
 
 export function AdminAttendanceScreen() {
+  const dark = useAdminOpsTheme();
   const [todayRows, setTodayRows] = useState<TodayRow[]>([]);
   const [monthUsers, setMonthUsers] = useState<MonthlyUser[]>([]);
   const [monthStr, setMonthStr] = useState(currentMonthStr());
@@ -193,7 +196,7 @@ export function AdminAttendanceScreen() {
     .filter(u => !attQ || u.name.toLowerCase().includes(attQ) || u.employeeId.toLowerCase().includes(attQ));
   const visibleCategories = CATEGORIES.filter(c => c.key === 'all' || categoryCounts[c.key] > 0);
 
-  const sec: React.CSSProperties = {...darkSectionLabel, fontSize: typography.sizes.base, fontWeight: typography.weights.black, letterSpacing: -0.2, textTransform: 'none', marginBottom: spacing.sm, color: dark.textPrimary};
+  const sec: React.CSSProperties = {...darkSectionLabel(dark), fontSize: typography.sizes.base, fontWeight: typography.weights.black, letterSpacing: -0.2, textTransform: 'none', marginBottom: spacing.sm, color: dark.textPrimary};
 
   if (loading) {
     return (
@@ -211,7 +214,7 @@ export function AdminAttendanceScreen() {
           each), Duolingo's bold streak treatment. Both are real, derived
           data: present is today's still-clocked-in count, the rate is
           checked-in-today over the whole roster. */}
-      <div style={{...darkCard, marginBottom: spacing.base, overflow: 'hidden'}}>
+      <div style={{...darkCard(dark), marginBottom: spacing.base, overflow: 'hidden'}}>
         <div style={{display: 'flex', alignItems: 'center', padding: '22px 0'}}>
           <div style={{flex: 1, textAlign: 'center'}}>
             <div style={{fontSize: 40, fontWeight: 900, letterSpacing: -1, lineHeight: 1, color: dark.success}}>{present}</div>
@@ -283,7 +286,7 @@ export function AdminAttendanceScreen() {
           <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: dark.textMuted}}>{attQ ? `No match for "${query.trim()}"` : 'No one in this category yet'}</div>
         </div>
       ) : (
-        <div style={{...darkCard, overflow: 'hidden', marginBottom: spacing.sm}}>
+        <div style={{...darkCard(dark), overflow: 'hidden', marginBottom: spacing.sm}}>
           {filteredUsers.map((u, i) => (
             <RosterRow key={u.userId} user={u} monthStr={monthStr} onClick={() => setSelectedUser(u)} isLast={i === filteredUsers.length - 1} />
           ))}
@@ -297,7 +300,7 @@ export function AdminAttendanceScreen() {
           <div style={{fontSize: 13, fontWeight: 600, marginTop: spacing.sm, color: dark.textMuted}}>Nobody has been marked present yet today</div>
         </div>
       ) : (
-        <div style={{...darkCard, overflow: 'hidden'}}>
+        <div style={{...darkCard(dark), overflow: 'hidden'}}>
           {todayRows.map((r, i) => (
             <div key={r.id} style={{display: 'flex', alignItems: 'center', gap: spacing.md, padding: '13px 14px', borderBottom: i === todayRows.length - 1 ? 'none' : `1px solid ${dark.divider}`}}>
               <div style={{width: 36, height: 36, borderRadius: radius.full, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: r.checkOut ? dark.cardAlt : dark.success + '22'}}>

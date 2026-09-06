@@ -114,11 +114,11 @@ export function Donut({parts, size = 100, stroke = 13, centerLabel, centerSub}: 
 // ── KPI row ─────────────────────────────────────────────────────────────
 
 export function KpiCard({icon, variant, value, label, deltaPct, onClick}: {
-  icon: IconName; variant: {bg: string; icon: string; valueText: string; labelText: string}; value: string; label: string; deltaPct: number | null; onClick: () => void;
+  icon: IconName; variant: {bg: string; icon: string; valueText: string; labelText: string}; value: string; label: string; deltaPct: number | null; onClick?: () => void;
 }) {
   const cc = useCc();
   return (
-    <PressableScale onClick={onClick} style={{flex: 1, borderRadius: 14, backgroundColor: variant.bg, padding: 14, textAlign: 'left', display: 'block', minWidth: 0}}>
+    <PressableScale onClick={onClick} style={{flex: 1, borderRadius: 14, backgroundColor: variant.bg, padding: 14, textAlign: 'left', display: 'block', minWidth: 0, cursor: onClick ? 'pointer' : 'default'}}>
       <Icon name={icon} size={17} color={variant.icon} />
       <div style={{fontSize: 22, fontWeight: 900, color: variant.valueText, marginTop: 8, letterSpacing: -0.5}}>{value}</div>
       <div style={{fontSize: 11, fontWeight: 700, color: variant.labelText, marginTop: 1}}>{label}</div>

@@ -2,9 +2,12 @@ import React from 'react';
 import {Icon, IconName} from '../../../components/Icon';
 import {useCc} from './ccTheme';
 
+// 'liveview' (Guard) and 'insights' (AI Insights/Intelligence) were removed
+// entirely by request — not just hidden, dropped from the type so nothing
+// can accidentally navigate there again.
 export type CcSection =
-  | 'dashboard' | 'liveview' | 'tasks' | 'slots' | 'visitors' | 'drivers'
-  | 'staff' | 'notifications' | 'insights' | 'reports' | 'explorer' | 'settings';
+  | 'dashboard' | 'tasks' | 'slots' | 'visitors' | 'drivers'
+  | 'staff' | 'notifications' | 'reports' | 'explorer' | 'settings';
 
 interface NavItem {
   key: CcSection;
@@ -16,14 +19,12 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   {key: 'dashboard', label: 'Dashboard', icon: 'dashboard', available: true},
-  {key: 'liveview', label: 'Live View', icon: 'live', available: true},
   {key: 'tasks', label: 'Parking Tasks', icon: 'tasks', available: false},
   {key: 'slots', label: 'Parking Slots', icon: 'parking', available: true},
   {key: 'visitors', label: 'Visitors', icon: 'people', available: false},
   {key: 'drivers', label: 'Drivers', icon: 'car', available: true},
   {key: 'staff', label: 'Staff & Attendance', icon: 'staff', available: true},
   {key: 'notifications', label: 'Notifications', icon: 'bell', available: false},
-  {key: 'insights', label: 'AI Insights', icon: 'sparkle', available: true},
   {key: 'reports', label: 'Reports', icon: 'clipboard', available: false},
   {key: 'explorer', label: 'Analytics Explorer', icon: 'analytics', available: true},
   {key: 'settings', label: 'Settings', icon: 'settings', available: true},

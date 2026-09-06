@@ -2,7 +2,7 @@ import React, {useState, useMemo, useEffect} from 'react';
 import {PressableScale} from '../../components/PressableScale';
 import {useAppState} from '../../context/AppStateContext';
 import {typography} from '../../theme';
-import {dark, darkCard, darkSectionLabel, DarkPill} from './adminDarkTheme';
+import {useAdminOpsTheme, darkCard, darkSectionLabel, DarkPill} from './adminDarkTheme';
 
 function agoLabel(ms?: number): string | null {
   if (!ms) return null;
@@ -27,6 +27,7 @@ function agoLabel(ms?: number): string | null {
 // Staff/Attendance (see ./adminDarkTheme) — same logic and data, only
 // the surface changed.
 export function AdminMapScreen({focusBlock}: {focusBlock?: string} = {}) {
+  const dark = useAdminOpsTheme();
   const {slots, tasks} = useAppState();
   const [picked, setPicked] = useState<string | undefined>(undefined);
   const [activeBlock, setActiveBlock] = useState<string | undefined>(focusBlock);
@@ -119,7 +120,7 @@ export function AdminMapScreen({focusBlock}: {focusBlock?: string} = {}) {
           <div style={{fontSize: 13, fontWeight: 600, color: dark.textMuted}}>No parking slots configured yet</div>
         </div>
       ) : (
-        <div style={{...darkCard, padding: 16}}>
+        <div style={{...darkCard(dark), padding: 16}}>
           <div style={{display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-start'}}>
             {currentBlock.slots.map(sl => {
               const free = sl.status === 'free';
@@ -143,7 +144,7 @@ export function AdminMapScreen({focusBlock}: {focusBlock?: string} = {}) {
             <div style={{width: 36, height: 4, borderRadius: 2, backgroundColor: dark.border, margin: '0 auto 18px'}} />
             <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18}}>
               <div>
-                <div style={darkSectionLabel}>SLOT {pickedSlot.id}</div>
+                <div style={darkSectionLabel(dark)}>SLOT {pickedSlot.id}</div>
                 <div style={{fontSize: 19, fontWeight: 900, marginTop: 2, color: dark.textPrimary}}>
                   {pickedSlot.status === 'occupied' ? (pickedOwnerTask?.doctorName ?? pickedSlot.carNumber ?? 'Occupied') : 'Free'}
                 </div>
