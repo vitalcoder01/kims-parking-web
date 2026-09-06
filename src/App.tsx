@@ -4,6 +4,7 @@ import {AuthProvider, useAuth} from './context/AuthContext';
 import {AppStateProvider} from './context/AppStateContext';
 import {DialogProvider} from './components/AppDialog';
 import {useTabHistory} from './hooks/useTabHistory';
+import {useIsWide} from './hooks/useIsWide';
 import {Icon, IconName} from './components/Icon';
 import {AlarmBanner} from './components/AlarmBanner';
 import {InstallBanner} from './components/InstallBanner';
@@ -72,6 +73,7 @@ const load = {
   AdminMapScreen:        () => import('./screens/admin/AdminMapScreen'),
   AdminGuardScreen:      () => import('./screens/admin/AdminGuardScreen'),
   AdminIntelligenceScreen: () => import('./screens/admin/AdminIntelligenceScreen'),
+  AdminCommandCenter: () => import('./screens/admin/commandcenter/AdminCommandCenter'),
   ValetHomeScreen:       () => import('./screens/valet/ValetHomeScreen'),
   ValetRecordsScreen:    () => import('./screens/valet/ValetRecordsScreen'),
   ValetMapScreen:        () => import('./screens/valet/ValetMapScreen'),
@@ -94,6 +96,7 @@ const AdminAttendanceScreen = lazyScreen(load.AdminAttendanceScreen, 'AdminAtten
 const AdminMapScreen        = lazyScreen(load.AdminMapScreen, 'AdminMapScreen');
 const AdminGuardScreen      = lazyScreen(load.AdminGuardScreen, 'AdminGuardScreen');
 const AdminIntelligenceScreen = lazyScreen(load.AdminIntelligenceScreen, 'AdminIntelligenceScreen');
+const AdminCommandCenter = lazyScreen(load.AdminCommandCenter, 'AdminCommandCenter');
 const ValetHomeScreen       = lazyScreen(load.ValetHomeScreen, 'ValetHomeScreen');
 const ValetRecordsScreen    = lazyScreen(load.ValetRecordsScreen, 'ValetRecordsScreen');
 const ValetMapScreen        = lazyScreen(load.ValetMapScreen, 'ValetMapScreen');
@@ -219,6 +222,10 @@ function ScreenFallback() {
 function RoleRouter() {
   const {colors} = useTheme();
   const {user} = useAuth();
+  // Gates the desktop admin command center (see AdminCommandCenter.tsx) —
+  // called unconditionally here, alongside every other hook in this
+  // component, so which branch renders below never changes hook order.
+  const isWide = useIsWide(1180);
   const [tab, setTab] = useTabHistory<TabKey>(
     user?.role === 'admin' ? 'Dashboard'
     : user?.role === 'valet' ? 'Queue'
@@ -299,6 +306,19 @@ function RoleRouter() {
     : tab === 'DriverDashboard' ? <DriverDashboardScreen onOpenJobs={() => setTab('Jobs')} />
     : tab === 'Jobs'        ? <DriverJobsScreen />
     : <SettingsScreen />;
+
+  // Desktop admin gets a completely different shell (persistent sidebar,
+  // wide grid dashboard) — see AdminCommandCenter.tsx for why this can't
+  // live inside .phone-frame (max-width: 480px, by design, for every other
+  // screen in this app). Every other role, and admin on a narrow viewport,
+  // renders the phone-frame exactly as before.
+  if (user?.role === 'admin' && isWide) {
+    return (
+      <Suspense fallback={<ScreenFallback />}>
+        <AdminCommandCenter userName={user.name} />
+      </Suspense>
+    );
+  }
 
   return (
     <div className="phone-frame" style={{backgroundColor: colors.background}}>

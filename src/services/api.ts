@@ -417,6 +417,41 @@ export type IntelligenceBundle = {
   insights: InsightCard[];
 };
 
+// ── Command center (admin-only, desktop dashboard) ──────────────────────
+export type ActivityTrendDay = {date: string; tasks: number; visitors: number; slotUsage: number};
+export type HeatmapCell = {tasks: number; visitors: number};
+export type DemandHeatmap = {weekdayLabels: string[]; grid: HeatmapCell[][]; maxTasks: number};
+export type FunnelVolumeStage = {key: string; label: string; count: number; avgMinutesFromCreation: number | null};
+export type TaskFunnelVolume = {
+  park: {sampleSize: number; stages: FunnelVolumeStage[]};
+  retrieve: {sampleSize: number; stages: FunnelVolumeStage[]};
+};
+export type VisitorIntelligence = {
+  total: number;
+  dailyCounts: {date: string; count: number}[];
+  byVehicleType: Record<string, number>;
+  byStatus: Record<string, number>;
+  note: string;
+};
+export type AnomalyRadarCategory = {
+  key: string; label: string; series: number[];
+  mean: number | null; stddev: number | null; anomalyCount: number; latest: number;
+};
+export type AnomalyRadar = {lookbackDays: number; dayKeys: string[]; categories: AnomalyRadarCategory[]};
+export type KpiDelta = {current: number; previous: number | null; pctChange: number | null};
+export type KpiComparison = {tasks: KpiDelta; visitors: KpiDelta; drivers: KpiDelta; users: KpiDelta};
+export type OperationalHealth = {score: number; band: 'Good' | 'Fair' | 'Poor'; breakdown: {warnInsights: number; openClientErrors: number}};
+
+export type CommandCenterBundle = IntelligenceBundle & {
+  taskFunnelVolume: TaskFunnelVolume;
+  activityTrend: {days: ActivityTrendDay[]};
+  demandHeatmap: DemandHeatmap;
+  visitorIntelligence: VisitorIntelligence;
+  anomalyRadar: AnomalyRadar;
+  kpiComparison: KpiComparison;
+  health: OperationalHealth;
+};
+
 export const analyticsApi = {
   // period omitted (or 'all') is the original all-time overview — same
   // response shape either way, just scoped to completedAt falling in the
@@ -427,6 +462,9 @@ export const analyticsApi = {
   // anomalies and the computed insight cards, in one fetch.
   intelligence: (period?: AnalyticsPeriod): Promise<IntelligenceBundle> =>
     client.get('/analytics/intelligence', {params: period && period !== 'all' ? {period} : undefined}).then(r => r.data),
+  // Everything the desktop command-center dashboard needs, in one fetch.
+  commandCenter: (period?: AnalyticsPeriod): Promise<CommandCenterBundle> =>
+    client.get('/analytics/command-center', {params: period && period !== 'all' ? {period} : undefined}).then(r => r.data),
 };
 
 export default client;
