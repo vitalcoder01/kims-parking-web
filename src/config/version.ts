@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 47;
-export const APP_VERSION_NAME = '1.9.1';
+export const APP_VERSION_CODE = 48;
+export const APP_VERSION_NAME = '1.9.2';
 export const RELEASE_NOTES =
-  'Admin Dashboard: now shows the full command-center experience on phones too — KPIs, activity trends, slot map, task funnel, top drivers, AI insights and "Ask Your Parking System", not just on desktop.';
+  'Admin Dashboard: added a light/dark toggle, and trimmed the view down to the essentials (Tasks, Visitors, Slots, Drivers, Users, trends, heatmap, slot map, task funnel, top drivers).';

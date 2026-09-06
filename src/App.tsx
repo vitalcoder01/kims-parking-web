@@ -294,7 +294,6 @@ function RoleRouter() {
         onOpenMap={(block) => { setMapFocusBlock(block); setTab('Map'); }}
         onOpenDrivers={() => { setStaffInitialFilter('driver'); setTab('Staff'); }}
         onOpenGuard={() => setTab('Guard')}
-        onOpenIntelligence={() => setTab('Intelligence')}
         onOpenAttendance={() => setTab('Attendance')}
       />
     : tab === 'Staff'       ? <AdminStaffScreen initialFilter={staffInitialFilter} />

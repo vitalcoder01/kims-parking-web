@@ -1,13 +1,12 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import {Icon} from '../../../components/Icon';
 import {PressableScale} from '../../../components/PressableScale';
 import {useAppState} from '../../../context/AppStateContext';
 import {analyticsApi, AnalyticsPeriod, CommandCenterBundle, SlotClassification} from '../../../services/api';
-import {cc} from './ccTheme';
+import {CcThemeContext, ccDark, ccLight, CcThemeMode, readCcThemeMode, writeCcThemeMode, useCc} from './ccTheme';
 import {
-  periodDateRangeLabel, Panel, KpiCard, SlotsKpiCard, HealthKpiCard, TrendChart, Heatmap,
-  SlotUtilizationPanel, AiInsightsPanel, RealtimeOperationsPanel, ParkingSlotMapPanel,
-  TaskFunnelPanel, TopDriversPanel, VisitorAnalyticsPanel, VisitorTypesPanel, AnomalyRadarPanel,
-  AskParkingSystemPanel,
+  periodDateRangeLabel, Panel, KpiCard, SlotsKpiCard, TrendChart, Heatmap,
+  SlotUtilizationPanel, ParkingSlotMapPanel, TaskFunnelPanel, TopDriversPanel,
 } from './panels';
 
 const PERIODS: {key: AnalyticsPeriod; label: string}[] = [
@@ -21,23 +20,51 @@ const PERIODS: {key: AnalyticsPeriod; label: string}[] = [
 /*
  * The phone-frame counterpart to AdminCommandCenter.tsx's desktop grid —
  * same data (analyticsApi.commandCenter), same panels (./panels.tsx), same
- * "cc" reference-matched palette, laid out as a single scrolling column
- * instead of a 4-column grid. This is what replaces AdminDashboardScreen as
- * the admin's "Dashboard" tab content on a phone.
+ * "cc" reference-matched palette (with the same light/dark toggle), laid
+ * out as a single scrolling column instead of a grid. This is what
+ * replaces AdminDashboardScreen as the admin's "Dashboard" tab content on
+ * a phone.
  *
- * Deliberately reordered, not just stacked top-to-bottom in the desktop's
- * grid order: AI Insights, capacity (slot utilization) and live operations
- * come first — the things worth seeing without scrolling on a phone — with
- * the denser trend/heatmap charts and the explorer panels below.
+ * By request, pared back to 6 panels (same set as the desktop version):
+ * the 5-card KPI row, Parking Activity Trends, Hourly Demand Heatmap,
+ * Slot Utilization, Parking Slot Map, Task Funnel and Top Drivers. Visitor
+ * Analytics/Types, Anomaly Radar, Ask Your Parking System, Realtime
+ * Operations, the Operational Health KPI and the AI Insights preview were
+ * all removed from this view — the full AI Insights screen is still one
+ * tap away on the Intelligence tab, untouched.
  */
-export function AdminDashboardMobile({onOpenMap, onOpenDrivers, onOpenGuard, onOpenIntelligence, onOpenAttendance}: {
+export function AdminDashboardMobile({onOpenMap, onOpenDrivers, onOpenGuard, onOpenAttendance}: {
   onOpenMap: (block?: string) => void;
   onOpenDrivers: () => void;
   onOpenGuard: () => void;
-  onOpenIntelligence: () => void;
   onOpenAttendance: () => void;
 }) {
-  const {slots: liveSlots, tasks: liveTasks} = useAppState();
+  const [themeMode, setThemeMode] = useState<CcThemeMode>(() => readCcThemeMode());
+  const palette = themeMode === 'light' ? ccLight : ccDark;
+  const toggleTheme = useCallback(() => {
+    setThemeMode(m => {
+      const next: CcThemeMode = m === 'dark' ? 'light' : 'dark';
+      writeCcThemeMode(next);
+      return next;
+    });
+  }, []);
+
+  return (
+    <CcThemeContext.Provider value={palette}>
+      <DashboardBody
+        onOpenMap={onOpenMap} onOpenDrivers={onOpenDrivers} onOpenGuard={onOpenGuard} onOpenAttendance={onOpenAttendance}
+        themeMode={themeMode} onToggleTheme={toggleTheme}
+      />
+    </CcThemeContext.Provider>
+  );
+}
+
+function DashboardBody({onOpenMap, onOpenDrivers, onOpenGuard, onOpenAttendance, themeMode, onToggleTheme}: {
+  onOpenMap: (block?: string) => void; onOpenDrivers: () => void; onOpenGuard: () => void; onOpenAttendance: () => void;
+  themeMode: CcThemeMode; onToggleTheme: () => void;
+}) {
+  const cc = useCc();
+  const {slots: liveSlots} = useAppState();
   const [period, setPeriod] = useState<AnalyticsPeriod>('monthly');
   const [data, setData] = useState<CommandCenterBundle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,14 +106,14 @@ export function AdminDashboardMobile({onOpenMap, onOpenDrivers, onOpenGuard, onO
   }
   if (!data) return null;
 
-  const {overview, kpiComparison, health, taskFunnelVolume, anomalyRadar, visitorIntelligence, insights, activityTrend, demandHeatmap} = data;
+  const {overview, kpiComparison, taskFunnelVolume, activityTrend, demandHeatmap} = data;
   const occupiedNow = liveSlots.filter(s => s.status === 'occupied').length;
   const totalSlotsNow = liveSlots.length;
   const occPct = totalSlotsNow ? Math.round((occupiedNow / totalSlotsNow) * 100) : 0;
 
   return (
     <div className="screen-scroll" style={{backgroundColor: cc.bg, padding: 16, paddingBottom: 40}}>
-      {/* Period selector + real date range + refresh */}
+      {/* Period selector + real date range + refresh + theme toggle */}
       <div style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4}}>
         <div className="hscroll" style={{gap: 8, flex: 1}}>
           {PERIODS.map(p => {
@@ -100,41 +127,37 @@ export function AdminDashboardMobile({onOpenMap, onOpenDrivers, onOpenGuard, onO
           })}
         </div>
         <PressableScale
+          onClick={onToggleTheme}
+          title={themeMode === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+          style={{width: 32, height: 32, borderRadius: 16, backgroundColor: cc.card, border: `1px solid ${cc.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+          <Icon name={themeMode === 'dark' ? 'moon' : 'sun'} size={14} color={cc.textPrimary} />
+        </PressableScale>
+        <PressableScale
           disabled={refreshing}
           style={{width: 32, height: 32, borderRadius: 16, backgroundColor: cc.card, border: `1px solid ${cc.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: refreshing ? 0.6 : 1, flexShrink: 0}}
           onClick={() => { setRefreshing(true); load(period, true); }}>
-          {refreshing ? <span className="spinner" style={{width: 13, height: 13, borderColor: cc.border, borderTopColor: cc.accentBlue}} /> : <span style={{fontSize: 13, color: cc.textPrimary}}>↻</span>}
+          {refreshing ? <span className="spinner" style={{width: 13, height: 13, borderColor: cc.border, borderTopColor: cc.accentBlue}} /> : <Icon name="refresh" size={14} color={cc.textPrimary} />}
         </PressableScale>
       </div>
       <div style={{fontSize: 10.5, color: cc.textMuted, fontWeight: 600, marginBottom: 14}}>{periodDateRangeLabel(period)}</div>
 
-      {/* KPI row — 2 columns x 3 rows on a phone rather than one cramped scroller. */}
+      {/* KPI row — 2 columns; the odd 5th card (Users) spans the full width. */}
       <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16}}>
-        <KpiCard icon="car" iconColor={cc.kpi.tasks.icon} bg={cc.kpi.tasks.bg} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" deltaPct={kpiComparison.tasks.pctChange} onClick={onOpenGuard} />
-        <KpiCard icon="people" iconColor={cc.kpi.visitors.icon} bg={cc.kpi.visitors.bg} value={visitorIntelligence.total.toLocaleString()} label="Visitors" deltaPct={kpiComparison.visitors.pctChange} onClick={onOpenGuard} />
+        <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" deltaPct={kpiComparison.tasks.pctChange} onClick={onOpenGuard} />
+        <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" deltaPct={kpiComparison.visitors.pctChange} onClick={onOpenGuard} />
         <SlotsKpiCard occPct={occPct} occupied={occupiedNow} available={totalSlotsNow - occupiedNow} total={totalSlotsNow} onClick={() => onOpenMap()} />
-        <KpiCard icon="car" iconColor={cc.kpi.drivers.icon} bg={cc.kpi.drivers.bg} value={String(kpiComparison.drivers.current)} label="Drivers" deltaPct={kpiComparison.drivers.pctChange} onClick={onOpenDrivers} />
-        <KpiCard icon="userCard" iconColor={cc.kpi.users.icon} bg={cc.kpi.users.bg} value={String(kpiComparison.users.current)} label="Users" deltaPct={kpiComparison.users.pctChange} onClick={onOpenAttendance} />
-        <HealthKpiCard health={health} onClick={onOpenIntelligence} />
+        <KpiCard icon="car" variant={cc.kpi.drivers} value={String(kpiComparison.drivers.current)} label="Drivers" deltaPct={kpiComparison.drivers.pctChange} onClick={onOpenDrivers} />
+        <div style={{gridColumn: 'span 2'}}>
+          <KpiCard icon="userCard" variant={cc.kpi.users} value={String(kpiComparison.users.current)} label="Users" deltaPct={kpiComparison.users.pctChange} onClick={onOpenAttendance} />
+        </div>
       </div>
 
-      {/* Critical intelligence first — AI insights, capacity, live ops. */}
-      <div style={{marginBottom: 14}}><AiInsightsPanel insights={insights} onNavigate={onOpenIntelligence} /></div>
       <div style={{marginBottom: 14}}><SlotUtilizationPanel liveSlots={liveSlots} onViewAll={() => onOpenMap()} /></div>
-      <div style={{marginBottom: 14}}><RealtimeOperationsPanel tasks={liveTasks} /></div>
-
-      {/* Demand / trend charts */}
       <div style={{marginBottom: 14}}><Panel title="Parking Activity Trends"><TrendChart days={activityTrend.days} /></Panel></div>
       <div style={{marginBottom: 14}}><Panel title="Hourly Demand Heatmap"><Heatmap heatmap={demandHeatmap} /></Panel></div>
-
-      {/* Investigation panels */}
       <div style={{marginBottom: 14}}><ParkingSlotMapPanel liveSlots={liveSlots} classById={classById} onOpenSlots={() => onOpenMap()} /></div>
       <div style={{marginBottom: 14}}><TaskFunnelPanel funnelVolume={taskFunnelVolume} /></div>
-      <div style={{marginBottom: 14}}><TopDriversPanel drivers={overview.drivers} onViewAll={onOpenDrivers} /></div>
-      <div style={{marginBottom: 14}}><VisitorAnalyticsPanel dailyCounts={visitorIntelligence.dailyCounts} /></div>
-      <div style={{marginBottom: 14}}><VisitorTypesPanel byVehicleType={visitorIntelligence.byVehicleType} total={visitorIntelligence.total} note={visitorIntelligence.note} /></div>
-      <div style={{marginBottom: 14}}><AnomalyRadarPanel categories={anomalyRadar.categories} /></div>
-      <AskParkingSystemPanel bundle={data} />
+      <TopDriversPanel drivers={overview.drivers} onViewAll={onOpenDrivers} />
     </div>
   );
 }

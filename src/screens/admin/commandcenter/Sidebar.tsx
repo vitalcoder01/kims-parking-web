@@ -1,6 +1,6 @@
 import React from 'react';
 import {Icon, IconName} from '../../../components/Icon';
-import {cc} from './ccTheme';
+import {useCc} from './ccTheme';
 
 export type CcSection =
   | 'dashboard' | 'liveview' | 'tasks' | 'slots' | 'visitors' | 'drivers'
@@ -30,6 +30,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export function Sidebar({active, onSelect, userName}: {active: CcSection; onSelect: (s: CcSection) => void; userName: string}) {
+  const cc = useCc();
   return (
     <div style={{
       width: 232, flexShrink: 0, display: 'flex', flexDirection: 'column',

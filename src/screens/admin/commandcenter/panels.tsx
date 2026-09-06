@@ -1,21 +1,20 @@
 import React, {useMemo, useState} from 'react';
-import {Icon} from '../../../components/Icon';
+import {Icon, IconName} from '../../../components/Icon';
 import {PressableScale} from '../../../components/PressableScale';
-import {ParkingSlot, ParkingTask} from '../../../context/AppStateContext';
-import {
-  AnalyticsPeriod, CommandCenterBundle, InsightCard, SlotClassification,
-  AnomalyRadarCategory, TaskFunnelVolume, DriverAnalytics, OperationalHealth, DemandHeatmap,
-} from '../../../services/api';
-import {cc, ccCard, ccPanelTitle, ccEmptyText} from './ccTheme';
+import {ParkingSlot} from '../../../context/AppStateContext';
+import {AnalyticsPeriod, SlotClassification, TaskFunnelVolume, DriverAnalytics, DemandHeatmap} from '../../../services/api';
+import {useCc, ccCard, ccPanelTitle, ccEmptyText, CcPalette} from './ccTheme';
 
 /*
  * Every presentational building block of the "command center" dashboard —
- * shared between the desktop shell (AdminCommandCenter.tsx, a wide 4-column
- * grid) and the mobile version (AdminDashboardMobile.tsx, the same panels
+ * shared between the desktop shell (AdminCommandCenter.tsx, a wide grid)
+ * and the mobile version (AdminDashboardMobile.tsx, the same panels
  * stacked in one column). One definition of each chart/card so the two
  * layouts can never drift into showing different numbers for the same
  * thing — only the ARRANGEMENT differs per screen size, never the content
- * or the data source.
+ * or the data source. Every component reads the active palette via
+ * useCc() (see ccTheme.ts) so the light/dark toggle reaches all of them
+ * from one place.
  */
 
 /** Mirrors backend utils/periodRange.js — display-only; the backend range
@@ -42,26 +41,14 @@ export function periodDateRangeLabel(period: AnalyticsPeriod): string {
   return `Jan 1 - Dec 31, ${now.getFullYear()}`;
 }
 
-export function agoLabel(ts: number): string {
-  const mins = Math.max(0, Math.round((Date.now() - ts) / 60000));
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins} min ago`;
-  return `${Math.floor(mins / 60)} hr ago`;
-}
-
-export function hourLabel(h: number): string {
-  const period = h < 12 ? 'AM' : 'PM';
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12} ${period}`;
-}
-
 // ── Shared small primitives ────────────────────────────────────────────────
 
 export function Panel({title, right, children, style}: {title: string; right?: React.ReactNode; children: React.ReactNode; style?: React.CSSProperties}) {
+  const cc = useCc();
   return (
-    <div style={{...ccCard, padding: 16, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative', ...style}}>
+    <div style={{...ccCard(cc), padding: 16, display: 'flex', flexDirection: 'column', minHeight: 0, position: 'relative', ...style}}>
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexShrink: 0, gap: 8}}>
-        <span style={ccPanelTitle}>{title}</span>
+        <span style={ccPanelTitle(cc)}>{title}</span>
         {right}
       </div>
       <div style={{flex: 1, minHeight: 0}}>{children}</div>
@@ -69,9 +56,12 @@ export function Panel({title, right, children, style}: {title: string; right?: R
   );
 }
 
-export const linkBtnStyle: React.CSSProperties = {background: 'none', border: 'none', color: cc.accentBlue, fontSize: 11, fontWeight: 800, cursor: 'pointer', padding: 0};
+function linkBtnStyle(cc: CcPalette): React.CSSProperties {
+  return {background: 'none', border: 'none', color: cc.accentBlue, fontSize: 11, fontWeight: 800, cursor: 'pointer', padding: 0};
+}
 
 export function LegendRow({color, label, value, pct}: {color: string; label: string; value: number; pct?: number}) {
+  const cc = useCc();
   return (
     <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
       <span style={{width: 9, height: 9, borderRadius: 3, backgroundColor: color, flexShrink: 0}} />
@@ -82,6 +72,7 @@ export function LegendRow({color, label, value, pct}: {color: string; label: str
 }
 
 export function LegendDot({color, label}: {color: string; label: string}) {
+  const cc = useCc();
   return (
     <span style={{display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: cc.textMuted, fontWeight: 700}}>
       <span style={{width: 8, height: 8, borderRadius: 2, backgroundColor: color, display: 'inline-block'}} />{label}
@@ -92,6 +83,7 @@ export function LegendDot({color, label}: {color: string; label: string}) {
 export function Donut({parts, size = 100, stroke = 13, centerLabel, centerSub}: {
   parts: {value: number; color: string}[]; size?: number; stroke?: number; centerLabel: string; centerSub?: string;
 }) {
+  const cc = useCc();
   const total = parts.reduce((a, p) => a + p.value, 0) || 1;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -119,28 +111,22 @@ export function Donut({parts, size = 100, stroke = 13, centerLabel, centerSub}: 
   );
 }
 
-export function MiniSparkline({series, color, width = 60, height = 20}: {series: number[]; color: string; width?: number; height?: number}) {
-  const max = Math.max(1, ...series);
-  const n = series.length;
-  const pts = series.map((v, i) => `${(i / Math.max(1, n - 1)) * width},${height - (v / max) * height}`).join(' ');
-  return <svg width={width} height={height} style={{flexShrink: 0}}><polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} /></svg>;
-}
-
 // ── KPI row ─────────────────────────────────────────────────────────────
 
-export function KpiCard({icon, iconColor, bg, value, label, deltaPct, onClick}: {
-  icon: import('../../../components/Icon').IconName; iconColor: string; bg: string; value: string; label: string; deltaPct: number | null; onClick: () => void;
+export function KpiCard({icon, variant, value, label, deltaPct, onClick}: {
+  icon: IconName; variant: {bg: string; icon: string; valueText: string; labelText: string}; value: string; label: string; deltaPct: number | null; onClick: () => void;
 }) {
+  const cc = useCc();
   return (
-    <PressableScale onClick={onClick} style={{flex: 1, borderRadius: 14, backgroundColor: bg, padding: 14, textAlign: 'left', display: 'block', minWidth: 0}}>
-      <Icon name={icon} size={17} color={iconColor} />
-      <div style={{fontSize: 22, fontWeight: 900, color: '#fff', marginTop: 8, letterSpacing: -0.5}}>{value}</div>
-      <div style={{fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.7)', marginTop: 1}}>{label}</div>
+    <PressableScale onClick={onClick} style={{flex: 1, borderRadius: 14, backgroundColor: variant.bg, padding: 14, textAlign: 'left', display: 'block', minWidth: 0}}>
+      <Icon name={icon} size={17} color={variant.icon} />
+      <div style={{fontSize: 22, fontWeight: 900, color: variant.valueText, marginTop: 8, letterSpacing: -0.5}}>{value}</div>
+      <div style={{fontSize: 11, fontWeight: 700, color: variant.labelText, marginTop: 1}}>{label}</div>
       {deltaPct != null && (
         <div style={{display: 'flex', alignItems: 'center', gap: 4, marginTop: 8}}>
-          <Icon name={deltaPct >= 0 ? 'arrowUp' : 'arrowDown'} size={9} color={deltaPct >= 0 ? '#8CF0B4' : '#F0A8A8'} />
-          <span style={{fontSize: 10.5, fontWeight: 800, color: deltaPct >= 0 ? '#8CF0B4' : '#F0A8A8'}}>{Math.abs(deltaPct)}%</span>
-          <span style={{fontSize: 9.5, color: 'rgba(255,255,255,0.5)'}}>vs last period</span>
+          <Icon name={deltaPct >= 0 ? 'arrowUp' : 'arrowDown'} size={9} color={deltaPct >= 0 ? cc.deltaUp : cc.deltaDown} />
+          <span style={{fontSize: 10.5, fontWeight: 800, color: deltaPct >= 0 ? cc.deltaUp : cc.deltaDown}}>{Math.abs(deltaPct)}%</span>
+          <span style={{fontSize: 9.5, color: variant.labelText}}>vs last period</span>
         </div>
       )}
     </PressableScale>
@@ -148,32 +134,17 @@ export function KpiCard({icon, iconColor, bg, value, label, deltaPct, onClick}: 
 }
 
 export function SlotsKpiCard({occPct, occupied, available, total, onClick}: {occPct: number; occupied: number; available: number; total: number; onClick: () => void}) {
+  const cc = useCc();
+  const v = cc.kpi.slots;
   return (
-    <PressableScale onClick={onClick} style={{flex: 1, borderRadius: 14, backgroundColor: cc.kpi.slots.bg, padding: 14, display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left'}}>
+    <PressableScale onClick={onClick} style={{flex: 1, borderRadius: 14, backgroundColor: v.bg, padding: 14, display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left'}}>
       <div style={{flex: 1, minWidth: 0}}>
-        <Icon name="parking" size={17} color={cc.kpi.slots.icon} />
-        <div style={{fontSize: 20, fontWeight: 900, color: '#fff', marginTop: 6}}>{total}</div>
-        <div style={{fontSize: 10.5, fontWeight: 700, color: 'rgba(255,255,255,0.7)'}}>Parking Slots</div>
-        <div style={{fontSize: 9, color: 'rgba(255,255,255,0.55)', marginTop: 4}}>{occupied} Occupied · {available} Available</div>
+        <Icon name="parking" size={17} color={v.icon} />
+        <div style={{fontSize: 20, fontWeight: 900, color: v.valueText, marginTop: 6}}>{total}</div>
+        <div style={{fontSize: 10.5, fontWeight: 700, color: v.labelText}}>Parking Slots</div>
+        <div style={{fontSize: 9, color: v.labelText, marginTop: 4}}>{occupied} Occupied · {available} Available</div>
       </div>
-      <Donut parts={[{value: occupied, color: '#F1786F'}, {value: available, color: '#4ADE9A'}]} size={52} stroke={7} centerLabel={`${occPct}%`} />
-    </PressableScale>
-  );
-}
-
-export function HealthKpiCard({health, onClick}: {health: OperationalHealth; onClick: () => void}) {
-  const bandColor = health.band === 'Good' ? cc.success : health.band === 'Fair' ? cc.warning : cc.danger;
-  return (
-    <PressableScale onClick={onClick} style={{flex: 1, ...ccCard, padding: 14, textAlign: 'left', display: 'block'}}>
-      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
-        <Icon name="shield" size={17} color={bandColor} />
-        <span style={{fontSize: 9.5, fontWeight: 800, color: bandColor, backgroundColor: bandColor + '22', borderRadius: 999, padding: '2px 7px'}}>{health.band}</span>
-      </div>
-      <div style={{fontSize: 11, fontWeight: 700, color: cc.textSecondary, marginTop: 8}}>Operational Health</div>
-      <div style={{fontSize: 20, fontWeight: 900, color: cc.textPrimary, marginTop: 2}}>{health.score} <span style={{fontSize: 12, color: cc.textMuted, fontWeight: 700}}>/ 100</span></div>
-      <div style={{height: 5, borderRadius: 3, backgroundColor: cc.divider, marginTop: 8, overflow: 'hidden'}}>
-        <div style={{height: 5, borderRadius: 3, width: `${health.score}%`, backgroundColor: bandColor}} />
-      </div>
+      <Donut parts={[{value: occupied, color: cc.danger}, {value: available, color: cc.success}]} size={52} stroke={7} centerLabel={`${occPct}%`} />
     </PressableScale>
   );
 }
@@ -181,6 +152,7 @@ export function HealthKpiCard({health, onClick}: {health: OperationalHealth; onC
 // ── Parking Activity Trends ────────────────────────────────────────────────
 
 export function TrendChart({days}: {days: {date: string; tasks: number; visitors: number}[]}) {
+  const cc = useCc();
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const width = 640, height = 190, padL = 4, padR = 4, padT = 8, padB = 20;
   const innerW = width - padL - padR, innerH = height - padT - padB;
@@ -193,7 +165,7 @@ export function TrendChart({days}: {days: {date: string; tasks: number; visitors
   const areaPath = n > 0 ? `${pathFor('tasks')} L ${xAt(n - 1)} ${padT + innerH} L ${xAt(0)} ${padT + innerH} Z` : '';
   const active = hoverIdx != null ? days[hoverIdx] : null;
 
-  if (n === 0) return <div style={ccEmptyText}>No activity recorded in this period.</div>;
+  if (n === 0) return <div style={ccEmptyText(cc)}>No activity recorded in this period.</div>;
 
   return (
     <div style={{position: 'relative'}}>
@@ -257,8 +229,8 @@ export function TrendChart({days}: {days: {date: string; tasks: number; visitors
 
 // ── Hourly Demand Heatmap ──────────────────────────────────────────────────
 
-function heatColor(frac: number): string {
-  if (frac <= 0) return '#171E30';
+function heatColor(frac: number, mode: 'light' | 'dark'): string {
+  if (frac <= 0) return mode === 'dark' ? '#171E30' : '#EDEFF6';
   if (frac < 0.33) return '#4C3A9E';
   if (frac < 0.66) return '#B45BC7';
   if (frac < 0.85) return '#E8703A';
@@ -266,6 +238,8 @@ function heatColor(frac: number): string {
 }
 
 export function Heatmap({heatmap}: {heatmap: DemandHeatmap}) {
+  const cc = useCc();
+  const mode: 'light' | 'dark' = cc.bg === '#0A0E1A' ? 'dark' : 'light';
   const [hover, setHover] = useState<{row: number; col: number} | null>(null);
   return (
     <div>
@@ -282,7 +256,7 @@ export function Heatmap({heatmap}: {heatmap: DemandHeatmap}) {
                 onMouseEnter={() => setHover({row, col})}
                 onMouseLeave={() => setHover(null)}
                 onClick={() => setHover(hover?.row === row && hover?.col === col ? null : {row, col})}
-                style={{aspectRatio: '1', borderRadius: 2, backgroundColor: heatColor(cell.tasks / heatmap.maxTasks), cursor: 'pointer'}}
+                style={{aspectRatio: '1', borderRadius: 2, backgroundColor: heatColor(cell.tasks / heatmap.maxTasks, mode), cursor: 'pointer'}}
               />
             ))}
           </React.Fragment>
@@ -302,6 +276,7 @@ export function Heatmap({heatmap}: {heatmap: DemandHeatmap}) {
 // ── Slot utilization (live snapshot) ───────────────────────────────────────
 
 export function SlotUtilizationPanel({liveSlots, onViewAll}: {liveSlots: ParkingSlot[]; onViewAll: () => void}) {
+  const cc = useCc();
   const total = liveSlots.length;
   const occupied = liveSlots.filter(s => s.status === 'occupied').length;
   const reserved = liveSlots.filter(s => s.status === 'reserved').length;
@@ -309,7 +284,7 @@ export function SlotUtilizationPanel({liveSlots, onViewAll}: {liveSlots: Parking
   const pct = total ? Math.round((occupied / total) * 100) : 0;
   return (
     <Panel title="Slot Utilization">
-      {total === 0 ? <div style={ccEmptyText}>No parking slots configured yet.</div> : (
+      {total === 0 ? <div style={ccEmptyText(cc)}>No parking slots configured yet.</div> : (
         <div style={{display: 'flex', alignItems: 'center', gap: 14}}>
           <Donut parts={[{value: occupied, color: cc.danger}, {value: available, color: cc.success}, {value: reserved, color: cc.accentAmber}]} centerLabel={`${pct}%`} centerSub="Occupied" />
           <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0}}>
@@ -327,74 +302,12 @@ export function SlotUtilizationPanel({liveSlots, onViewAll}: {liveSlots: Parking
   );
 }
 
-// ── AI Insights ─────────────────────────────────────────────────────────
-
-export function AiInsightsPanel({insights, onNavigate}: {insights: InsightCard[]; onNavigate: () => void}) {
-  return (
-    <Panel title="AI Insights" right={<button onClick={onNavigate} style={linkBtnStyle}>View All</button>} style={{flex: 1}}>
-      {insights.length === 0 ? <div style={ccEmptyText}>Nothing has crossed a meaningful threshold this period.</div> : (
-        <div style={{display: 'flex', flexDirection: 'column', maxHeight: '100%', overflowY: 'auto'}}>
-          {insights.slice(0, 6).map(i => (
-            <PressableScale key={i.id} onClick={onNavigate} style={{display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 2px', borderBottom: `1px solid ${cc.divider}`, textAlign: 'left'}}>
-              <div style={{width: 26, height: 26, borderRadius: 8, backgroundColor: (i.severity === 'warn' ? cc.warning : cc.accentCyan) + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-                <Icon name={i.severity === 'warn' ? 'alert' : 'info'} size={13} color={i.severity === 'warn' ? cc.warning : cc.accentCyan} />
-              </div>
-              <div style={{flex: 1, minWidth: 0}}>
-                <div style={{fontSize: 11.5, fontWeight: 800, color: i.severity === 'warn' ? cc.warning : cc.accentCyan}}>{i.title}</div>
-                <div style={{fontSize: 10.5, color: cc.textSecondary, marginTop: 2, lineHeight: '14px'}}>{i.observation}</div>
-              </div>
-              <Icon name="chevronRight" size={12} color={cc.textMuted} />
-            </PressableScale>
-          ))}
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-// ── Realtime Operations (live) ────────────────────────────────────────────
-
-export function RealtimeOperationsPanel({tasks}: {tasks: ParkingTask[]}) {
-  const events = useMemo(() => {
-    const withTime = tasks.map(t => {
-      const ts = t.completedAt ?? t.keyCollectedAt ?? t.assignedAt ?? t.requestedAt;
-      if (!ts) return null;
-      const label =
-        t.status === 'completed' ? (t.type === 'park' ? `Parked at ${t.slotId ?? '—'}` : `Retrieved${t.slotId ? ` from ${t.slotId}` : ''}`)
-        : t.status === 'assigned' ? `Slot assigned${t.slotId ? ` ${t.slotId}` : ''}`
-        : t.status === 'key_collected' ? 'Key collected'
-        : t.status === 'in_transit' ? 'In transit'
-        : null;
-      if (!label) return null;
-      return {id: t.id, carNumber: t.carNumber, label, ts};
-    }).filter((e): e is {id: number; carNumber: string; label: string; ts: number} => e != null);
-    return withTime.sort((a, b) => b.ts - a.ts).slice(0, 6);
-  }, [tasks]);
-
-  return (
-    <Panel title="Realtime Operations" right={<span style={{width: 8, height: 8, borderRadius: 4, backgroundColor: cc.success, display: 'inline-block'}} />}>
-      {events.length === 0 ? <div style={ccEmptyText}>No active operations right now.</div> : (
-        <div style={{display: 'flex', flexDirection: 'column', gap: 9}}>
-          {events.map(e => (
-            <div key={e.id} style={{display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11}}>
-              <div style={{flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
-                <span style={{fontWeight: 800, color: cc.textPrimary}}>{e.carNumber}</span>
-                <span style={{color: cc.textSecondary}}> {e.label}</span>
-              </div>
-              <span style={{color: cc.textMuted, flexShrink: 0}}>{agoLabel(e.ts)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </Panel>
-  );
-}
-
 // ── Parking Slot Map (live + period classification) ───────────────────────
 
 const SLOT_STATE_COLORS = {available: '#22C55E', occupied: '#EF4444', underutilized: '#E8C23A', overloaded: '#F0703A', reserved: '#F59E0B'};
 
 export function ParkingSlotMapPanel({liveSlots, classById, onOpenSlots}: {liveSlots: ParkingSlot[]; classById: Map<string, SlotClassification>; onOpenSlots: () => void}) {
+  const cc = useCc();
   const [selected, setSelected] = useState<string | null>(null);
   const byBlock = useMemo(() => {
     const m = new Map<string, ParkingSlot[]>();
@@ -414,10 +327,10 @@ export function ParkingSlotMapPanel({liveSlots, classById, onOpenSlots}: {liveSl
   const sel = selected ? liveSlots.find(s => s.id === selected) ?? null : null;
   const selUsage = sel ? classById.get(sel.id) : undefined;
 
-  if (liveSlots.length === 0) return <Panel title="Parking Slot Map"><div style={ccEmptyText}>No parking slots configured yet.</div></Panel>;
+  if (liveSlots.length === 0) return <Panel title="Parking Slot Map"><div style={ccEmptyText(cc)}>No parking slots configured yet.</div></Panel>;
 
   return (
-    <Panel title="Parking Slot Map" right={<button onClick={onOpenSlots} style={linkBtnStyle}>All Areas →</button>}>
+    <Panel title="Parking Slot Map" right={<button onClick={onOpenSlots} style={linkBtnStyle(cc)}>All Areas →</button>}>
       <div style={{display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 210, overflowY: 'auto'}}>
         {byBlock.map(b => (
           <div key={b.name}>
@@ -429,7 +342,7 @@ export function ParkingSlotMapPanel({liveSlots, classById, onOpenSlots}: {liveSl
                 return (
                   <button key={s.id} onClick={() => setSelected(on ? null : s.id)} title={s.id}
                     style={{
-                      width: 26, height: 24, borderRadius: 5, border: on ? '1.5px solid #fff' : 'none',
+                      width: 26, height: 24, borderRadius: 5, border: on ? `1.5px solid ${cc.textPrimary}` : 'none',
                       backgroundColor: st.color, cursor: 'pointer', opacity: on ? 1 : 0.85,
                     }} />
                 );
@@ -449,7 +362,7 @@ export function ParkingSlotMapPanel({liveSlots, classById, onOpenSlots}: {liveSl
           {(selUsage === 'OVERLOADED' || selUsage === 'UNDERUTILIZED') && (
             <div style={{fontSize: 10.5, color: cc.textMuted, marginTop: 2}}>{selUsage === 'OVERLOADED' ? 'Well above average use this period' : 'Well below average use this period'}</div>
           )}
-          <button onClick={onOpenSlots} style={{...linkBtnStyle, marginTop: 8, fontSize: 11}}>Click to view details →</button>
+          <button onClick={onOpenSlots} style={{...linkBtnStyle(cc), marginTop: 8, fontSize: 11}}>Click to view details →</button>
         </div>
       )}
 
@@ -466,9 +379,9 @@ export function ParkingSlotMapPanel({liveSlots, classById, onOpenSlots}: {liveSl
 
 // ── Task funnel (volume) ──────────────────────────────────────────────────
 
-const STAGE_COLORS = [cc.accentBlue, cc.accentIndigo, cc.accentAmber, cc.accentGreen];
-
 export function TaskFunnelPanel({funnelVolume}: {funnelVolume: TaskFunnelVolume}) {
+  const cc = useCc();
+  const stageColors = [cc.accentBlue, cc.accentIndigo, cc.accentAmber, cc.accentGreen];
   const [tab, setTab] = useState<'park' | 'retrieve'>('park');
   const data = funnelVolume[tab];
   const maxCount = Math.max(1, ...data.stages.map(s => s.count));
@@ -483,7 +396,7 @@ export function TaskFunnelPanel({funnelVolume}: {funnelVolume: TaskFunnelVolume}
         ))}
       </div>
     }>
-      {data.sampleSize === 0 ? <div style={ccEmptyText}>No {tab} tasks in this period.</div> : (
+      {data.sampleSize === 0 ? <div style={ccEmptyText(cc)}>No {tab} tasks in this period.</div> : (
         <div style={{display: 'flex', flexDirection: 'column', gap: 9}}>
           {data.stages.map((s, i) => (
             <div key={s.key}>
@@ -494,7 +407,7 @@ export function TaskFunnelPanel({funnelVolume}: {funnelVolume: TaskFunnelVolume}
                 </span>
               </div>
               <div style={{height: 7, borderRadius: 4, backgroundColor: cc.divider, overflow: 'hidden'}}>
-                <div style={{height: 7, borderRadius: 4, width: `${(s.count / maxCount) * 100}%`, backgroundColor: STAGE_COLORS[i % STAGE_COLORS.length]}} />
+                <div style={{height: 7, borderRadius: 4, width: `${(s.count / maxCount) * 100}%`, backgroundColor: stageColors[i % stageColors.length]}} />
               </div>
             </div>
           ))}
@@ -507,11 +420,12 @@ export function TaskFunnelPanel({funnelVolume}: {funnelVolume: TaskFunnelVolume}
 // ── Top Drivers ────────────────────────────────────────────────────────────
 
 export function TopDriversPanel({drivers, onViewAll}: {drivers: DriverAnalytics[]; onViewAll: () => void}) {
+  const cc = useCc();
   const active = drivers.filter(d => d.totalCompleted > 0).slice(0, 5);
   const maxV = Math.max(1, ...active.map(d => d.totalCompleted));
   return (
-    <Panel title="Top Drivers" right={<button onClick={onViewAll} style={linkBtnStyle}>By Tasks</button>}>
-      {active.length === 0 ? <div style={ccEmptyText}>No completed jobs yet.</div> : (
+    <Panel title="Top Drivers" right={<button onClick={onViewAll} style={linkBtnStyle(cc)}>By Tasks</button>}>
+      {active.length === 0 ? <div style={ccEmptyText(cc)}>No completed jobs yet.</div> : (
         <div style={{display: 'flex', flexDirection: 'column', gap: 9}}>
           {active.map((d, i) => (
             <div key={d.id} style={{display: 'flex', alignItems: 'center', gap: 8}}>
@@ -528,123 +442,6 @@ export function TopDriversPanel({drivers, onViewAll}: {drivers: DriverAnalytics[
       <PressableScale onClick={onViewAll} style={{marginTop: 14, width: '100%', height: 32, borderRadius: 9, backgroundColor: cc.accentBlue + '18', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
         <span style={{fontSize: 11, fontWeight: 800, color: cc.accentBlue}}>View All Drivers →</span>
       </PressableScale>
-    </Panel>
-  );
-}
-
-// ── Visitor Analytics / Types ──────────────────────────────────────────────
-
-export function VisitorAnalyticsPanel({dailyCounts}: {dailyCounts: {date: string; count: number}[]}) {
-  const maxV = Math.max(1, ...dailyCounts.map(d => d.count));
-  return (
-    <Panel title="Visitor Analytics">
-      {dailyCounts.length === 0 ? <div style={ccEmptyText}>No visitors in this period.</div> : (
-        <div style={{display: 'flex', alignItems: 'flex-end', height: 120, gap: 2}}>
-          {dailyCounts.map(d => (
-            <div key={d.date} title={`${d.date}: ${d.count}`} style={{flex: 1, height: `${(d.count / maxV) * 100}%`, minHeight: 2, backgroundColor: cc.accentPurple, borderRadius: 2}} />
-          ))}
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-const VEHICLE_TYPE_COLORS: Record<string, string> = {car: cc.accentBlue, bike: cc.accentAmber};
-
-export function VisitorTypesPanel({byVehicleType, total, note}: {byVehicleType: Record<string, number>; total: number; note: string}) {
-  const entries = Object.entries(byVehicleType);
-  return (
-    <Panel title="Visitor Types">
-      {total === 0 ? <div style={ccEmptyText}>No visitors in this period.</div> : (
-        <>
-          <div style={{display: 'flex', alignItems: 'center', gap: 14}}>
-            <Donut parts={entries.map(([k, v]) => ({value: v, color: VEHICLE_TYPE_COLORS[k] ?? cc.accentPurple}))} centerLabel={String(total)} centerSub="Visitors" size={92} />
-            <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0}}>
-              {entries.map(([k, v]) => (
-                <LegendRow key={k} color={VEHICLE_TYPE_COLORS[k] ?? cc.accentPurple} label={k[0].toUpperCase() + k.slice(1)} value={v} pct={Math.round((v / total) * 100)} />
-              ))}
-            </div>
-          </div>
-          <div style={{fontSize: 9.5, color: cc.textMuted, marginTop: 10, lineHeight: '13px'}}>{note}</div>
-        </>
-      )}
-    </Panel>
-  );
-}
-
-// ── Anomaly Radar ──────────────────────────────────────────────────────────
-
-export function AnomalyRadarPanel({categories}: {categories: AnomalyRadarCategory[]}) {
-  return (
-    <Panel title="Anomaly Radar (Last 14 Days)">
-      <div style={{display: 'flex', flexDirection: 'column', gap: 9}}>
-        {categories.map(c => (
-          <div key={c.key} style={{display: 'flex', alignItems: 'center', gap: 8}}>
-            <span style={{width: 7, height: 7, borderRadius: 4, backgroundColor: c.anomalyCount > 0 ? cc.danger : cc.textMuted, flexShrink: 0}} />
-            <span style={{flex: 1, fontSize: 10.5, fontWeight: 700, color: cc.textSecondary, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis'}}>{c.label}</span>
-            <MiniSparkline series={c.series} color={c.anomalyCount > 0 ? cc.danger : cc.accentCyan} />
-            <span style={{fontSize: 10.5, fontWeight: 800, color: cc.textPrimary, width: 14, textAlign: 'right', flexShrink: 0}}>{c.anomalyCount}</span>
-          </div>
-        ))}
-      </div>
-    </Panel>
-  );
-}
-
-// ── Ask Your Parking System ────────────────────────────────────────────────
-
-const SUGGESTED_QUESTIONS = ['Why was parking busy yesterday?', 'Which slots are underutilized?', 'Who is overloaded?', 'What changed this week?', 'Where are the bottlenecks?'];
-
-function answerQuestion(q: string, bundle: CommandCenterBundle): string {
-  const s = q.toLowerCase();
-  if (s.includes('busy') || s.includes('peak')) {
-    if (bundle.overview.busiestHour == null) return 'Not enough completed jobs yet to identify a peak hour.';
-    return `Demand peaks around ${hourLabel(bundle.overview.busiestHour)}, with ${bundle.overview.hourlyDistribution[bundle.overview.busiestHour]} jobs completed in that hour this period.`;
-  }
-  if (s.includes('underutilized')) {
-    const examples = bundle.slots.slots.filter(x => x.classification === 'UNDERUTILIZED').slice(0, 5).map(x => x.id);
-    return bundle.slots.underutilizedCount === 0 ? 'No slots are currently underutilized.' : `${bundle.slots.underutilizedCount} of ${bundle.slots.totalSlots} slots are underutilized this period: ${examples.join(', ')}.`;
-  }
-  if (s.includes('overload') || s.includes('driver')) {
-    const active = bundle.overview.drivers.filter(d => d.totalCompleted > 0);
-    if (!active.length) return 'No completed jobs yet to assess driver load.';
-    const total = active.reduce((a, d) => a + d.totalCompleted, 0);
-    const top = active[0];
-    return `${top.name} is handling the most jobs: ${top.totalCompleted} of ${total} completed this period (${Math.round((top.totalCompleted / total) * 100)}%).`;
-  }
-  if (s.includes('changed') || s.includes('week')) {
-    const t = bundle.kpiComparison.tasks;
-    if (t.pctChange == null) return 'No prior period to compare against.';
-    return `Completed tasks are ${t.pctChange >= 0 ? 'up' : 'down'} ${Math.abs(t.pctChange)}% vs the previous period (${t.previous} → ${t.current}).`;
-  }
-  if (s.includes('bottleneck')) {
-    const b = bundle.taskFunnel.retrieve.bottleneck ?? bundle.taskFunnel.park.bottleneck;
-    if (!b) return 'No stage currently stands out as a bottleneck.';
-    return `The slowest stage is "${b.label}", averaging ${Math.round(b.avgMinutes ?? 0)} minutes across ${b.sampleSize} jobs.`;
-  }
-  return 'I can answer questions about peak hours, underutilized slots, driver workload, week-over-week change, and bottlenecks — try one of the suggestions below.';
-}
-
-export function AskParkingSystemPanel({bundle}: {bundle: CommandCenterBundle}) {
-  const [q, setQ] = useState('');
-  const [answer, setAnswer] = useState<string | null>(null);
-  const ask = (question: string) => { setQ(question); setAnswer(answerQuestion(question, bundle)); };
-  return (
-    <Panel title="Ask Your Parking System">
-      <div style={{display: 'flex', gap: 8, marginBottom: 10}}>
-        <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') ask(q); }}
-          placeholder="e.g. Why was parking busy yesterday?"
-          style={{flex: 1, height: 32, borderRadius: 9, border: `1px solid ${cc.border}`, backgroundColor: cc.cardAlt, color: cc.textPrimary, fontSize: 11, padding: '0 10px', outline: 'none'}} />
-        <PressableScale onClick={() => ask(q)} style={{width: 32, height: 32, borderRadius: 9, backgroundColor: cc.accentBlue, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-          <Icon name="arrowRight" size={14} color="#fff" />
-        </PressableScale>
-      </div>
-      {answer && <div style={{backgroundColor: cc.cardAlt, border: `1px solid ${cc.border}`, borderRadius: 9, padding: 10, fontSize: 11, color: cc.textSecondary, marginBottom: 10, lineHeight: '15px'}}>{answer}</div>}
-      <div style={{display: 'flex', flexWrap: 'wrap', gap: 6}}>
-        {SUGGESTED_QUESTIONS.map(sq => (
-          <button key={sq} onClick={() => ask(sq)} style={{fontSize: 10, fontWeight: 700, padding: '5px 9px', borderRadius: 999, border: `1px solid ${cc.border}`, backgroundColor: cc.cardAlt, color: cc.textSecondary, cursor: 'pointer'}}>{sq}</button>
-        ))}
-      </div>
     </Panel>
   );
 }

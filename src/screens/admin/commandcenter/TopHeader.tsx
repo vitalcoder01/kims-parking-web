@@ -1,7 +1,7 @@
 import React from 'react';
 import {Icon} from '../../../components/Icon';
 import {PressableScale} from '../../../components/PressableScale';
-import {cc} from './ccTheme';
+import {useCc, CcThemeMode} from './ccTheme';
 import type {AnalyticsPeriod} from '../../../services/api';
 
 const PERIODS: {key: AnalyticsPeriod; label: string}[] = [
@@ -12,12 +12,14 @@ const PERIODS: {key: AnalyticsPeriod; label: string}[] = [
   {key: 'all', label: 'All-time'},
 ];
 
-export function TopHeader({period, onPeriodChange, dateRangeLabel, onRefresh, refreshing, connected, query, onQueryChange, unreadCount, userName}: {
+export function TopHeader({period, onPeriodChange, dateRangeLabel, onRefresh, refreshing, connected, query, onQueryChange, unreadCount, userName, themeMode, onToggleTheme}: {
   period: AnalyticsPeriod; onPeriodChange: (p: AnalyticsPeriod) => void; dateRangeLabel: string;
   onRefresh: () => void; refreshing: boolean; connected: boolean;
   query: string; onQueryChange: (q: string) => void;
   unreadCount: number; userName: string;
+  themeMode: CcThemeMode; onToggleTheme: () => void;
 }) {
+  const cc = useCc();
   return (
     <div style={{
       height: 64, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12,
@@ -91,12 +93,16 @@ export function TopHeader({period, onPeriodChange, dateRangeLabel, onRefresh, re
         )}
       </div>
 
-      {/* Fixed-dark by design (same reasoning as the mobile ops screens —
-          see adminDarkTheme.tsx), so this is a decorative indicator rather
-          than a working toggle. */}
-      <div title="This console is fixed-dark" style={{flexShrink: 0, width: 34, height: 34, borderRadius: 9, backgroundColor: cc.cardAlt, border: `1px solid ${cc.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.6}}>
-        <Icon name="moon" size={14} color={cc.textPrimary} />
-      </div>
+      {/* Real light/dark toggle for the command center's own palette (see
+          ccTheme.ts) — scoped to this shell + the Dashboard panels, not the
+          other reused mobile screens (Guard/Map/Staff/etc), which keep
+          their own separate fixed-dark theme. */}
+      <PressableScale
+        onClick={onToggleTheme}
+        title={themeMode === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+        style={{flexShrink: 0, width: 34, height: 34, borderRadius: 9, backgroundColor: cc.cardAlt, border: `1px solid ${cc.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+        <Icon name={themeMode === 'dark' ? 'moon' : 'sun'} size={14} color={cc.textPrimary} />
+      </PressableScale>
 
       <div style={{flexShrink: 0, width: 34, height: 34, borderRadius: 17, backgroundColor: cc.accentBlue + '30', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
         <span style={{fontSize: 11.5, fontWeight: 800, color: cc.accentBlue}}>{userName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>

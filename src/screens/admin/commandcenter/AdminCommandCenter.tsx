@@ -2,14 +2,12 @@ import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {useAppState} from '../../../context/AppStateContext';
 import {getSocket} from '../../../services/socket';
 import {analyticsApi, AnalyticsPeriod, CommandCenterBundle, SlotClassification} from '../../../services/api';
-import {cc} from './ccTheme';
+import {CcThemeContext, ccDark, ccLight, CcThemeMode, readCcThemeMode, writeCcThemeMode, useCc} from './ccTheme';
 import {Sidebar, CcSection} from './Sidebar';
 import {TopHeader} from './TopHeader';
 import {
-  periodDateRangeLabel, Panel, KpiCard, SlotsKpiCard, HealthKpiCard, TrendChart, Heatmap,
-  SlotUtilizationPanel, AiInsightsPanel, RealtimeOperationsPanel, ParkingSlotMapPanel,
-  TaskFunnelPanel, TopDriversPanel, VisitorAnalyticsPanel, VisitorTypesPanel, AnomalyRadarPanel,
-  AskParkingSystemPanel,
+  periodDateRangeLabel, Panel, KpiCard, SlotsKpiCard, TrendChart, Heatmap,
+  SlotUtilizationPanel, ParkingSlotMapPanel, TaskFunnelPanel, TopDriversPanel,
 } from './panels';
 
 // Existing screens reused as-is inside sidebar sections that don't need a
@@ -30,7 +28,7 @@ import {SettingsScreen} from '../../SettingsScreen';
  * charts, colors), while every number on it comes from the real database
  * via the backend's /analytics/command-center bundle (see
  * analytics.service.js) plus the app's existing live AppStateContext for
- * anything genuinely real-time (slot occupancy, the activity feed).
+ * anything genuinely real-time (slot occupancy).
  *
  * Only renders on wide viewports (see App.tsx's useIsWide gate) — narrower
  * screens get AdminDashboardMobile.tsx instead, a single-column stack of
@@ -43,6 +41,16 @@ import {SettingsScreen} from '../../SettingsScreen';
  * Sidebar items with no existing backing screen (Parking Tasks list,
  * Visitors list, Notifications list, Reports) are shown disabled with a
  * "Soon" tag in Sidebar.tsx rather than linked to something fake.
+ *
+ * By request, the Dashboard section itself was pared back from the
+ * original reference's full 12-panel layout: Visitor Analytics, Visitor
+ * Types, Anomaly Radar, Ask Your Parking System, Realtime Operations and
+ * the Operational Health KPI were all removed, and the AI Insights preview
+ * panel is no longer shown here (the full AI Insights screen is still
+ * reachable from the sidebar, untouched — only this Dashboard preview of
+ * it was dropped). Six panels remain: the 5-card KPI row, Parking Activity
+ * Trends, Hourly Demand Heatmap, Slot Utilization, Parking Slot Map, Task
+ * Funnel and Top Drivers.
  */
 export function AdminCommandCenter({userName}: {userName: string}) {
   const {notifications} = useAppState();
@@ -51,6 +59,8 @@ export function AdminCommandCenter({userName}: {userName: string}) {
   const [query, setQuery] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [connected, setConnected] = useState(() => getSocket()?.connected ?? false);
+  const [themeMode, setThemeMode] = useState<CcThemeMode>(() => readCcThemeMode());
+  const palette = themeMode === 'light' ? ccLight : ccDark;
 
   useEffect(() => {
     const s = getSocket();
@@ -62,33 +72,45 @@ export function AdminCommandCenter({userName}: {userName: string}) {
     return () => { s.off('connect', onConnect); s.off('disconnect', onDisconnect); };
   }, []);
 
+  const toggleTheme = useCallback(() => {
+    setThemeMode(m => {
+      const next: CcThemeMode = m === 'dark' ? 'light' : 'dark';
+      writeCcThemeMode(next);
+      return next;
+    });
+  }, []);
+
   return (
-    <div style={{position: 'fixed', inset: 0, display: 'flex', backgroundColor: cc.bg, zIndex: 0}}>
-      <Sidebar active={section} onSelect={setSection} userName={userName} />
-      <div style={{flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column'}}>
-        <TopHeader
-          period={period} onPeriodChange={setPeriod} dateRangeLabel={periodDateRangeLabel(period)}
-          onRefresh={() => setRefreshKey(k => k + 1)}
-          refreshing={false} connected={connected}
-          query={query} onQueryChange={setQuery}
-          unreadCount={notifications.filter(n => !n.read).length} userName={userName}
-        />
-        <div style={{flex: 1, minHeight: 0, overflowY: 'auto'}}>
-          {section === 'dashboard' && <DashboardSection period={period} refreshKey={refreshKey} onNavigate={setSection} />}
-          {section === 'liveview' && <ScreenPane><AdminGuardScreen /></ScreenPane>}
-          {section === 'slots' && <ScreenPane><AdminMapScreen /></ScreenPane>}
-          {section === 'drivers' && <ScreenPane><AdminStaffScreen initialFilter="driver" /></ScreenPane>}
-          {section === 'staff' && <ScreenPane><AdminAttendanceScreen /></ScreenPane>}
-          {section === 'insights' && <ScreenPane><AdminIntelligenceScreen /></ScreenPane>}
-          {section === 'explorer' && <ScreenPane><AnalyticsScreen /></ScreenPane>}
-          {section === 'settings' && <ScreenPane><SettingsScreen /></ScreenPane>}
+    <CcThemeContext.Provider value={palette}>
+      <div style={{position: 'fixed', inset: 0, display: 'flex', backgroundColor: palette.bg, zIndex: 0}}>
+        <Sidebar active={section} onSelect={setSection} userName={userName} />
+        <div style={{flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column'}}>
+          <TopHeader
+            period={period} onPeriodChange={setPeriod} dateRangeLabel={periodDateRangeLabel(period)}
+            onRefresh={() => setRefreshKey(k => k + 1)}
+            refreshing={false} connected={connected}
+            query={query} onQueryChange={setQuery}
+            unreadCount={notifications.filter(n => !n.read).length} userName={userName}
+            themeMode={themeMode} onToggleTheme={toggleTheme}
+          />
+          <div style={{flex: 1, minHeight: 0, overflowY: 'auto'}}>
+            {section === 'dashboard' && <DashboardSection period={period} refreshKey={refreshKey} onNavigate={setSection} />}
+            {section === 'liveview' && <ScreenPane><AdminGuardScreen /></ScreenPane>}
+            {section === 'slots' && <ScreenPane><AdminMapScreen /></ScreenPane>}
+            {section === 'drivers' && <ScreenPane><AdminStaffScreen initialFilter="driver" /></ScreenPane>}
+            {section === 'staff' && <ScreenPane><AdminAttendanceScreen /></ScreenPane>}
+            {section === 'insights' && <ScreenPane><AdminIntelligenceScreen /></ScreenPane>}
+            {section === 'explorer' && <ScreenPane><AnalyticsScreen /></ScreenPane>}
+            {section === 'settings' && <ScreenPane><SettingsScreen /></ScreenPane>}
+          </div>
         </div>
       </div>
-    </div>
+    </CcThemeContext.Provider>
   );
 }
 
 function ScreenPane({children}: {children: React.ReactNode}) {
+  const cc = useCc();
   return (
     <div style={{display: 'flex', justifyContent: 'center', minHeight: '100%', backgroundColor: cc.bg}}>
       <div style={{width: '100%', maxWidth: 560}}>{children}</div>
@@ -99,7 +121,8 @@ function ScreenPane({children}: {children: React.ReactNode}) {
 // ── Dashboard section (data fetch + grid) ──────────────────────────────────
 
 function DashboardSection({period, refreshKey, onNavigate}: {period: AnalyticsPeriod; refreshKey: number; onNavigate: (s: CcSection) => void}) {
-  const {slots: liveSlots, tasks: liveTasks} = useAppState();
+  const cc = useCc();
+  const {slots: liveSlots} = useAppState();
   const [data, setData] = useState<CommandCenterBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -127,7 +150,7 @@ function DashboardSection({period, refreshKey, onNavigate}: {period: AnalyticsPe
   }
   if (!data) return null;
 
-  const {overview, kpiComparison, health, taskFunnelVolume, anomalyRadar, visitorIntelligence, insights, activityTrend, demandHeatmap} = data;
+  const {overview, kpiComparison, taskFunnelVolume, activityTrend, demandHeatmap} = data;
   const occupiedNow = liveSlots.filter(s => s.status === 'occupied').length;
   const totalSlotsNow = liveSlots.length;
   const occPct = totalSlotsNow ? Math.round((occupiedNow / totalSlotsNow) * 100) : 0;
@@ -135,15 +158,14 @@ function DashboardSection({period, refreshKey, onNavigate}: {period: AnalyticsPe
   return (
     <div style={{padding: 20}}>
       <div style={{display: 'flex', gap: 12, marginBottom: 16}}>
-        <KpiCard icon="car" iconColor={cc.kpi.tasks.icon} bg={cc.kpi.tasks.bg} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" deltaPct={kpiComparison.tasks.pctChange} onClick={() => onNavigate('liveview')} />
-        <KpiCard icon="people" iconColor={cc.kpi.visitors.icon} bg={cc.kpi.visitors.bg} value={visitorIntelligence.total.toLocaleString()} label="Visitors" deltaPct={kpiComparison.visitors.pctChange} onClick={() => onNavigate('liveview')} />
+        <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" deltaPct={kpiComparison.tasks.pctChange} onClick={() => onNavigate('liveview')} />
+        <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" deltaPct={kpiComparison.visitors.pctChange} onClick={() => onNavigate('liveview')} />
         <SlotsKpiCard occPct={occPct} occupied={occupiedNow} available={totalSlotsNow - occupiedNow} total={totalSlotsNow} onClick={() => onNavigate('slots')} />
-        <KpiCard icon="car" iconColor={cc.kpi.drivers.icon} bg={cc.kpi.drivers.bg} value={String(kpiComparison.drivers.current)} label="Drivers" deltaPct={kpiComparison.drivers.pctChange} onClick={() => onNavigate('drivers')} />
-        <KpiCard icon="userCard" iconColor={cc.kpi.users.icon} bg={cc.kpi.users.bg} value={String(kpiComparison.users.current)} label="Users" deltaPct={kpiComparison.users.pctChange} onClick={() => onNavigate('staff')} />
-        <HealthKpiCard health={health} onClick={() => onNavigate('insights')} />
+        <KpiCard icon="car" variant={cc.kpi.drivers} value={String(kpiComparison.drivers.current)} label="Drivers" deltaPct={kpiComparison.drivers.pctChange} onClick={() => onNavigate('drivers')} />
+        <KpiCard icon="userCard" variant={cc.kpi.users} value={String(kpiComparison.users.current)} label="Users" deltaPct={kpiComparison.users.pctChange} onClick={() => onNavigate('staff')} />
       </div>
 
-      <div style={{display: 'grid', gridTemplateColumns: '2fr 1.1fr 1fr 1.3fr', gap: 14, alignItems: 'start'}}>
+      <div style={{display: 'grid', gridTemplateColumns: '2fr 1.1fr 1fr', gap: 14, alignItems: 'start'}}>
         <div style={{gridColumn: '1', gridRow: '1'}}>
           <Panel title="Parking Activity Trends"><TrendChart days={activityTrend.days} /></Panel>
         </div>
@@ -152,10 +174,6 @@ function DashboardSection({period, refreshKey, onNavigate}: {period: AnalyticsPe
         </div>
         <div style={{gridColumn: '3', gridRow: '1'}}>
           <SlotUtilizationPanel liveSlots={liveSlots} onViewAll={() => onNavigate('slots')} />
-        </div>
-        <div style={{gridColumn: '4', gridRow: '1 / 3', display: 'flex', flexDirection: 'column', gap: 14, minHeight: 0}}>
-          <AiInsightsPanel insights={insights} onNavigate={() => onNavigate('insights')} />
-          <RealtimeOperationsPanel tasks={liveTasks} />
         </div>
 
         <div style={{gridColumn: '1', gridRow: '2'}}>
@@ -166,19 +184,6 @@ function DashboardSection({period, refreshKey, onNavigate}: {period: AnalyticsPe
         </div>
         <div style={{gridColumn: '3', gridRow: '2'}}>
           <TopDriversPanel drivers={overview.drivers} onViewAll={() => onNavigate('drivers')} />
-        </div>
-
-        <div style={{gridColumn: '1', gridRow: '3'}}>
-          <VisitorAnalyticsPanel dailyCounts={visitorIntelligence.dailyCounts} />
-        </div>
-        <div style={{gridColumn: '2', gridRow: '3'}}>
-          <VisitorTypesPanel byVehicleType={visitorIntelligence.byVehicleType} total={visitorIntelligence.total} note={visitorIntelligence.note} />
-        </div>
-        <div style={{gridColumn: '3', gridRow: '3'}}>
-          <AnomalyRadarPanel categories={anomalyRadar.categories} />
-        </div>
-        <div style={{gridColumn: '4', gridRow: '3'}}>
-          <AskParkingSystemPanel bundle={data} />
         </div>
       </div>
     </div>
