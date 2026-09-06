@@ -67,7 +67,7 @@ const load = {
   VehicleSetupScreen:    () => import('./screens/VehicleSetupScreen'),
   SettingsScreen:        () => import('./screens/SettingsScreen'),
   HistoryScreen:         () => import('./screens/HistoryScreen'),
-  AdminDashboardScreen:  () => import('./screens/admin/AdminDashboardScreen'),
+  AdminDashboardMobile:  () => import('./screens/admin/commandcenter/AdminDashboardMobile'),
   AdminStaffScreen:      () => import('./screens/admin/AdminStaffScreen'),
   AdminAttendanceScreen: () => import('./screens/admin/AdminAttendanceScreen'),
   AdminMapScreen:        () => import('./screens/admin/AdminMapScreen'),
@@ -90,7 +90,7 @@ const VirtualCardScreen     = lazyScreen(load.VirtualCardScreen, 'VirtualCardScr
 const VehicleSetupScreen    = lazyScreen(load.VehicleSetupScreen, 'VehicleSetupScreen');
 const SettingsScreen        = lazyScreen(load.SettingsScreen, 'SettingsScreen');
 const HistoryScreen         = lazyScreen(load.HistoryScreen, 'HistoryScreen');
-const AdminDashboardScreen  = lazyScreen(load.AdminDashboardScreen, 'AdminDashboardScreen');
+const AdminDashboardMobile  = lazyScreen(load.AdminDashboardMobile, 'AdminDashboardMobile');
 const AdminStaffScreen      = lazyScreen(load.AdminStaffScreen, 'AdminStaffScreen');
 const AdminAttendanceScreen = lazyScreen(load.AdminAttendanceScreen, 'AdminAttendanceScreen');
 const AdminMapScreen        = lazyScreen(load.AdminMapScreen, 'AdminMapScreen');
@@ -155,7 +155,7 @@ const LOADER_FOR_TAB: Record<TabKey, () => Promise<unknown>> = {
   History: load.HistoryScreen,
   Setup: load.VehicleSetupScreen,
   Settings: load.SettingsScreen,
-  Dashboard: load.AdminDashboardScreen,
+  Dashboard: load.AdminDashboardMobile,
   Staff: load.AdminStaffScreen,
   Attendance: load.AdminAttendanceScreen,
   Map: load.AdminMapScreen,
@@ -290,9 +290,12 @@ function RoleRouter() {
     : isHistory            ? <HistoryScreen onBack={() => setTab('Home')} />
     : tab === 'Home'        ? <DoctorHomeScreen onOpenCard={() => setTab('Card')} onOpenHistory={() => setTab('History')} />
     : tab === 'Setup'       ? <VehicleSetupScreen onBack={() => setTab('Home')} />
-    : tab === 'Dashboard'   ? <AdminDashboardScreen
+    : tab === 'Dashboard'   ? <AdminDashboardMobile
         onOpenMap={(block) => { setMapFocusBlock(block); setTab('Map'); }}
         onOpenDrivers={() => { setStaffInitialFilter('driver'); setTab('Staff'); }}
+        onOpenGuard={() => setTab('Guard')}
+        onOpenIntelligence={() => setTab('Intelligence')}
+        onOpenAttendance={() => setTab('Attendance')}
       />
     : tab === 'Staff'       ? <AdminStaffScreen initialFilter={staffInitialFilter} />
     : tab === 'Attendance'  ? <AdminAttendanceScreen />
