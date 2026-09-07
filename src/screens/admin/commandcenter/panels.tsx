@@ -692,12 +692,14 @@ export function ServiceReliabilityPanel({friction}: {friction: OperationalFricti
 }
 
 // ── Timing waterfall ────────────────────────────────────────────────────
-// The whole process drawn as one proportional segmented bar — each stage's
-// width is its share of the total average time, laid left-to-right in
-// pipeline order, so the journey reads as a single flowing timeline instead
-// of a list of separate bars. The bottleneck segment (already identified
-// server-side, never guessed here) breaks the color sequence to red so it
-// pops out of the flow at a glance.
+// This data IS a sequence (assigned -> key collected -> parked, one stage
+// strictly after the last), so it's drawn as one — a connected vertical
+// rail of steps, not a generic stat list or a detached progress bar bolted
+// on top of one. Each step's own inline bar carries its share of the total
+// time, so structure (the rail) and magnitude (the bar) live in the same
+// row instead of two disconnected chart elements. The bottleneck node
+// (identified server-side, never guessed here) is the one break from the
+// neutral palette.
 function TimingWaterfall({stages, bottleneckKey}: {
   stages: {key: string; label: string; avgMinutes: number; sampleSize: number}[];
   bottleneckKey?: string;
@@ -708,34 +710,36 @@ function TimingWaterfall({stages, bottleneckKey}: {
   const fmt = (m: number) => m < 1 ? '<1m' : `${Math.round(m)}m`;
   return (
     <div>
-      <div style={{display: 'flex', height: 32, borderRadius: 9, overflow: 'hidden', border: `1px solid ${cc.border}`}}>
-        {stages.map((s, i) => {
-          const isBottleneck = s.key === bottleneckKey;
-          const widthPct = Math.max((s.avgMinutes / total) * 100, 3);
-          return (
-            <div key={s.key} title={`${s.label}: ${fmt(s.avgMinutes)} · n=${s.sampleSize}`} style={{
-              width: `${widthPct}%`, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              backgroundColor: isBottleneck ? cc.danger : colors[i % colors.length],
-              borderRight: i < stages.length - 1 ? `2px solid ${cc.card}` : 'none',
-            }}>
-              {widthPct > 13 && <span style={{fontSize: 10, fontWeight: 900, color: '#fff'}}>{fmt(s.avgMinutes)}</span>}
+      {stages.map((s, i) => {
+        const isBottleneck = s.key === bottleneckKey;
+        const isLast = i === stages.length - 1;
+        const barColor = isBottleneck ? cc.danger : colors[i % colors.length];
+        const widthPct = Math.max((s.avgMinutes / total) * 100, 4);
+        return (
+          <div key={s.key} style={{display: 'flex', gap: 11}}>
+            <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', width: 10, flexShrink: 0}}>
+              <span style={{
+                width: isBottleneck ? 10 : 8, height: isBottleneck ? 10 : 8, borderRadius: '50%', flexShrink: 0,
+                backgroundColor: barColor, boxShadow: `0 0 0 3px ${barColor}22`,
+              }} />
+              {!isLast && <span style={{flex: 1, width: 2, minHeight: 14, backgroundColor: cc.divider, marginTop: 3}} />}
             </div>
-          );
-        })}
-      </div>
-      <div style={{display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 7}}>
-        {stages.map((s, i) => {
-          const isBottleneck = s.key === bottleneckKey;
-          return (
-            <div key={s.key} style={{display: 'flex', alignItems: 'center', gap: 4}}>
-              <span style={{width: 7, height: 7, borderRadius: 2, flexShrink: 0, backgroundColor: isBottleneck ? cc.danger : colors[i % colors.length]}} />
-              <span style={{fontSize: 9, fontWeight: 700, color: isBottleneck ? cc.danger : cc.textSecondary}}>
-                {s.label}{isBottleneck ? ' ⚠' : ''} <span style={{color: cc.textMuted, fontWeight: 600}}>{fmt(s.avgMinutes)} · n={s.sampleSize}</span>
-              </span>
+            <div style={{flex: 1, minWidth: 0, paddingBottom: isLast ? 2 : 14}}>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8}}>
+                <span style={{fontSize: 11.5, fontWeight: 800, color: isBottleneck ? cc.danger : cc.textPrimary}}>
+                  {s.label}{isBottleneck ? ' ⚠' : ''}
+                </span>
+                <span style={{fontSize: 11, fontWeight: 800, color: isBottleneck ? cc.danger : cc.textPrimary, flexShrink: 0, whiteSpace: 'nowrap'}}>
+                  {fmt(s.avgMinutes)} <span style={{fontWeight: 600, color: cc.textMuted, fontSize: 9.5}}>· n={s.sampleSize}</span>
+                </span>
+              </div>
+              <div style={{height: 5, borderRadius: 999, backgroundColor: cc.divider, marginTop: 6, overflow: 'hidden'}}>
+                <div style={{height: 5, borderRadius: 999, width: `${widthPct}%`, backgroundColor: barColor}} />
+              </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

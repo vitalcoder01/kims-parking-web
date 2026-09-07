@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 59;
-export const APP_VERSION_NAME = '1.10.3';
+export const APP_VERSION_CODE = 60;
+export const APP_VERSION_NAME = '1.10.4';
 export const RELEASE_NOTES =
-  'Admin mobile: removed the top title bar ("Operations", "Staff", "Live Map", etc.) from every tab — Dashboard, Staff, Attendance, Map, Analytics and Settings all now start right at their content.';
+  'Admin Dashboard: redesigned Process Timing as a connected step-by-step rail — each stage of the park/retrieve journey gets its own node and proportional bar, with the bottleneck stage breaking the pattern in red.';
