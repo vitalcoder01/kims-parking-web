@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 49;
-export const APP_VERSION_NAME = '1.9.3';
+export const APP_VERSION_CODE = 50;
+export const APP_VERSION_NAME = '1.9.4';
 export const RELEASE_NOTES =
-  'Admin console: removed the Guard and AI Insights tabs. Staff, Attendance and Parking Slots now share the same light/dark theme as the Dashboard, with light as the default.';
+  'Admin Dashboard: added a new Service Reliability panel — real cancellation rate, driver no-response, assignment timeouts, unstaffed alerts, job recalls, escalations and retrieval recovery counts.';

@@ -7,7 +7,7 @@ import {Sidebar, CcSection} from './Sidebar';
 import {TopHeader} from './TopHeader';
 import {
   periodDateRangeLabel, Panel, KpiCard, SlotsKpiCard, TrendChart, Heatmap,
-  SlotUtilizationPanel, ParkingSlotMapPanel, TaskFunnelPanel, TopDriversPanel,
+  SlotUtilizationPanel, ParkingSlotMapPanel, TaskFunnelPanel, TopDriversPanel, ServiceReliabilityPanel,
 } from './panels';
 
 // Existing screens reused as-is inside sidebar sections that don't need a
@@ -150,7 +150,7 @@ function DashboardSection({period, refreshKey, onNavigate}: {period: AnalyticsPe
   }
   if (!data) return null;
 
-  const {overview, kpiComparison, taskFunnelVolume, activityTrend, demandHeatmap} = data;
+  const {overview, kpiComparison, taskFunnelVolume, activityTrend, demandHeatmap, operationalFriction} = data;
   const occupiedNow = liveSlots.filter(s => s.status === 'occupied').length;
   const totalSlotsNow = liveSlots.length;
   const occPct = totalSlotsNow ? Math.round((occupiedNow / totalSlotsNow) * 100) : 0;
@@ -184,6 +184,10 @@ function DashboardSection({period, refreshKey, onNavigate}: {period: AnalyticsPe
         </div>
         <div style={{gridColumn: '3', gridRow: '2'}}>
           <TopDriversPanel drivers={overview.drivers} onViewAll={() => onNavigate('drivers')} />
+        </div>
+
+        <div style={{gridColumn: '1 / 4', gridRow: '3'}}>
+          <ServiceReliabilityPanel friction={operationalFriction} />
         </div>
       </div>
     </div>

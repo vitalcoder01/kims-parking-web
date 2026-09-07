@@ -2,7 +2,7 @@ import React, {useMemo, useState} from 'react';
 import {Icon, IconName} from '../../../components/Icon';
 import {PressableScale} from '../../../components/PressableScale';
 import {ParkingSlot} from '../../../context/AppStateContext';
-import {AnalyticsPeriod, SlotClassification, TaskFunnelVolume, DriverAnalytics, DemandHeatmap} from '../../../services/api';
+import {AnalyticsPeriod, SlotClassification, TaskFunnelVolume, DriverAnalytics, DemandHeatmap, OperationalFriction} from '../../../services/api';
 import {useCc, ccCard, ccPanelTitle, ccEmptyText, CcPalette} from './ccTheme';
 
 /*
@@ -442,6 +442,65 @@ export function TopDriversPanel({drivers, onViewAll}: {drivers: DriverAnalytics[
       <PressableScale onClick={onViewAll} style={{marginTop: 14, width: '100%', height: 32, borderRadius: 9, backgroundColor: cc.accentBlue + '18', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
         <span style={{fontSize: 11, fontWeight: 800, color: cc.accentBlue}}>View All Drivers →</span>
       </PressableScale>
+    </Panel>
+  );
+}
+
+// ── Service Reliability ──────────────────────────────────────────────────
+// Real friction/failure events mined from an actual production data
+// export (a Supabase CSV snippet) — see the backend's operationalFriction
+// for exact sourcing (fixed notification titles + ParkingTask's own
+// lifecycle columns). Nothing here is a guess: each number is a direct
+// count or a ratio of two direct counts.
+export function ServiceReliabilityPanel({friction}: {friction: OperationalFriction}) {
+  const cc = useCc();
+  const stats: {label: string; value: string; sub?: string; tone: 'warn' | 'danger' | 'neutral'}[] = [
+    {
+      label: 'Cancellation Rate', value: `${friction.cancellationRatePct}%`,
+      sub: `${friction.cancelledTasks} of ${friction.totalTasks} tasks`,
+      tone: friction.cancellationRatePct > 5 ? 'danger' : friction.cancellationRatePct > 0 ? 'warn' : 'neutral',
+    },
+    {
+      label: 'Driver No-Response', value: String(friction.driverNoResponseCount),
+      tone: friction.driverNoResponseCount > 0 ? 'warn' : 'neutral',
+    },
+    {
+      label: 'Assignment Expired', value: String(friction.assignmentExpiredCount),
+      tone: friction.assignmentExpiredCount > 0 ? 'warn' : 'neutral',
+    },
+    {
+      label: 'Unstaffed Alerts', value: String(friction.unstaffedAlertCount),
+      tone: friction.unstaffedAlertCount > 0 ? 'warn' : 'neutral',
+    },
+    {
+      label: 'Jobs Recalled', value: String(friction.jobsRecalledCount),
+      tone: friction.jobsRecalledCount > 0 ? 'danger' : 'neutral',
+    },
+    {
+      label: 'Escalated Jobs', value: String(friction.escalatedTasksCount),
+      tone: friction.escalatedTasksCount > 0 ? 'danger' : 'neutral',
+    },
+    {
+      label: 'Retrieval Recovery Rate', value: `${friction.recoveryBroadcastRatePct}%`,
+      sub: `${friction.recoveryBroadcastCount} of ${friction.retrieveTasks} retrievals`,
+      tone: friction.recoveryBroadcastRatePct > 5 ? 'warn' : 'neutral',
+    },
+  ];
+  const toneColor = (t: 'warn' | 'danger' | 'neutral') => t === 'danger' ? cc.danger : t === 'warn' ? cc.warning : cc.textPrimary;
+
+  return (
+    <Panel title="Service Reliability">
+      {friction.totalTasks === 0 ? <div style={ccEmptyText(cc)}>No tasks in this period.</div> : (
+        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))', gap: 14}}>
+          {stats.map(s => (
+            <div key={s.label}>
+              <div style={{fontSize: 20, fontWeight: 900, color: toneColor(s.tone)}}>{s.value}</div>
+              <div style={{fontSize: 10, fontWeight: 700, color: cc.textSecondary, marginTop: 3}}>{s.label}</div>
+              {s.sub && <div style={{fontSize: 9, color: cc.textMuted, marginTop: 1}}>{s.sub}</div>}
+            </div>
+          ))}
+        </div>
+      )}
     </Panel>
   );
 }

@@ -6,7 +6,7 @@ import {analyticsApi, AnalyticsPeriod, CommandCenterBundle, SlotClassification} 
 import {CcThemeContext, ccDark, ccLight, CcThemeMode, readCcThemeMode, writeCcThemeMode, useCc} from './ccTheme';
 import {
   periodDateRangeLabel, Panel, KpiCard, SlotsKpiCard, TrendChart, Heatmap,
-  SlotUtilizationPanel, ParkingSlotMapPanel, TaskFunnelPanel, TopDriversPanel,
+  SlotUtilizationPanel, ParkingSlotMapPanel, TaskFunnelPanel, TopDriversPanel, ServiceReliabilityPanel,
 } from './panels';
 
 const PERIODS: {key: AnalyticsPeriod; label: string}[] = [
@@ -107,7 +107,7 @@ function DashboardBody({onOpenMap, onOpenDrivers, onOpenAttendance, themeMode, o
   }
   if (!data) return null;
 
-  const {overview, kpiComparison, taskFunnelVolume, activityTrend, demandHeatmap} = data;
+  const {overview, kpiComparison, taskFunnelVolume, activityTrend, demandHeatmap, operationalFriction} = data;
   const occupiedNow = liveSlots.filter(s => s.status === 'occupied').length;
   const totalSlotsNow = liveSlots.length;
   const occPct = totalSlotsNow ? Math.round((occupiedNow / totalSlotsNow) * 100) : 0;
@@ -158,7 +158,8 @@ function DashboardBody({onOpenMap, onOpenDrivers, onOpenAttendance, themeMode, o
       <div style={{marginBottom: 14}}><Panel title="Hourly Demand Heatmap"><Heatmap heatmap={demandHeatmap} /></Panel></div>
       <div style={{marginBottom: 14}}><ParkingSlotMapPanel liveSlots={liveSlots} classById={classById} onOpenSlots={() => onOpenMap()} /></div>
       <div style={{marginBottom: 14}}><TaskFunnelPanel funnelVolume={taskFunnelVolume} /></div>
-      <TopDriversPanel drivers={overview.drivers} onViewAll={onOpenDrivers} />
+      <div style={{marginBottom: 14}}><TopDriversPanel drivers={overview.drivers} onViewAll={onOpenDrivers} /></div>
+      <ServiceReliabilityPanel friction={operationalFriction} />
     </div>
   );
 }

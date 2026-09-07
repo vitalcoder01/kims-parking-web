@@ -441,6 +441,25 @@ export type AnomalyRadar = {lookbackDays: number; dayKeys: string[]; categories:
 export type KpiDelta = {current: number; previous: number | null; pctChange: number | null};
 export type KpiComparison = {tasks: KpiDelta; visitors: KpiDelta; drivers: KpiDelta; users: KpiDelta};
 export type OperationalHealth = {score: number; band: 'Good' | 'Fair' | 'Poor'; breakdown: {warnInsights: number; openClientErrors: number}};
+// Real friction events mined from an actual production data export (a
+// Supabase CSV snippet) — driver non-acceptance, assignment timeouts,
+// unstaffed-job alerts, recalls, escalations and retrieval recovery
+// broadcasts, cross-checked against ParkingTask's own lifecycle columns.
+// See backend analytics.service.js's operationalFriction for exact
+// notification-title matches and field sources.
+export type OperationalFriction = {
+  totalTasks: number;
+  cancelledTasks: number;
+  cancellationRatePct: number;
+  driverNoResponseCount: number;
+  assignmentExpiredCount: number;
+  unstaffedAlertCount: number;
+  jobsRecalledCount: number;
+  escalatedTasksCount: number;
+  retrieveTasks: number;
+  recoveryBroadcastCount: number;
+  recoveryBroadcastRatePct: number;
+};
 
 export type CommandCenterBundle = IntelligenceBundle & {
   taskFunnelVolume: TaskFunnelVolume;
@@ -449,6 +468,7 @@ export type CommandCenterBundle = IntelligenceBundle & {
   visitorIntelligence: VisitorIntelligence;
   anomalyRadar: AnomalyRadar;
   kpiComparison: KpiComparison;
+  operationalFriction: OperationalFriction;
   health: OperationalHealth;
 };
 
