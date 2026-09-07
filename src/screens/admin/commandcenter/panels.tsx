@@ -113,38 +113,26 @@ export function Donut({parts, size = 100, stroke = 13, centerLabel, centerSub}: 
 
 // ── KPI row ─────────────────────────────────────────────────────────────
 
-export function KpiCard({icon, variant, value, label, deltaPct, onClick}: {
-  icon: IconName; variant: {bg: string; icon: string; valueText: string; labelText: string}; value: string; label: string; deltaPct: number | null; onClick?: () => void;
+export function KpiCard({icon, variant, value, label, onClick}: {
+  icon: IconName; variant: {bg: string; icon: string; valueText: string; labelText: string}; value: string; label: string; onClick?: () => void;
 }) {
-  const cc = useCc();
   return (
     <PressableScale onClick={onClick} style={{flex: 1, borderRadius: 14, backgroundColor: variant.bg, padding: 14, textAlign: 'left', display: 'block', minWidth: 0, cursor: onClick ? 'pointer' : 'default'}}>
       <Icon name={icon} size={17} color={variant.icon} />
       <div style={{fontSize: 22, fontWeight: 900, color: variant.valueText, marginTop: 8, letterSpacing: -0.5}}>{value}</div>
       <div style={{fontSize: 11, fontWeight: 700, color: variant.labelText, marginTop: 1}}>{label}</div>
-      {deltaPct != null && (
-        <div style={{display: 'flex', alignItems: 'center', gap: 4, marginTop: 8}}>
-          <Icon name={deltaPct >= 0 ? 'arrowUp' : 'arrowDown'} size={9} color={deltaPct >= 0 ? cc.deltaUp : cc.deltaDown} />
-          <span style={{fontSize: 10.5, fontWeight: 800, color: deltaPct >= 0 ? cc.deltaUp : cc.deltaDown}}>{Math.abs(deltaPct)}%</span>
-          <span style={{fontSize: 9.5, color: variant.labelText}}>vs last period</span>
-        </div>
-      )}
     </PressableScale>
   );
 }
 
-export function SlotsKpiCard({occPct, occupied, available, total, onClick}: {occPct: number; occupied: number; available: number; total: number; onClick: () => void}) {
-  const cc = useCc();
-  const v = cc.kpi.slots;
+export function SlotsKpiCard({occupied, available, total, onClick}: {occupied: number; available: number; total: number; onClick: () => void}) {
+  const v = useCc().kpi.slots;
   return (
-    <PressableScale onClick={onClick} style={{flex: 1, borderRadius: 14, backgroundColor: v.bg, padding: 14, display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left'}}>
-      <div style={{flex: 1, minWidth: 0}}>
-        <Icon name="parking" size={17} color={v.icon} />
-        <div style={{fontSize: 20, fontWeight: 900, color: v.valueText, marginTop: 6}}>{total}</div>
-        <div style={{fontSize: 10.5, fontWeight: 700, color: v.labelText}}>Parking Slots</div>
-        <div style={{fontSize: 9, color: v.labelText, marginTop: 4}}>{occupied} Occupied · {available} Available</div>
-      </div>
-      <Donut parts={[{value: occupied, color: cc.danger}, {value: available, color: cc.success}]} size={52} stroke={7} centerLabel={`${occPct}%`} />
+    <PressableScale onClick={onClick} style={{flex: 1, borderRadius: 14, backgroundColor: v.bg, padding: 14, textAlign: 'left', display: 'block', minWidth: 0}}>
+      <Icon name="parking" size={17} color={v.icon} />
+      <div style={{fontSize: 22, fontWeight: 900, color: v.valueText, marginTop: 8, letterSpacing: -0.5}}>{total}</div>
+      <div style={{fontSize: 11, fontWeight: 700, color: v.labelText, marginTop: 1}}>Parking Slots</div>
+      <div style={{fontSize: 9, color: v.labelText, marginTop: 4}}>{occupied} Occupied · {available} Available</div>
     </PressableScale>
   );
 }
@@ -154,12 +142,29 @@ export function SlotsKpiCard({occPct, occupied, available, total, onClick}: {occ
 export function TrendChart({days}: {days: {date: string; tasks: number; visitors: number}[]}) {
   const cc = useCc();
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  const width = 640, height = 190, padL = 4, padR = 4, padT = 8, padB = 20;
+  // padL widened from the original 4px to make room for real Y-axis value
+  // labels — previously this chart had no way to read an actual number off
+  // it at all short of hovering; now the scale is visible at a glance.
+  const width = 640, height = 190, padL = 34, padR = 4, padT = 8, padB = 20;
   const innerW = width - padL - padR, innerH = height - padT - padB;
   const n = days.length;
   const maxVal = Math.max(1, ...days.map(d => Math.max(d.tasks, d.visitors)));
   const xAt = (i: number) => padL + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
   const yAt = (v: number) => padT + innerH - (v / maxVal) * innerH;
+
+  // Real summary stats computed straight from the same series the lines
+  // draw from — no separate query, no guessing. Gives the headline numbers
+  // (total, daily average, which day peaked) without needing to hover
+  // point-by-point to piece them together.
+  const totalTasks = days.reduce((s, d) => s + d.tasks, 0);
+  const totalVisitors = days.reduce((s, d) => s + d.visitors, 0);
+  const avgTasksPerDay = n ? Math.round((totalTasks / n) * 10) / 10 : 0;
+  const peakIdx = days.reduce((best, d, i) => (d.tasks > (days[best]?.tasks ?? -1) ? i : best), 0);
+  const peakDay = n ? days[peakIdx] : null;
+  // 4 evenly-spaced gridlines (0 at the baseline up to the series max),
+  // each with its own real value label — the actual scale of the chart,
+  // not just its shape.
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(maxVal * f));
 
   // A single-day range (the "Today" period, almost always) gives `days`
   // exactly one entry. An SVG path with only a lone "M" (moveto) paints
@@ -184,6 +189,26 @@ export function TrendChart({days}: {days: {date: string; tasks: number; visitors
 
   return (
     <div style={{position: 'relative'}}>
+      <div style={{display: 'flex', gap: 18, marginBottom: 12, flexWrap: 'wrap'}}>
+        <div>
+          <div style={{fontSize: 15, fontWeight: 900, color: cc.accentBlue}}>{totalTasks.toLocaleString()}</div>
+          <div style={{fontSize: 9, fontWeight: 700, color: cc.textMuted}}>Total Tasks</div>
+        </div>
+        <div>
+          <div style={{fontSize: 15, fontWeight: 900, color: cc.accentGreen}}>{totalVisitors.toLocaleString()}</div>
+          <div style={{fontSize: 9, fontWeight: 700, color: cc.textMuted}}>Total Visitors</div>
+        </div>
+        <div>
+          <div style={{fontSize: 15, fontWeight: 900, color: cc.textPrimary}}>{avgTasksPerDay}</div>
+          <div style={{fontSize: 9, fontWeight: 700, color: cc.textMuted}}>Avg Tasks/Day</div>
+        </div>
+        {peakDay && n > 1 && (
+          <div>
+            <div style={{fontSize: 15, fontWeight: 900, color: cc.textPrimary}}>{peakDay.tasks} <span style={{fontSize: 10, fontWeight: 700, color: cc.textMuted}}>on {peakDay.date.slice(5)}</span></div>
+            <div style={{fontSize: 9, fontWeight: 700, color: cc.textMuted}}>Peak Day</div>
+          </div>
+        )}
+      </div>
       <svg
         width="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none"
         style={{display: 'block', overflow: 'visible', cursor: 'crosshair'}}
@@ -209,6 +234,15 @@ export function TrendChart({days}: {days: {date: string; tasks: number; visitors
             <stop offset="100%" stopColor={cc.accentBlue} stopOpacity="0" />
           </linearGradient>
         </defs>
+        {/* Real Y-axis gridlines + value labels — previously this chart had
+           no scale at all, only shape. Skipped for a single point (n===1),
+           where a 0..value scale over a flat line adds nothing. */}
+        {n > 1 && yTicks.map(v => (
+          <React.Fragment key={v}>
+            <line x1={padL} x2={padL + innerW} y1={yAt(v)} y2={yAt(v)} stroke={cc.divider} strokeWidth={1} strokeDasharray={v === 0 ? undefined : '3 3'} />
+            <text x={padL - 6} y={yAt(v) + 3} textAnchor="end" fontSize={8.5} fontWeight={700} fill={cc.textMuted}>{v}</text>
+          </React.Fragment>
+        ))}
         <path d={areaPath} fill="url(#ccAreaFill)" stroke="none" />
         <path d={pathFor('tasks')} fill="none" stroke={cc.accentBlue} strokeWidth={2} />
         <path d={pathFor('visitors')} fill="none" stroke={cc.accentGreen} strokeWidth={2} />
@@ -216,6 +250,14 @@ export function TrendChart({days}: {days: {date: string; tasks: number; visitors
           <>
             <circle cx={xAt(0)} cy={yAt(days[0].tasks)} r={4} fill={cc.accentBlue} />
             <circle cx={xAt(0)} cy={yAt(days[0].visitors)} r={4} fill={cc.accentGreen} />
+          </>
+        )}
+        {/* Peak day — the busiest task day always stays marked, not just on
+           hover, so the chart's headline fact reads at a glance. */}
+        {peakDay && n > 1 && (
+          <>
+            <circle cx={xAt(peakIdx)} cy={yAt(peakDay.tasks)} r={4} fill={cc.bg} stroke={cc.accentBlue} strokeWidth={2} />
+            <text x={xAt(peakIdx)} y={yAt(peakDay.tasks) - 8} textAnchor="middle" fontSize={8.5} fontWeight={800} fill={cc.accentBlue}>Peak {peakDay.tasks}</text>
           </>
         )}
         {active && hoverIdx != null && (
@@ -309,17 +351,52 @@ export function SlotUtilizationPanel({liveSlots, onViewAll}: {liveSlots: Parking
   const reserved = liveSlots.filter(s => s.status === 'reserved').length;
   const available = total - occupied - reserved;
   const pct = total ? Math.round((occupied / total) * 100) : 0;
+
+  // Per-block breakdown — the aggregate donut alone answers "how full are
+  // we", not "where". Real per-block occupied/total from the same live
+  // slot list (already grouped this way in ParkingSlotMapPanel), sorted
+  // busiest-first so the block actually under pressure is the one that
+  // reads first, not just the alphabetically-first one.
+  const byBlock = useMemo(() => {
+    const m = new Map<string, {occupied: number; total: number}>();
+    for (const s of liveSlots) {
+      const e = m.get(s.block) ?? {occupied: 0, total: 0};
+      e.total++;
+      if (s.status === 'occupied') e.occupied++;
+      m.set(s.block, e);
+    }
+    return [...m.entries()]
+      .map(([block, e]) => ({block, ...e, pct: e.total ? Math.round((e.occupied / e.total) * 100) : 0}))
+      .sort((a, b) => b.pct - a.pct);
+  }, [liveSlots]);
+
   return (
     <Panel title="Slot Utilization">
       {total === 0 ? <div style={ccEmptyText(cc)}>No parking slots configured yet.</div> : (
-        <div style={{display: 'flex', alignItems: 'center', gap: 14}}>
-          <Donut parts={[{value: occupied, color: cc.danger}, {value: available, color: cc.success}, {value: reserved, color: cc.accentAmber}]} centerLabel={`${pct}%`} centerSub="Occupied" />
-          <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0}}>
-            <LegendRow color={cc.danger} label="Occupied" value={occupied} />
-            <LegendRow color={cc.success} label="Available" value={available} />
-            <LegendRow color={cc.accentAmber} label="Reserved" value={reserved} />
+        <>
+          <div style={{display: 'flex', alignItems: 'center', gap: 14}}>
+            <Donut parts={[{value: occupied, color: cc.danger}, {value: available, color: cc.success}, {value: reserved, color: cc.accentAmber}]} centerLabel={`${pct}%`} centerSub="Occupied" />
+            <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0}}>
+              <LegendRow color={cc.danger} label="Occupied" value={occupied} />
+              <LegendRow color={cc.success} label="Available" value={available} />
+              <LegendRow color={cc.accentAmber} label="Reserved" value={reserved} />
+            </div>
           </div>
-        </div>
+          {byBlock.length > 1 && (
+            <div style={{marginTop: 14, paddingTop: 12, borderTop: `1px solid ${cc.divider}`, display: 'flex', flexDirection: 'column', gap: 8}}>
+              <div style={{fontSize: 9.5, fontWeight: 800, color: cc.textMuted, textTransform: 'uppercase', letterSpacing: 0.3}}>By Block</div>
+              {byBlock.map(b => (
+                <div key={b.block} style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                  <span style={{fontSize: 10.5, fontWeight: 700, color: cc.textSecondary, width: 46, flexShrink: 0}}>{b.block}</span>
+                  <div style={{flex: 1, height: 7, borderRadius: 4, backgroundColor: cc.divider, overflow: 'hidden'}}>
+                    <div style={{height: 7, borderRadius: 4, width: `${b.pct}%`, backgroundColor: b.pct >= 80 ? cc.danger : b.pct >= 50 ? cc.accentAmber : cc.success}} />
+                  </div>
+                  <span style={{fontSize: 10, fontWeight: 800, color: cc.textPrimary, width: 60, textAlign: 'right', flexShrink: 0}}>{b.occupied}/{b.total} · {b.pct}%</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
       <PressableScale onClick={onViewAll} style={{marginTop: 14, width: '100%', height: 34, borderRadius: 9, backgroundColor: cc.accentBlue + '1c', border: `1px solid ${cc.accentBlue}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6}}>
         <span style={{fontSize: 11.5, fontWeight: 800, color: cc.accentBlue}}>View All Slots</span>

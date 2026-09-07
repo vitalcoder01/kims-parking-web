@@ -56,7 +56,7 @@ import {SettingsScreen} from '../../SettingsScreen';
  */
 export function AdminCommandCenter({userName}: {userName: string}) {
   const [section, setSection] = useState<CcSection>('dashboard');
-  const [period, setPeriod] = useState<AnalyticsPeriod>('monthly');
+  const [period, setPeriod] = useState<AnalyticsPeriod>('daily');
   const [query, setQuery] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   // Real loading state of the Dashboard section's data fetch, lifted up so
@@ -180,7 +180,6 @@ function DashboardSection({period, refreshKey, onNavigate, onLoadingChange}: {
   const {overview, kpiComparison, taskFunnelVolume, activityTrend, demandHeatmap, operationalFriction} = data;
   const occupiedNow = liveSlots.filter(s => s.status === 'occupied').length;
   const totalSlotsNow = liveSlots.length;
-  const occPct = totalSlotsNow ? Math.round((occupiedNow / totalSlotsNow) * 100) : 0;
 
   return (
     // Dims (never blanks) in place while a period switch or manual refresh
@@ -191,11 +190,11 @@ function DashboardSection({period, refreshKey, onNavigate, onLoadingChange}: {
     // effect above) stay silent/undimmed on purpose — those swap in place.
     <div style={{padding: 20, opacity: loading ? 0.55 : 1, transition: 'opacity 0.15s', pointerEvents: loading ? 'none' : 'auto'}}>
       <div style={{display: 'flex', gap: 12, marginBottom: 16}}>
-        <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" deltaPct={kpiComparison.tasks.pctChange} />
-        <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" deltaPct={kpiComparison.visitors.pctChange} />
-        <SlotsKpiCard occPct={occPct} occupied={occupiedNow} available={totalSlotsNow - occupiedNow} total={totalSlotsNow} onClick={() => onNavigate('slots')} />
-        <KpiCard icon="car" variant={cc.kpi.drivers} value={String(kpiComparison.drivers.current)} label="Drivers" deltaPct={kpiComparison.drivers.pctChange} onClick={() => onNavigate('drivers')} />
-        <KpiCard icon="userCard" variant={cc.kpi.users} value={String(kpiComparison.users.current)} label="Users" deltaPct={kpiComparison.users.pctChange} onClick={() => onNavigate('staff')} />
+        <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" />
+        <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" />
+        <SlotsKpiCard occupied={occupiedNow} available={totalSlotsNow - occupiedNow} total={totalSlotsNow} onClick={() => onNavigate('slots')} />
+        <KpiCard icon="car" variant={cc.kpi.drivers} value={String(kpiComparison.drivers.current)} label="Drivers" onClick={() => onNavigate('drivers')} />
+        <KpiCard icon="userCard" variant={cc.kpi.users} value={String(kpiComparison.users.current)} label="Users" onClick={() => onNavigate('staff')} />
       </div>
 
       <div style={{display: 'grid', gridTemplateColumns: '2fr 1.1fr 1fr', gap: 14, alignItems: 'start'}}>

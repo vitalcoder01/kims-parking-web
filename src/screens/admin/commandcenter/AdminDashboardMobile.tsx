@@ -67,7 +67,7 @@ function DashboardBody({onOpenMap, onOpenDrivers, onOpenAttendance, themeMode, o
 }) {
   const cc = useCc();
   const {slots: liveSlots, tasks: liveTasks, visitors: liveVisitors, notifications: liveNotifications} = useAppState();
-  const [period, setPeriod] = useState<AnalyticsPeriod>('monthly');
+  const [period, setPeriod] = useState<AnalyticsPeriod>('daily');
   const [data, setData] = useState<CommandCenterBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -134,7 +134,6 @@ function DashboardBody({onOpenMap, onOpenDrivers, onOpenAttendance, themeMode, o
   const {overview, kpiComparison, taskFunnelVolume, activityTrend, demandHeatmap, operationalFriction} = data;
   const occupiedNow = liveSlots.filter(s => s.status === 'occupied').length;
   const totalSlotsNow = liveSlots.length;
-  const occPct = totalSlotsNow ? Math.round((occupiedNow / totalSlotsNow) * 100) : 0;
 
   return (
     // Dims (never blanks) the panels below the pill row while a period
@@ -175,12 +174,12 @@ function DashboardBody({onOpenMap, onOpenDrivers, onOpenAttendance, themeMode, o
       <div style={{opacity: loading ? 0.55 : 1, transition: 'opacity 0.15s', pointerEvents: loading ? 'none' : 'auto'}}>
         {/* KPI row — 2 columns; the odd 5th card (Users) spans the full width. */}
         <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16}}>
-          <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" deltaPct={kpiComparison.tasks.pctChange} />
-          <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" deltaPct={kpiComparison.visitors.pctChange} />
-          <SlotsKpiCard occPct={occPct} occupied={occupiedNow} available={totalSlotsNow - occupiedNow} total={totalSlotsNow} onClick={() => onOpenMap()} />
-          <KpiCard icon="car" variant={cc.kpi.drivers} value={String(kpiComparison.drivers.current)} label="Drivers" deltaPct={kpiComparison.drivers.pctChange} onClick={onOpenDrivers} />
+          <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" />
+          <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" />
+          <SlotsKpiCard occupied={occupiedNow} available={totalSlotsNow - occupiedNow} total={totalSlotsNow} onClick={() => onOpenMap()} />
+          <KpiCard icon="car" variant={cc.kpi.drivers} value={String(kpiComparison.drivers.current)} label="Drivers" onClick={onOpenDrivers} />
           <div style={{gridColumn: 'span 2'}}>
-            <KpiCard icon="userCard" variant={cc.kpi.users} value={String(kpiComparison.users.current)} label="Users" deltaPct={kpiComparison.users.pctChange} onClick={onOpenAttendance} />
+            <KpiCard icon="userCard" variant={cc.kpi.users} value={String(kpiComparison.users.current)} label="Users" onClick={onOpenAttendance} />
           </div>
         </div>
 
