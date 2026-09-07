@@ -12,11 +12,10 @@ const PERIODS: {key: AnalyticsPeriod; label: string}[] = [
   {key: 'all', label: 'All-time'},
 ];
 
-export function TopHeader({period, onPeriodChange, dateRangeLabel, onRefresh, refreshing, connected, query, onQueryChange, unreadCount, userName, themeMode, onToggleTheme}: {
+export function TopHeader({period, onPeriodChange, dateRangeLabel, onRefresh, refreshing, query, onQueryChange, themeMode, onToggleTheme}: {
   period: AnalyticsPeriod; onPeriodChange: (p: AnalyticsPeriod) => void; dateRangeLabel: string;
-  onRefresh: () => void; refreshing: boolean; connected: boolean;
+  onRefresh: () => void; refreshing: boolean;
   query: string; onQueryChange: (q: string) => void;
-  unreadCount: number; userName: string;
   themeMode: CcThemeMode; onToggleTheme: () => void;
 }) {
   const cc = useCc();
@@ -25,11 +24,6 @@ export function TopHeader({period, onPeriodChange, dateRangeLabel, onRefresh, re
       height: 64, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12,
       padding: '0 20px', backgroundColor: cc.headerBg, borderBottom: `1px solid ${cc.border}`,
     }}>
-      <div style={{flexShrink: 0}}>
-        <div style={{fontSize: 16, fontWeight: 900, color: cc.textPrimary, letterSpacing: -0.2}}>Parking Intelligence</div>
-        <div style={{fontSize: 10.5, color: cc.textMuted, marginTop: 1}}>Smart Parking. Better Care. Brighter Tomorrow.</div>
-      </div>
-
       <div style={{
         flex: 1, maxWidth: 340, display: 'flex', alignItems: 'center', gap: 8,
         backgroundColor: cc.cardAlt, border: `1px solid ${cc.border}`, borderRadius: 10, padding: '0 12px', height: 34,
@@ -61,37 +55,12 @@ export function TopHeader({period, onPeriodChange, dateRangeLabel, onRefresh, re
         <span style={{fontSize: 10.5, fontWeight: 600, color: cc.textMuted, whiteSpace: 'nowrap'}}>{dateRangeLabel}</span>
       </div>
 
-      {/* Comparison is always on — every KPI delta already compares against
-          the immediately-preceding equivalent period (see kpiComparison in
-          analytics.service.js). This just states that plainly. */}
-      <div style={{flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 10px', borderRadius: 9, border: `1px solid ${cc.border}`, backgroundColor: cc.cardAlt}}>
-        <Icon name="trending" size={12} color={cc.textMuted} />
-        <span style={{fontSize: 10.5, fontWeight: 700, color: cc.textSecondary, whiteSpace: 'nowrap'}}>vs Previous Period</span>
-      </div>
-
-      <div style={{flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, height: 34, padding: '0 12px', borderRadius: 9, backgroundColor: cc.success + '18'}}>
-        <span style={{width: 7, height: 7, borderRadius: 4, backgroundColor: cc.success, display: 'inline-block'}} />
-        <span style={{fontSize: 11, fontWeight: 800, color: cc.success}}>{connected ? 'Live' : 'Offline'}</span>
-      </div>
-
       <PressableScale onClick={onRefresh} disabled={refreshing} style={{
         flexShrink: 0, width: 34, height: 34, borderRadius: 9, backgroundColor: cc.cardAlt, border: `1px solid ${cc.border}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: refreshing ? 0.6 : 1,
       }}>
         {refreshing ? <span className="spinner" style={{width: 14, height: 14, borderColor: cc.border, borderTopColor: cc.accentBlue}} /> : <Icon name="refresh" size={15} color={cc.textPrimary} />}
       </PressableScale>
-
-      {/* Real unread count from the app's own notification stream. */}
-      <div style={{position: 'relative', flexShrink: 0}}>
-        <div style={{width: 34, height: 34, borderRadius: 9, backgroundColor: cc.cardAlt, border: `1px solid ${cc.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-          <Icon name="bell" size={15} color={cc.textPrimary} />
-        </div>
-        {unreadCount > 0 && (
-          <span style={{position: 'absolute', top: -4, right: -4, minWidth: 15, height: 15, borderRadius: 8, backgroundColor: cc.danger, color: '#fff', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px'}}>
-            {unreadCount > 9 ? '9+' : unreadCount}
-          </span>
-        )}
-      </div>
 
       {/* Real light/dark toggle for the command center's own palette (see
           ccTheme.ts) — scoped to this shell + the Dashboard panels, not the
@@ -103,10 +72,6 @@ export function TopHeader({period, onPeriodChange, dateRangeLabel, onRefresh, re
         style={{flexShrink: 0, width: 34, height: 34, borderRadius: 9, backgroundColor: cc.cardAlt, border: `1px solid ${cc.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
         <Icon name={themeMode === 'dark' ? 'moon' : 'sun'} size={14} color={cc.textPrimary} />
       </PressableScale>
-
-      <div style={{flexShrink: 0, width: 34, height: 34, borderRadius: 17, backgroundColor: cc.accentBlue + '30', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-        <span style={{fontSize: 11.5, fontWeight: 800, color: cc.accentBlue}}>{userName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
-      </div>
     </div>
   );
 }

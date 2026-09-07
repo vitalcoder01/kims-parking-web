@@ -1,6 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useAppState} from '../../../context/AppStateContext';
-import {getSocket} from '../../../services/socket';
 import {analyticsApi, AnalyticsPeriod, CommandCenterBundle, SlotClassification} from '../../../services/api';
 import {CcThemeContext, ccDark, ccLight, CcThemeMode, readCcThemeMode, writeCcThemeMode, useCc} from './ccTheme';
 import {Sidebar, CcSection} from './Sidebar';
@@ -56,7 +55,6 @@ import {SettingsScreen} from '../../SettingsScreen';
  * deleted outright, not left dead in the tree.
  */
 export function AdminCommandCenter({userName}: {userName: string}) {
-  const {notifications} = useAppState();
   const [section, setSection] = useState<CcSection>('dashboard');
   const [period, setPeriod] = useState<AnalyticsPeriod>('monthly');
   const [query, setQuery] = useState('');
@@ -67,19 +65,8 @@ export function AdminCommandCenter({userName}: {userName: string}) {
   // background refresh) gave zero visual feedback while the ~2-3s
   // command-center fetch was in flight, making the dashboard look frozen.
   const [dashboardLoading, setDashboardLoading] = useState(false);
-  const [connected, setConnected] = useState(() => getSocket()?.connected ?? false);
   const [themeMode, setThemeMode] = useState<CcThemeMode>(() => readCcThemeMode());
   const palette = themeMode === 'light' ? ccLight : ccDark;
-
-  useEffect(() => {
-    const s = getSocket();
-    if (!s) return;
-    const onConnect = () => setConnected(true);
-    const onDisconnect = () => setConnected(false);
-    s.on('connect', onConnect);
-    s.on('disconnect', onDisconnect);
-    return () => { s.off('connect', onConnect); s.off('disconnect', onDisconnect); };
-  }, []);
 
   const toggleTheme = useCallback(() => {
     setThemeMode(m => {
@@ -97,9 +84,8 @@ export function AdminCommandCenter({userName}: {userName: string}) {
           <TopHeader
             period={period} onPeriodChange={setPeriod} dateRangeLabel={periodDateRangeLabel(period)}
             onRefresh={() => setRefreshKey(k => k + 1)}
-            refreshing={section === 'dashboard' && dashboardLoading} connected={connected}
+            refreshing={section === 'dashboard' && dashboardLoading}
             query={query} onQueryChange={setQuery}
-            unreadCount={notifications.filter(n => !n.read).length} userName={userName}
             themeMode={themeMode} onToggleTheme={toggleTheme}
           />
           <div style={{flex: 1, minHeight: 0, overflowY: 'auto'}}>
