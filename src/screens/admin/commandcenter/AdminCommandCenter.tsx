@@ -5,7 +5,7 @@ import {CcThemeContext, ccDark, ccLight, CcThemeMode, readCcThemeMode, writeCcTh
 import {Sidebar, CcSection} from './Sidebar';
 import {TopHeader} from './TopHeader';
 import {
-  periodDateRangeLabel, Panel, KpiCard, SlotsKpiCard, TrendChart, Heatmap,
+  periodDateRangeLabel, Panel, KpiCard, TrendChart, Heatmap,
   SlotUtilizationPanel, ParkingSlotMapPanel, TaskFunnelPanel, TopDriversPanel, ServiceReliabilityPanel,
   ProcessTimingPanel,
 } from './panels';
@@ -178,8 +178,6 @@ function DashboardSection({period, refreshKey, onNavigate, onLoadingChange}: {
   if (!data) return null;
 
   const {overview, kpiComparison, taskFunnelVolume, activityTrend, demandHeatmap, operationalFriction} = data;
-  const occupiedNow = liveSlots.filter(s => s.status === 'occupied').length;
-  const totalSlotsNow = liveSlots.length;
 
   return (
     // Dims (never blanks) in place while a period switch or manual refresh
@@ -192,7 +190,6 @@ function DashboardSection({period, refreshKey, onNavigate, onLoadingChange}: {
       <div style={{display: 'flex', gap: 12, marginBottom: 16}}>
         <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" />
         <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" />
-        <SlotsKpiCard occupied={occupiedNow} available={totalSlotsNow - occupiedNow} total={totalSlotsNow} onClick={() => onNavigate('slots')} />
         <KpiCard icon="car" variant={cc.kpi.drivers} value={String(kpiComparison.drivers.current)} label="Drivers" onClick={() => onNavigate('drivers')} />
         <KpiCard icon="userCard" variant={cc.kpi.users} value={String(kpiComparison.users.current)} label="Users" onClick={() => onNavigate('staff')} />
       </div>

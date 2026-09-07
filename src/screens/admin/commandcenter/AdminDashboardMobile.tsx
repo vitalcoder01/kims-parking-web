@@ -5,7 +5,7 @@ import {useAppState} from '../../../context/AppStateContext';
 import {analyticsApi, AnalyticsPeriod, CommandCenterBundle, SlotClassification} from '../../../services/api';
 import {CcThemeContext, ccDark, ccLight, CcThemeMode, readCcThemeMode, writeCcThemeMode, useCc} from './ccTheme';
 import {
-  periodDateRangeLabel, Panel, KpiCard, SlotsKpiCard, TrendChart, Heatmap,
+  periodDateRangeLabel, Panel, KpiCard, TrendChart, Heatmap,
   SlotUtilizationPanel, ParkingSlotMapPanel, TaskFunnelPanel, TopDriversPanel, ServiceReliabilityPanel,
   ProcessTimingPanel,
 } from './panels';
@@ -132,8 +132,6 @@ function DashboardBody({onOpenMap, onOpenDrivers, onOpenAttendance, themeMode, o
   if (!data) return null;
 
   const {overview, kpiComparison, taskFunnelVolume, activityTrend, demandHeatmap, operationalFriction} = data;
-  const occupiedNow = liveSlots.filter(s => s.status === 'occupied').length;
-  const totalSlotsNow = liveSlots.length;
 
   return (
     // Dims (never blanks) the panels below the pill row while a period
@@ -172,15 +170,14 @@ function DashboardBody({onOpenMap, onOpenDrivers, onOpenAttendance, themeMode, o
       <div style={{fontSize: 10.5, color: cc.textMuted, fontWeight: 600, marginBottom: 14}}>{periodDateRangeLabel(period)}</div>
 
       <div style={{opacity: loading ? 0.55 : 1, transition: 'opacity 0.15s', pointerEvents: loading ? 'none' : 'auto'}}>
-        {/* KPI row — 2 columns; the odd 5th card (Users) spans the full width. */}
+        {/* KPI row — 2×2 grid (the Parking Slots card was removed by
+           request; 4 cards now divides evenly, no odd spanning card
+           needed). */}
         <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16}}>
           <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" />
           <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" />
-          <SlotsKpiCard occupied={occupiedNow} available={totalSlotsNow - occupiedNow} total={totalSlotsNow} onClick={() => onOpenMap()} />
           <KpiCard icon="car" variant={cc.kpi.drivers} value={String(kpiComparison.drivers.current)} label="Drivers" onClick={onOpenDrivers} />
-          <div style={{gridColumn: 'span 2'}}>
-            <KpiCard icon="userCard" variant={cc.kpi.users} value={String(kpiComparison.users.current)} label="Users" onClick={onOpenAttendance} />
-          </div>
+          <KpiCard icon="userCard" variant={cc.kpi.users} value={String(kpiComparison.users.current)} label="Users" onClick={onOpenAttendance} />
         </div>
 
         <div style={{marginBottom: 14}}><SlotUtilizationPanel liveSlots={liveSlots} onViewAll={() => onOpenMap()} /></div>

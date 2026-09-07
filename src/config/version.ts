@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 55;
-export const APP_VERSION_NAME = '1.9.9';
+export const APP_VERSION_CODE = 56;
+export const APP_VERSION_NAME = '1.10.0';
 export const RELEASE_NOTES =
-  'Admin Dashboard: cleaner KPI cards (dropped the small ring gauge and "vs last period" percentages), Today is now the default view, and both Parking Activity Trends and Slot Utilization got real analytical upgrades — trend totals/averages/peak-day plus a real axis scale, and a per-block occupancy breakdown.';
+  'Admin Dashboard: removed the Parking Slots KPI card, centered the legends under Parking Activity Trends and the Hourly Demand Heatmap, and simplified the Slot Utilization by-block numbers to just occupied/total.';

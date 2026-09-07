@@ -125,18 +125,6 @@ export function KpiCard({icon, variant, value, label, onClick}: {
   );
 }
 
-export function SlotsKpiCard({occupied, available, total, onClick}: {occupied: number; available: number; total: number; onClick: () => void}) {
-  const v = useCc().kpi.slots;
-  return (
-    <PressableScale onClick={onClick} style={{flex: 1, borderRadius: 14, backgroundColor: v.bg, padding: 14, textAlign: 'left', display: 'block', minWidth: 0}}>
-      <Icon name="parking" size={17} color={v.icon} />
-      <div style={{fontSize: 22, fontWeight: 900, color: v.valueText, marginTop: 8, letterSpacing: -0.5}}>{total}</div>
-      <div style={{fontSize: 11, fontWeight: 700, color: v.labelText, marginTop: 1}}>Parking Slots</div>
-      <div style={{fontSize: 9, color: v.labelText, marginTop: 4}}>{occupied} Occupied · {available} Available</div>
-    </PressableScale>
-  );
-}
-
 // ── Parking Activity Trends ────────────────────────────────────────────────
 
 export function TrendChart({days}: {days: {date: string; tasks: number; visitors: number}[]}) {
@@ -288,7 +276,7 @@ export function TrendChart({days}: {days: {date: string; tasks: number; visitors
           </>
         )}
       </div>
-      <div style={{display: 'flex', gap: 14, marginTop: 8}}>
+      <div style={{display: 'flex', justifyContent: 'center', gap: 14, marginTop: 8}}>
         <span style={{display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: cc.textMuted}}><span style={{width: 8, height: 8, borderRadius: 2, backgroundColor: cc.accentBlue, display: 'inline-block'}} />Parking Tasks</span>
         <span style={{display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: cc.textMuted}}><span style={{width: 8, height: 8, borderRadius: 2, backgroundColor: cc.accentGreen, display: 'inline-block'}} />Visitors</span>
       </div>
@@ -331,7 +319,7 @@ export function Heatmap({heatmap}: {heatmap: DemandHeatmap}) {
           </React.Fragment>
         ))}
       </div>
-      <div style={{marginTop: 10, fontSize: 10.5, color: cc.textSecondary, minHeight: 14}}>
+      <div style={{marginTop: 10, fontSize: 10.5, color: cc.textSecondary, minHeight: 14, textAlign: 'center'}}>
         {hover ? (
           <span><b style={{color: cc.textPrimary}}>{heatmap.weekdayLabels[hover.row]} {hover.col}:00</b> — Tasks: {heatmap.grid[hover.row][hover.col].tasks}, Visitors: {heatmap.grid[hover.row][hover.col].visitors}</span>
         ) : (
@@ -391,7 +379,7 @@ export function SlotUtilizationPanel({liveSlots, onViewAll}: {liveSlots: Parking
                   <div style={{flex: 1, height: 7, borderRadius: 4, backgroundColor: cc.divider, overflow: 'hidden'}}>
                     <div style={{height: 7, borderRadius: 4, width: `${b.pct}%`, backgroundColor: b.pct >= 80 ? cc.danger : b.pct >= 50 ? cc.accentAmber : cc.success}} />
                   </div>
-                  <span style={{fontSize: 10, fontWeight: 800, color: cc.textPrimary, width: 60, textAlign: 'right', flexShrink: 0}}>{b.occupied}/{b.total} · {b.pct}%</span>
+                  <span style={{fontSize: 10, fontWeight: 800, color: cc.textPrimary, width: 40, textAlign: 'right', flexShrink: 0}}>{b.occupied}/{b.total}</span>
                 </div>
               ))}
             </div>
