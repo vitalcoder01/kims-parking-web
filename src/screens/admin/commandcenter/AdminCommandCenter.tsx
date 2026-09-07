@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useAppState} from '../../../context/AppStateContext';
 import {getSocket} from '../../../services/socket';
 import {analyticsApi, AnalyticsPeriod, CommandCenterBundle, SlotClassification} from '../../../services/api';
@@ -61,6 +61,12 @@ export function AdminCommandCenter({userName}: {userName: string}) {
   const [period, setPeriod] = useState<AnalyticsPeriod>('monthly');
   const [query, setQuery] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  // Real loading state of the Dashboard section's data fetch, lifted up so
+  // the header's refresh spinner reflects it honestly — it used to be
+  // hardcoded `refreshing={false}` below, so a period switch (or any
+  // background refresh) gave zero visual feedback while the ~2-3s
+  // command-center fetch was in flight, making the dashboard look frozen.
+  const [dashboardLoading, setDashboardLoading] = useState(false);
   const [connected, setConnected] = useState(() => getSocket()?.connected ?? false);
   const [themeMode, setThemeMode] = useState<CcThemeMode>(() => readCcThemeMode());
   const palette = themeMode === 'light' ? ccLight : ccDark;
@@ -91,13 +97,13 @@ export function AdminCommandCenter({userName}: {userName: string}) {
           <TopHeader
             period={period} onPeriodChange={setPeriod} dateRangeLabel={periodDateRangeLabel(period)}
             onRefresh={() => setRefreshKey(k => k + 1)}
-            refreshing={false} connected={connected}
+            refreshing={section === 'dashboard' && dashboardLoading} connected={connected}
             query={query} onQueryChange={setQuery}
             unreadCount={notifications.filter(n => !n.read).length} userName={userName}
             themeMode={themeMode} onToggleTheme={toggleTheme}
           />
           <div style={{flex: 1, minHeight: 0, overflowY: 'auto'}}>
-            {section === 'dashboard' && <DashboardSection period={period} refreshKey={refreshKey} onNavigate={setSection} />}
+            {section === 'dashboard' && <DashboardSection period={period} refreshKey={refreshKey} onNavigate={setSection} onLoadingChange={setDashboardLoading} />}
             {section === 'slots' && <ScreenPane><AdminMapScreen /></ScreenPane>}
             {section === 'drivers' && <ScreenPane><AdminStaffScreen initialFilter="driver" /></ScreenPane>}
             {section === 'staff' && <ScreenPane><AdminAttendanceScreen /></ScreenPane>}
@@ -121,21 +127,55 @@ function ScreenPane({children}: {children: React.ReactNode}) {
 
 // ── Dashboard section (data fetch + grid) ──────────────────────────────────
 
-function DashboardSection({period, refreshKey, onNavigate}: {period: AnalyticsPeriod; refreshKey: number; onNavigate: (s: CcSection) => void}) {
+function DashboardSection({period, refreshKey, onNavigate, onLoadingChange}: {
+  period: AnalyticsPeriod; refreshKey: number; onNavigate: (s: CcSection) => void;
+  onLoadingChange: (loading: boolean) => void;
+}) {
   const cc = useCc();
-  const {slots: liveSlots} = useAppState();
+  const {slots: liveSlots, tasks: liveTasks, visitors: liveVisitors, notifications: liveNotifications} = useAppState();
   const [data, setData] = useState<CommandCenterBundle | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
-  const load = useCallback((p: AnalyticsPeriod) => {
-    setLoading(true);
+  // `silent` backs the live-refresh path below: a background refetch swaps
+  // the numbers in place once it resolves, without the spinner/dimming a
+  // period switch or manual refresh shows — those already communicate
+  // "loading" through the header's spinner (see onLoadingChange).
+  const load = useCallback((p: AnalyticsPeriod, silent?: boolean) => {
+    if (!silent) { setLoading(true); onLoadingChange(true); }
     analyticsApi.commandCenter(p)
       .then(d => { setData(d); setErr(null); })
-      .catch(() => setErr('Could not load dashboard data'))
-      .finally(() => setLoading(false));
-  }, []);
+      .catch(() => { if (!silent) setErr('Could not load dashboard data'); })
+      .finally(() => { if (!silent) { setLoading(false); onLoadingChange(false); } });
+  }, [onLoadingChange]);
   useEffect(() => { load(period); }, [period, refreshKey, load]);
+
+  // Real websocket-driven live refresh — reuses the app's existing genuine
+  // Socket.IO state (tasks/visitors/notifications, already patched live by
+  // AppStateContext from task:upsert/visitor:upsert/notification:new; see
+  // realtime/index.js on the backend) as the trigger for a background
+  // refetch of this heavy aggregate bundle, instead of only ever updating
+  // on a manual period change or refresh click. Debounced (a single job's
+  // lifecycle fires several task:upsert events within seconds) and
+  // rate-limited to at most once every 15s (the bundle itself costs ~2-3s
+  // server-side — refetching on every event would hammer it) so the
+  // dashboard stays live without flooding the backend.
+  const periodRef = useRef(period);
+  periodRef.current = period;
+  const lastFetchRef = useRef(Date.now());
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedOnceRef = useRef(false);
+  useEffect(() => {
+    if (!mountedOnceRef.current) { mountedOnceRef.current = true; return; } // skip the initial hydration
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      const sinceLast = Date.now() - lastFetchRef.current;
+      const fire = () => { lastFetchRef.current = Date.now(); load(periodRef.current, true); };
+      if (sinceLast >= 15000) fire();
+      else timerRef.current = setTimeout(fire, 15000 - sinceLast);
+    }, 4000);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [liveTasks, liveVisitors, liveNotifications, load]);
 
   const classById = useMemo(() => {
     const m = new Map<string, SlotClassification>();
@@ -157,7 +197,13 @@ function DashboardSection({period, refreshKey, onNavigate}: {period: AnalyticsPe
   const occPct = totalSlotsNow ? Math.round((occupiedNow / totalSlotsNow) * 100) : 0;
 
   return (
-    <div style={{padding: 20}}>
+    // Dims (never blanks) in place while a period switch or manual refresh
+    // is in flight — previously a period change showed the PREVIOUS
+    // period's numbers with zero visual change for the ~2-3s the fetch
+    // takes, which is exactly why switching to "This Week" looked like it
+    // silently did nothing. Live background refreshes (the socket-driven
+    // effect above) stay silent/undimmed on purpose — those swap in place.
+    <div style={{padding: 20, opacity: loading ? 0.55 : 1, transition: 'opacity 0.15s', pointerEvents: loading ? 'none' : 'auto'}}>
       <div style={{display: 'flex', gap: 12, marginBottom: 16}}>
         <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" deltaPct={kpiComparison.tasks.pctChange} />
         <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" deltaPct={kpiComparison.visitors.pctChange} />

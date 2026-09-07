@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Icon} from '../../../components/Icon';
 import {PressableScale} from '../../../components/PressableScale';
 import {useAppState} from '../../../context/AppStateContext';
@@ -66,7 +66,7 @@ function DashboardBody({onOpenMap, onOpenDrivers, onOpenAttendance, themeMode, o
   themeMode: CcThemeMode; onToggleTheme: () => void;
 }) {
   const cc = useCc();
-  const {slots: liveSlots} = useAppState();
+  const {slots: liveSlots, tasks: liveTasks, visitors: liveVisitors, notifications: liveNotifications} = useAppState();
   const [period, setPeriod] = useState<AnalyticsPeriod>('monthly');
   const [data, setData] = useState<CommandCenterBundle | null>(null);
   const [loading, setLoading] = useState(true);
@@ -77,10 +77,33 @@ function DashboardBody({onOpenMap, onOpenDrivers, onOpenAttendance, themeMode, o
     if (!silent) setLoading(true);
     analyticsApi.commandCenter(p)
       .then(d => { setData(d); setErr(null); })
-      .catch(() => setErr('Could not load dashboard data'))
-      .finally(() => { setLoading(false); setRefreshing(false); });
+      .catch(() => { if (!silent) setErr('Could not load dashboard data'); })
+      .finally(() => { if (!silent) setLoading(false); setRefreshing(false); });
   }, []);
   useEffect(() => { load(period); }, [period, load]);
+
+  // Real websocket-driven live refresh — same treatment as the desktop
+  // command center (see AdminCommandCenter.tsx's DashboardSection for the
+  // full rationale): tasks/visitors/notifications are already patched live
+  // by AppStateContext from genuine Socket.IO events, so a change to any
+  // of them triggers a debounced (4s quiet), rate-limited (>=15s apart)
+  // silent background refetch instead of only updating on manual actions.
+  const periodRef = useRef(period);
+  periodRef.current = period;
+  const lastFetchRef = useRef(Date.now());
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedOnceRef = useRef(false);
+  useEffect(() => {
+    if (!mountedOnceRef.current) { mountedOnceRef.current = true; return; }
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      const sinceLast = Date.now() - lastFetchRef.current;
+      const fire = () => { lastFetchRef.current = Date.now(); load(periodRef.current, true); };
+      if (sinceLast >= 15000) fire();
+      else timerRef.current = setTimeout(fire, 15000 - sinceLast);
+    }, 4000);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [liveTasks, liveVisitors, liveNotifications, load]);
 
   const classById = useMemo(() => {
     const m = new Map<string, SlotClassification>();
@@ -114,6 +137,12 @@ function DashboardBody({onOpenMap, onOpenDrivers, onOpenAttendance, themeMode, o
   const occPct = totalSlotsNow ? Math.round((occupiedNow / totalSlotsNow) * 100) : 0;
 
   return (
+    // Dims (never blanks) the panels below the pill row while a period
+    // switch is in flight, same fix as the desktop command center: before
+    // this, picking a new period left the PREVIOUS period's numbers on
+    // screen with no visual change for ~2-3s, which is why "This Week"
+    // looked like it silently did nothing. Live background refreshes stay
+    // undimmed on purpose — those swap in place.
     <div className="screen-scroll" style={{backgroundColor: cc.bg, padding: 16, paddingBottom: 40}}>
       {/* Period selector + real date range + refresh + theme toggle */}
       <div style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4}}>
@@ -143,26 +172,28 @@ function DashboardBody({onOpenMap, onOpenDrivers, onOpenAttendance, themeMode, o
       </div>
       <div style={{fontSize: 10.5, color: cc.textMuted, fontWeight: 600, marginBottom: 14}}>{periodDateRangeLabel(period)}</div>
 
-      {/* KPI row — 2 columns; the odd 5th card (Users) spans the full width. */}
-      <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16}}>
-        <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" deltaPct={kpiComparison.tasks.pctChange} />
-        <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" deltaPct={kpiComparison.visitors.pctChange} />
-        <SlotsKpiCard occPct={occPct} occupied={occupiedNow} available={totalSlotsNow - occupiedNow} total={totalSlotsNow} onClick={() => onOpenMap()} />
-        <KpiCard icon="car" variant={cc.kpi.drivers} value={String(kpiComparison.drivers.current)} label="Drivers" deltaPct={kpiComparison.drivers.pctChange} onClick={onOpenDrivers} />
-        <div style={{gridColumn: 'span 2'}}>
-          <KpiCard icon="userCard" variant={cc.kpi.users} value={String(kpiComparison.users.current)} label="Users" deltaPct={kpiComparison.users.pctChange} onClick={onOpenAttendance} />
+      <div style={{opacity: loading ? 0.55 : 1, transition: 'opacity 0.15s', pointerEvents: loading ? 'none' : 'auto'}}>
+        {/* KPI row — 2 columns; the odd 5th card (Users) spans the full width. */}
+        <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16}}>
+          <KpiCard icon="car" variant={cc.kpi.tasks} value={overview.totalJobsCompleted.toLocaleString()} label="Parking Tasks" deltaPct={kpiComparison.tasks.pctChange} />
+          <KpiCard icon="people" variant={cc.kpi.visitors} value={data.visitorIntelligence.total.toLocaleString()} label="Visitors" deltaPct={kpiComparison.visitors.pctChange} />
+          <SlotsKpiCard occPct={occPct} occupied={occupiedNow} available={totalSlotsNow - occupiedNow} total={totalSlotsNow} onClick={() => onOpenMap()} />
+          <KpiCard icon="car" variant={cc.kpi.drivers} value={String(kpiComparison.drivers.current)} label="Drivers" deltaPct={kpiComparison.drivers.pctChange} onClick={onOpenDrivers} />
+          <div style={{gridColumn: 'span 2'}}>
+            <KpiCard icon="userCard" variant={cc.kpi.users} value={String(kpiComparison.users.current)} label="Users" deltaPct={kpiComparison.users.pctChange} onClick={onOpenAttendance} />
+          </div>
         </div>
-      </div>
 
-      <div style={{marginBottom: 14}}><SlotUtilizationPanel liveSlots={liveSlots} onViewAll={() => onOpenMap()} /></div>
-      <div style={{marginBottom: 14}}><Panel title="Parking Activity Trends"><TrendChart days={activityTrend.days} /></Panel></div>
-      <div style={{marginBottom: 14}}><Panel title="Hourly Demand Heatmap"><Heatmap heatmap={demandHeatmap} /></Panel></div>
-      <div style={{marginBottom: 14}}><ParkingSlotMapPanel liveSlots={liveSlots} classById={classById} onOpenSlots={() => onOpenMap()} /></div>
-      <div style={{marginBottom: 14}}><TaskFunnelPanel funnelVolume={taskFunnelVolume} /></div>
-      <div style={{marginBottom: 14}}><TopDriversPanel drivers={overview.drivers} onViewAll={onOpenDrivers} /></div>
-      <ServiceReliabilityPanel friction={operationalFriction} />
-      {/* New addition, appended last — does not touch any panel above. */}
-      <div style={{marginTop: 14}}><ProcessTimingPanel funnel={data.taskFunnel} /></div>
+        <div style={{marginBottom: 14}}><SlotUtilizationPanel liveSlots={liveSlots} onViewAll={() => onOpenMap()} /></div>
+        <div style={{marginBottom: 14}}><Panel title="Parking Activity Trends"><TrendChart days={activityTrend.days} /></Panel></div>
+        <div style={{marginBottom: 14}}><Panel title="Hourly Demand Heatmap"><Heatmap heatmap={demandHeatmap} /></Panel></div>
+        <div style={{marginBottom: 14}}><ParkingSlotMapPanel liveSlots={liveSlots} classById={classById} onOpenSlots={() => onOpenMap()} /></div>
+        <div style={{marginBottom: 14}}><TaskFunnelPanel funnelVolume={taskFunnelVolume} /></div>
+        <div style={{marginBottom: 14}}><TopDriversPanel drivers={overview.drivers} onViewAll={onOpenDrivers} /></div>
+        <ServiceReliabilityPanel friction={operationalFriction} />
+        {/* New addition, appended last — does not touch any panel above. */}
+        <div style={{marginTop: 14}}><ProcessTimingPanel funnel={data.taskFunnel} /></div>
+      </div>
     </div>
   );
 }
