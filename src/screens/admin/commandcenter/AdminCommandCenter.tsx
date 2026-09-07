@@ -8,6 +8,7 @@ import {TopHeader} from './TopHeader';
 import {
   periodDateRangeLabel, Panel, KpiCard, SlotsKpiCard, TrendChart, Heatmap,
   SlotUtilizationPanel, ParkingSlotMapPanel, TaskFunnelPanel, TopDriversPanel, ServiceReliabilityPanel,
+  ProcessTimingPanel,
 } from './panels';
 
 // Existing screens reused as-is inside sidebar sections that don't need a
@@ -188,6 +189,13 @@ function DashboardSection({period, refreshKey, onNavigate}: {period: AnalyticsPe
 
         <div style={{gridColumn: '1 / 4', gridRow: '3'}}>
           <ServiceReliabilityPanel friction={operationalFriction} />
+        </div>
+
+        {/* New addition — does not touch any panel above. Charts avgMinutes
+           per stage from taskFunnel (already fetched, never charted before)
+           to show where time is actually lost, not just where volume goes. */}
+        <div style={{gridColumn: '1 / 4', gridRow: '4'}}>
+          <ProcessTimingPanel funnel={data.taskFunnel} />
         </div>
       </div>
     </div>

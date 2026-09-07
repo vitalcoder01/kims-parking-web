@@ -2,7 +2,7 @@ import React, {useMemo, useState} from 'react';
 import {Icon, IconName} from '../../../components/Icon';
 import {PressableScale} from '../../../components/PressableScale';
 import {ParkingSlot} from '../../../context/AppStateContext';
-import {AnalyticsPeriod, SlotClassification, TaskFunnelVolume, DriverAnalytics, DemandHeatmap, OperationalFriction} from '../../../services/api';
+import {AnalyticsPeriod, SlotClassification, TaskFunnelVolume, DriverAnalytics, DemandHeatmap, OperationalFriction, TaskFunnel} from '../../../services/api';
 import {useCc, ccCard, ccPanelTitle, ccEmptyText, CcPalette} from './ccTheme';
 
 /*
@@ -500,6 +500,69 @@ export function ServiceReliabilityPanel({friction}: {friction: OperationalFricti
             </div>
           ))}
         </div>
+      )}
+    </Panel>
+  );
+}
+
+// ── Process Timing ───────────────────────────────────────────────────────
+// A NEW addition — deliberately does not replace or alter TaskFunnelPanel
+// above. That panel shows stage VOLUME (how many tasks reached each
+// stage); this one shows stage DURATION (how long each stage actually
+// takes, averaged from real timestamp columns the backend already
+// computes in taskFunnel — see analytics.service.js's taskFunnel/
+// avgMinutes). Answers a different question at a glance: "where is time
+// actually being lost?" — the true bottleneck stage (already identified
+// server-side, never guessed here) is called out in the danger color so
+// it reads instantly as a horizontal bar chart, not just a stat.
+export function ProcessTimingPanel({funnel}: {funnel: TaskFunnel}) {
+  const cc = useCc();
+  const [tab, setTab] = useState<'park' | 'retrieve'>('park');
+  const data = funnel[tab];
+  const timedStages = data.stages.filter(s => s.avgMinutes != null);
+  const maxMinutes = Math.max(1, ...timedStages.map(s => s.avgMinutes as number));
+  return (
+    <Panel title="Process Timing" right={
+      <div style={{display: 'flex', gap: 4}}>
+        {(['park', 'retrieve'] as const).map(k => (
+          <button key={k} onClick={() => setTab(k)} style={{
+            fontSize: 10, fontWeight: 800, padding: '4px 9px', borderRadius: 999, border: 'none', cursor: 'pointer',
+            backgroundColor: tab === k ? cc.accentBlue : cc.cardAlt, color: tab === k ? '#fff' : cc.textSecondary,
+          }}>{k === 'park' ? 'Park' : 'Retrieve'}</button>
+        ))}
+      </div>
+    }>
+      {data.sampleSize === 0 || timedStages.length === 0 ? (
+        <div style={ccEmptyText(cc)}>Not enough completed {tab} tasks yet to time this stage-by-stage.</div>
+      ) : (
+        <>
+          <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
+            {timedStages.map(s => {
+              const isBottleneck = data.bottleneck?.key === s.key;
+              const mins = s.avgMinutes as number;
+              return (
+                <div key={s.key}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 3}}>
+                    <span style={{fontSize: 10.5, fontWeight: 700, color: isBottleneck ? cc.danger : cc.textSecondary}}>
+                      {s.label}{isBottleneck ? ' ⚠' : ''}
+                    </span>
+                    <span style={{fontSize: 10.5, fontWeight: 800, color: cc.textPrimary}}>
+                      {mins < 1 ? '<1m' : `${Math.round(mins)}m`} <span style={{color: cc.textMuted, fontWeight: 600}}>· n={s.sampleSize}</span>
+                    </span>
+                  </div>
+                  <div style={{height: 8, borderRadius: 4, backgroundColor: cc.divider, overflow: 'hidden'}}>
+                    <div style={{height: 8, borderRadius: 4, width: `${(mins / maxMinutes) * 100}%`, backgroundColor: isBottleneck ? cc.danger : cc.accentBlue}} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {data.bottleneck && (
+            <div style={{marginTop: 12, fontSize: 10, fontWeight: 600, color: cc.textMuted}}>
+              Slowest step: <span style={{color: cc.danger, fontWeight: 800}}>{data.bottleneck.label}</span> averages {Math.round(data.bottleneck.avgMinutes ?? 0)}m — the best place to speed up {tab === 'park' ? 'parking' : 'retrieval'}.
+            </div>
+          )}
+        </>
       )}
     </Panel>
   );

@@ -7,6 +7,7 @@ import {CcThemeContext, ccDark, ccLight, CcThemeMode, readCcThemeMode, writeCcTh
 import {
   periodDateRangeLabel, Panel, KpiCard, SlotsKpiCard, TrendChart, Heatmap,
   SlotUtilizationPanel, ParkingSlotMapPanel, TaskFunnelPanel, TopDriversPanel, ServiceReliabilityPanel,
+  ProcessTimingPanel,
 } from './panels';
 
 const PERIODS: {key: AnalyticsPeriod; label: string}[] = [
@@ -160,6 +161,8 @@ function DashboardBody({onOpenMap, onOpenDrivers, onOpenAttendance, themeMode, o
       <div style={{marginBottom: 14}}><TaskFunnelPanel funnelVolume={taskFunnelVolume} /></div>
       <div style={{marginBottom: 14}}><TopDriversPanel drivers={overview.drivers} onViewAll={onOpenDrivers} /></div>
       <ServiceReliabilityPanel friction={operationalFriction} />
+      {/* New addition, appended last — does not touch any panel above. */}
+      <div style={{marginTop: 14}}><ProcessTimingPanel funnel={data.taskFunnel} /></div>
     </div>
   );
 }

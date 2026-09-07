@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 50;
-export const APP_VERSION_NAME = '1.9.4';
+export const APP_VERSION_CODE = 51;
+export const APP_VERSION_NAME = '1.9.5';
 export const RELEASE_NOTES =
-  'Admin Dashboard: added a new Service Reliability panel — real cancellation rate, driver no-response, assignment timeouts, unstaffed alerts, job recalls, escalations and retrieval recovery counts.';
+  'Admin Dashboard: added a new Process Timing panel — a real stage-by-stage duration chart for park and retrieve jobs, highlighting the exact bottleneck step slowing each one down.';
