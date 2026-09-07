@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 57;
-export const APP_VERSION_NAME = '1.10.1';
+export const APP_VERSION_CODE = 58;
+export const APP_VERSION_NAME = '1.10.2';
 export const RELEASE_NOTES =
-  'Admin Dashboard: Service Reliability is now a radar chart (all 7 friction metrics at once, real numbers on each point) and Process Timing is now a proportional flow bar showing the whole park/retrieve journey as one colored timeline with the bottleneck stage highlighted.';
+  'Admin Dashboard: made the Service Reliability and Process Timing charts more compact, and the radar chart is now a real slicer — click a metric (on the shape or in the legend) to highlight it and see its full real-data detail.';

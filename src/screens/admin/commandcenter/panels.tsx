@@ -543,12 +543,22 @@ export function TopDriversPanel({drivers, onViewAll}: {drivers: DriverAnalytics[
 // from center and connected into a filled polygon. Values above 100 are
 // visually capped at the outer ring (the real number still shows in the
 // vertex label) so one runaway metric can't blow out the whole shape.
-function RadarChart({axes, size = 240}: {
-  axes: {label: string; raw: string; pct: number; tone: 'warn' | 'danger' | 'neutral'}[];
+// Compact: no floating outer-ring labels (that's what made it big) — the
+// precise numbers live in a tight side legend next to the chart instead,
+// so the SVG itself can shrink down to an at-a-glance shape.
+// A real slicer, not just a picture: every vertex (and its matching
+// legend row, see below) is clickable. Selecting one enlarges its dot,
+// dims the rest of the polygon, and surfaces that metric's full
+// real-data sentence beneath the chart — click again (or the same
+// legend row) to clear it.
+function RadarChart({axes, size = 132, selected, onSelect}: {
+  axes: {pct: number; tone: 'warn' | 'danger' | 'neutral'}[];
   size?: number;
+  selected: number | null;
+  onSelect: (i: number | null) => void;
 }) {
   const cc = useCc();
-  const cx = size / 2, cy = size / 2, R = size / 2 - 56;
+  const cx = size / 2, cy = size / 2, R = size / 2 - 10;
   const n = axes.length;
   const angleFor = (i: number) => (i / n) * 2 * Math.PI - Math.PI / 2;
   const pointFor = (i: number, frac: number): [number, number] => {
@@ -556,19 +566,19 @@ function RadarChart({axes, size = 240}: {
     return [cx + R * frac * Math.cos(a), cy + R * frac * Math.sin(a)];
   };
   const toneColor = (t: 'warn' | 'danger' | 'neutral') => t === 'danger' ? cc.danger : t === 'warn' ? cc.warning : cc.accentBlue;
-  const rings = [0.25, 0.5, 0.75, 1];
+  const rings = [0.5, 1];
   // Scale to the data's own range rather than a fixed 0-100 — these
   // friction rates are almost always single digits to low double digits,
   // so a literal 0-100 axis squashes every real polygon down near the
   // center. A 40-point floor (stretched further only if something is
   // genuinely worse than that) keeps the shape readable while staying
-  // honest — every vertex label still shows the real, unscaled number.
+  // honest — the real, unscaled number lives in the side legend.
   const scaleMax = Math.max(40, ...axes.map(a => a.pct));
   const dataPts = axes.map((ax, i) => pointFor(i, Math.min(1, ax.pct / scaleMax)));
   const polygon = dataPts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ') + ' Z';
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{overflow: 'visible', flexShrink: 0}}>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{flexShrink: 0}}>
       {rings.map(f => {
         const pts = axes.map((_, i) => pointFor(i, f));
         const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ') + ' Z';
@@ -578,17 +588,17 @@ function RadarChart({axes, size = 240}: {
         const [x, y] = pointFor(i, 1);
         return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke={cc.divider} strokeWidth={1} />;
       })}
-      <path d={polygon} fill={cc.accentBlue + '2A'} stroke={cc.accentBlue} strokeWidth={2} />
-      {dataPts.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={4} fill={toneColor(axes[i].tone)} stroke={cc.card} strokeWidth={1.5} />
-      ))}
-      {axes.map((ax, i) => {
-        const [lx, ly] = pointFor(i, 1.36);
+      <path d={polygon} fill={cc.accentBlue + '2A'} stroke={cc.accentBlue} strokeWidth={2} opacity={selected == null ? 1 : 0.35} />
+      {dataPts.map(([x, y], i) => {
+        const isSel = selected === i;
         return (
-          <text key={i} x={lx} y={ly} textAnchor="middle">
-            <tspan x={lx} dy="-4" fontSize={11} fontWeight={900} fill={toneColor(ax.tone)}>{ax.raw}</tspan>
-            <tspan x={lx} dy="12" fontSize={7.5} fontWeight={700} fill={cc.textMuted}>{ax.label}</tspan>
-          </text>
+          <g key={i} onClick={() => onSelect(isSel ? null : i)} style={{cursor: 'pointer'}}>
+            {/* Generous invisible hit target — the visible dot alone is too small to tap reliably. */}
+            <circle cx={x} cy={y} r={11} fill="transparent" />
+            {isSel && <circle cx={x} cy={y} r={7} fill="none" stroke={toneColor(axes[i].tone)} strokeWidth={1.5} opacity={0.5} />}
+            <circle cx={x} cy={y} r={isSel ? 4.5 : 3} fill={toneColor(axes[i].tone)} stroke={cc.card} strokeWidth={1.2}
+              opacity={selected == null || isSel ? 1 : 0.4} />
+          </g>
         );
       })}
     </svg>
@@ -602,30 +612,79 @@ function RadarChart({axes, size = 240}: {
 // lifecycle columns). Nothing here is a guess: each axis is either an
 // already-real rate (cancellation, recovery) or a raw count turned into a
 // rate against totalTasks — so every axis sits on the same 0-100 scale a
-// radar chart needs, while the vertex label still shows the real count/%.
+// radar chart needs. Compact layout: a small shape chart + a tight numeric
+// legend side by side. Both the vertices and the legend rows are one
+// shared clickable slicer — selecting a metric (chart or legend, either
+// drives the same state) highlights it and surfaces its full real-data
+// sentence below, e.g. "138 unstaffed alerts out of 387 tasks (35.7%)".
 export function ServiceReliabilityPanel({friction}: {friction: OperationalFriction}) {
   const cc = useCc();
+  const [selected, setSelected] = useState<number | null>(null);
   const rateOf = (count: number) => friction.totalTasks ? (count / friction.totalTasks) * 100 : 0;
-  const axes: {label: string; raw: string; pct: number; tone: 'warn' | 'danger' | 'neutral'}[] = [
-    {label: 'Cancellations', raw: `${friction.cancellationRatePct}%`, pct: friction.cancellationRatePct, tone: friction.cancellationRatePct > 5 ? 'danger' : friction.cancellationRatePct > 0 ? 'warn' : 'neutral'},
-    {label: 'No-Response', raw: String(friction.driverNoResponseCount), pct: rateOf(friction.driverNoResponseCount), tone: friction.driverNoResponseCount > 0 ? 'warn' : 'neutral'},
-    {label: 'Expired', raw: String(friction.assignmentExpiredCount), pct: rateOf(friction.assignmentExpiredCount), tone: friction.assignmentExpiredCount > 0 ? 'warn' : 'neutral'},
-    {label: 'Unstaffed', raw: String(friction.unstaffedAlertCount), pct: rateOf(friction.unstaffedAlertCount), tone: friction.unstaffedAlertCount > 0 ? 'warn' : 'neutral'},
-    {label: 'Recalled', raw: String(friction.jobsRecalledCount), pct: rateOf(friction.jobsRecalledCount), tone: friction.jobsRecalledCount > 0 ? 'danger' : 'neutral'},
-    {label: 'Escalated', raw: String(friction.escalatedTasksCount), pct: rateOf(friction.escalatedTasksCount), tone: friction.escalatedTasksCount > 0 ? 'danger' : 'neutral'},
-    {label: 'Recovery', raw: `${friction.recoveryBroadcastRatePct}%`, pct: friction.recoveryBroadcastRatePct, tone: friction.recoveryBroadcastRatePct > 5 ? 'warn' : 'neutral'},
+  const axes: {label: string; raw: string; pct: number; tone: 'warn' | 'danger' | 'neutral'; detail: string}[] = [
+    {
+      label: 'Cancellations', raw: `${friction.cancellationRatePct}%`, pct: friction.cancellationRatePct,
+      tone: friction.cancellationRatePct > 5 ? 'danger' : friction.cancellationRatePct > 0 ? 'warn' : 'neutral',
+      detail: `${friction.cancelledTasks} of ${friction.totalTasks} tasks were cancelled (${friction.cancellationRatePct}%).`,
+    },
+    {
+      label: 'No-Response', raw: String(friction.driverNoResponseCount), pct: rateOf(friction.driverNoResponseCount),
+      tone: friction.driverNoResponseCount > 0 ? 'warn' : 'neutral',
+      detail: `${friction.driverNoResponseCount} "driver did not accept" alerts — ${Math.round(rateOf(friction.driverNoResponseCount) * 10) / 10}% of tasks.`,
+    },
+    {
+      label: 'Expired', raw: String(friction.assignmentExpiredCount), pct: rateOf(friction.assignmentExpiredCount),
+      tone: friction.assignmentExpiredCount > 0 ? 'warn' : 'neutral',
+      detail: `${friction.assignmentExpiredCount} driver assignments expired before being accepted.`,
+    },
+    {
+      label: 'Unstaffed', raw: String(friction.unstaffedAlertCount), pct: rateOf(friction.unstaffedAlertCount),
+      tone: friction.unstaffedAlertCount > 0 ? 'warn' : 'neutral',
+      detail: `${friction.unstaffedAlertCount} "still needs a driver/valet" alerts were sent out.`,
+    },
+    {
+      label: 'Recalled', raw: String(friction.jobsRecalledCount), pct: rateOf(friction.jobsRecalledCount),
+      tone: friction.jobsRecalledCount > 0 ? 'danger' : 'neutral',
+      detail: `${friction.jobsRecalledCount} jobs were recalled and brought back after being sent out.`,
+    },
+    {
+      label: 'Escalated', raw: String(friction.escalatedTasksCount), pct: rateOf(friction.escalatedTasksCount),
+      tone: friction.escalatedTasksCount > 0 ? 'danger' : 'neutral',
+      detail: `${friction.escalatedTasksCount} jobs were escalated.`,
+    },
+    {
+      label: 'Recovery', raw: `${friction.recoveryBroadcastRatePct}%`, pct: friction.recoveryBroadcastRatePct,
+      tone: friction.recoveryBroadcastRatePct > 5 ? 'warn' : 'neutral',
+      detail: `${friction.recoveryBroadcastCount} of ${friction.retrieveTasks} retrievals (${friction.recoveryBroadcastRatePct}%) needed a recovery broadcast.`,
+    },
   ];
+  const toneColor = (t: 'warn' | 'danger' | 'neutral') => t === 'danger' ? cc.danger : t === 'warn' ? cc.warning : cc.textPrimary;
+  const toggle = (i: number) => setSelected(s => s === i ? null : i);
 
   return (
     <Panel title="Service Reliability">
       {friction.totalTasks === 0 ? <div style={ccEmptyText(cc)}>No tasks in this period.</div> : (
         <div>
-          <div style={{display: 'flex', justifyContent: 'center', paddingTop: 16}}>
-            <RadarChart axes={axes} />
+          <div style={{display: 'flex', alignItems: 'center', gap: 18}}>
+            <RadarChart axes={axes} selected={selected} onSelect={setSelected} />
+            <div style={{flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 4, minWidth: 0}}>
+              {axes.map((ax, i) => (
+                <div key={ax.label} onClick={() => toggle(i)} style={{
+                  display: 'flex', justifyContent: 'space-between', gap: 6, cursor: 'pointer',
+                  padding: '3px 5px', borderRadius: 6, backgroundColor: selected === i ? cc.cardAlt : 'transparent',
+                }}>
+                  <span style={{fontSize: 9.5, fontWeight: 700, color: selected === i ? cc.textPrimary : cc.textSecondary}}>{ax.label}</span>
+                  <span style={{fontSize: 11, fontWeight: 900, color: toneColor(ax.tone)}}>{ax.raw}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{textAlign: 'center', fontSize: 9, color: cc.textMuted, marginTop: 4}}>
-            Each axis is scaled to its own range for readability — the number at each point is the real count or rate.
-          </div>
+          {selected != null && (
+            <div style={{marginTop: 10, paddingTop: 8, borderTop: `1px solid ${cc.divider}`, fontSize: 10.5, fontWeight: 600, color: cc.textSecondary}}>
+              <span style={{color: toneColor(axes[selected].tone), fontWeight: 800}}>{axes[selected].label}: </span>
+              {axes[selected].detail}
+            </div>
+          )}
         </div>
       )}
     </Panel>
@@ -649,7 +708,7 @@ function TimingWaterfall({stages, bottleneckKey}: {
   const fmt = (m: number) => m < 1 ? '<1m' : `${Math.round(m)}m`;
   return (
     <div>
-      <div style={{display: 'flex', height: 46, borderRadius: 12, overflow: 'hidden', border: `1px solid ${cc.border}`}}>
+      <div style={{display: 'flex', height: 32, borderRadius: 9, overflow: 'hidden', border: `1px solid ${cc.border}`}}>
         {stages.map((s, i) => {
           const isBottleneck = s.key === bottleneckKey;
           const widthPct = Math.max((s.avgMinutes / total) * 100, 3);
@@ -659,18 +718,18 @@ function TimingWaterfall({stages, bottleneckKey}: {
               backgroundColor: isBottleneck ? cc.danger : colors[i % colors.length],
               borderRight: i < stages.length - 1 ? `2px solid ${cc.card}` : 'none',
             }}>
-              {widthPct > 11 && <span style={{fontSize: 11, fontWeight: 900, color: '#fff'}}>{fmt(s.avgMinutes)}</span>}
+              {widthPct > 13 && <span style={{fontSize: 10, fontWeight: 900, color: '#fff'}}>{fmt(s.avgMinutes)}</span>}
             </div>
           );
         })}
       </div>
-      <div style={{display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 10}}>
+      <div style={{display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 7}}>
         {stages.map((s, i) => {
           const isBottleneck = s.key === bottleneckKey;
           return (
-            <div key={s.key} style={{display: 'flex', alignItems: 'center', gap: 5}}>
-              <span style={{width: 8, height: 8, borderRadius: 2, flexShrink: 0, backgroundColor: isBottleneck ? cc.danger : colors[i % colors.length]}} />
-              <span style={{fontSize: 9.5, fontWeight: 700, color: isBottleneck ? cc.danger : cc.textSecondary}}>
+            <div key={s.key} style={{display: 'flex', alignItems: 'center', gap: 4}}>
+              <span style={{width: 7, height: 7, borderRadius: 2, flexShrink: 0, backgroundColor: isBottleneck ? cc.danger : colors[i % colors.length]}} />
+              <span style={{fontSize: 9, fontWeight: 700, color: isBottleneck ? cc.danger : cc.textSecondary}}>
                 {s.label}{isBottleneck ? ' ⚠' : ''} <span style={{color: cc.textMuted, fontWeight: 600}}>{fmt(s.avgMinutes)} · n={s.sampleSize}</span>
               </span>
             </div>
