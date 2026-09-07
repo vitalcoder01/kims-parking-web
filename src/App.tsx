@@ -166,12 +166,16 @@ const LOADER_FOR_TAB: Record<TabKey, () => Promise<unknown>> = {
 function tabsForRole(role: string | undefined): TabDef[] {
   if (role === 'admin') {
     return [
-      {key: 'Dashboard', label: 'Dashboard', icon: 'dashboard', headerTitle: 'Operations'},
-      {key: 'Staff', label: 'Staff', icon: 'staff', headerTitle: 'Staff'},
-      {key: 'Attendance', label: 'Attendance', icon: 'calendar', headerTitle: 'Attendance'},
-      {key: 'Map', label: 'Map', icon: 'map', headerTitle: 'Live Map'},
+      // headerTitle: null across the board, by request — the native-stack-
+      // style title bar ("Operations" on Dashboard, etc.) is removed from
+      // every admin mobile tab, not just Dashboard. Each tab's own bottom-
+      // nav icon + label is still there for context.
+      {key: 'Dashboard', label: 'Dashboard', icon: 'dashboard', headerTitle: null},
+      {key: 'Staff', label: 'Staff', icon: 'staff', headerTitle: null},
+      {key: 'Attendance', label: 'Attendance', icon: 'calendar', headerTitle: null},
+      {key: 'Map', label: 'Map', icon: 'map', headerTitle: null},
       {key: 'Analytics', label: 'Analytics', icon: 'analytics', headerTitle: null},
-      {key: 'Settings', label: 'Settings', icon: 'settings', headerTitle: 'Settings'},
+      {key: 'Settings', label: 'Settings', icon: 'settings', headerTitle: null},
     ];
   }
   if (role === 'valet') {
