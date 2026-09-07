@@ -161,8 +161,23 @@ export function TrendChart({days}: {days: {date: string; tasks: number; visitors
   const xAt = (i: number) => padL + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
   const yAt = (v: number) => padT + innerH - (v / maxVal) * innerH;
 
-  const pathFor = (key: 'tasks' | 'visitors') => days.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i)} ${yAt(d[key])}`).join(' ');
-  const areaPath = n > 0 ? `${pathFor('tasks')} L ${xAt(n - 1)} ${padT + innerH} L ${xAt(0)} ${padT + innerH} Z` : '';
+  // A single-day range (the "Today" period, almost always) gives `days`
+  // exactly one entry. An SVG path with only a lone "M" (moveto) paints
+  // nothing — there's no line segment to stroke — so the chart silently
+  // rendered blank for "Today" specifically. Widen a lone point into a
+  // short flat 2-point line so it always has something to draw, and mark
+  // it with a visible dot (below) since a flat sliver alone still reads
+  // as "empty" at a glance.
+  const pathFor = (key: 'tasks' | 'visitors') => {
+    if (n === 1) {
+      const y = yAt(days[0][key]);
+      return `M ${padL} ${y} L ${padL + innerW} ${y}`;
+    }
+    return days.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i)} ${yAt(d[key])}`).join(' ');
+  };
+  const areaPath = n === 0 ? '' : n === 1
+    ? `M ${padL} ${yAt(days[0].tasks)} L ${padL + innerW} ${yAt(days[0].tasks)} L ${padL + innerW} ${padT + innerH} L ${padL} ${padT + innerH} Z`
+    : `${pathFor('tasks')} L ${xAt(n - 1)} ${padT + innerH} L ${xAt(0)} ${padT + innerH} Z`;
   const active = hoverIdx != null ? days[hoverIdx] : null;
 
   if (n === 0) return <div style={ccEmptyText(cc)}>No activity recorded in this period.</div>;
@@ -197,6 +212,12 @@ export function TrendChart({days}: {days: {date: string; tasks: number; visitors
         <path d={areaPath} fill="url(#ccAreaFill)" stroke="none" />
         <path d={pathFor('tasks')} fill="none" stroke={cc.accentBlue} strokeWidth={2} />
         <path d={pathFor('visitors')} fill="none" stroke={cc.accentGreen} strokeWidth={2} />
+        {n === 1 && (
+          <>
+            <circle cx={xAt(0)} cy={yAt(days[0].tasks)} r={4} fill={cc.accentBlue} />
+            <circle cx={xAt(0)} cy={yAt(days[0].visitors)} r={4} fill={cc.accentGreen} />
+          </>
+        )}
         {active && hoverIdx != null && (
           <>
             <line x1={xAt(hoverIdx)} x2={xAt(hoverIdx)} y1={padT} y2={padT + innerH} stroke={cc.border} strokeWidth={1} />
@@ -214,10 +235,16 @@ export function TrendChart({days}: {days: {date: string; tasks: number; visitors
           </div>
         </div>
       )}
-      <div style={{display: 'flex', justifyContent: 'space-between', marginTop: 4}}>
-        <span style={{fontSize: 9.5, color: cc.textMuted, fontWeight: 700}}>{days[0]?.date.slice(5)}</span>
-        <span style={{fontSize: 9.5, color: cc.textMuted, fontWeight: 700}}>{days[Math.floor(n / 2)]?.date.slice(5)}</span>
-        <span style={{fontSize: 9.5, color: cc.textMuted, fontWeight: 700}}>{days[n - 1]?.date.slice(5)}</span>
+      <div style={{display: 'flex', justifyContent: n === 1 ? 'center' : 'space-between', marginTop: 4}}>
+        {n === 1 ? (
+          <span style={{fontSize: 9.5, color: cc.textMuted, fontWeight: 700}}>{days[0].date.slice(5)}</span>
+        ) : (
+          <>
+            <span style={{fontSize: 9.5, color: cc.textMuted, fontWeight: 700}}>{days[0]?.date.slice(5)}</span>
+            <span style={{fontSize: 9.5, color: cc.textMuted, fontWeight: 700}}>{days[Math.floor(n / 2)]?.date.slice(5)}</span>
+            <span style={{fontSize: 9.5, color: cc.textMuted, fontWeight: 700}}>{days[n - 1]?.date.slice(5)}</span>
+          </>
+        )}
       </div>
       <div style={{display: 'flex', gap: 14, marginTop: 8}}>
         <span style={{display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: cc.textMuted}}><span style={{width: 8, height: 8, borderRadius: 2, backgroundColor: cc.accentBlue, display: 'inline-block'}} />Parking Tasks</span>

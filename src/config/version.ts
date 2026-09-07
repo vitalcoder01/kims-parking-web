@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 51;
-export const APP_VERSION_NAME = '1.9.5';
+export const APP_VERSION_CODE = 52;
+export const APP_VERSION_NAME = '1.9.6';
 export const RELEASE_NOTES =
-  'Admin Dashboard: added a new Process Timing panel — a real stage-by-stage duration chart for park and retrieve jobs, highlighting the exact bottleneck step slowing each one down.';
+  'Admin Dashboard: fixed Parking Activity Trends showing blank when viewing "Today" — a single-day chart now draws correctly instead of leaving the graph empty.';
