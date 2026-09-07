@@ -538,81 +538,163 @@ export function TopDriversPanel({drivers, onViewAll}: {drivers: DriverAnalytics[
   );
 }
 
+// ── Radar chart (generic, N-axis) ──────────────────────────────────────────
+// A 0-100 polar chart: each axis is a rate/percentage, plotted as distance
+// from center and connected into a filled polygon. Values above 100 are
+// visually capped at the outer ring (the real number still shows in the
+// vertex label) so one runaway metric can't blow out the whole shape.
+function RadarChart({axes, size = 240}: {
+  axes: {label: string; raw: string; pct: number; tone: 'warn' | 'danger' | 'neutral'}[];
+  size?: number;
+}) {
+  const cc = useCc();
+  const cx = size / 2, cy = size / 2, R = size / 2 - 56;
+  const n = axes.length;
+  const angleFor = (i: number) => (i / n) * 2 * Math.PI - Math.PI / 2;
+  const pointFor = (i: number, frac: number): [number, number] => {
+    const a = angleFor(i);
+    return [cx + R * frac * Math.cos(a), cy + R * frac * Math.sin(a)];
+  };
+  const toneColor = (t: 'warn' | 'danger' | 'neutral') => t === 'danger' ? cc.danger : t === 'warn' ? cc.warning : cc.accentBlue;
+  const rings = [0.25, 0.5, 0.75, 1];
+  // Scale to the data's own range rather than a fixed 0-100 — these
+  // friction rates are almost always single digits to low double digits,
+  // so a literal 0-100 axis squashes every real polygon down near the
+  // center. A 40-point floor (stretched further only if something is
+  // genuinely worse than that) keeps the shape readable while staying
+  // honest — every vertex label still shows the real, unscaled number.
+  const scaleMax = Math.max(40, ...axes.map(a => a.pct));
+  const dataPts = axes.map((ax, i) => pointFor(i, Math.min(1, ax.pct / scaleMax)));
+  const polygon = dataPts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ') + ' Z';
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{overflow: 'visible', flexShrink: 0}}>
+      {rings.map(f => {
+        const pts = axes.map((_, i) => pointFor(i, f));
+        const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ') + ' Z';
+        return <path key={f} d={d} fill="none" stroke={cc.divider} strokeWidth={1} />;
+      })}
+      {axes.map((_, i) => {
+        const [x, y] = pointFor(i, 1);
+        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke={cc.divider} strokeWidth={1} />;
+      })}
+      <path d={polygon} fill={cc.accentBlue + '2A'} stroke={cc.accentBlue} strokeWidth={2} />
+      {dataPts.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={4} fill={toneColor(axes[i].tone)} stroke={cc.card} strokeWidth={1.5} />
+      ))}
+      {axes.map((ax, i) => {
+        const [lx, ly] = pointFor(i, 1.36);
+        return (
+          <text key={i} x={lx} y={ly} textAnchor="middle">
+            <tspan x={lx} dy="-4" fontSize={11} fontWeight={900} fill={toneColor(ax.tone)}>{ax.raw}</tspan>
+            <tspan x={lx} dy="12" fontSize={7.5} fontWeight={700} fill={cc.textMuted}>{ax.label}</tspan>
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
+
 // ── Service Reliability ──────────────────────────────────────────────────
 // Real friction/failure events mined from an actual production data
 // export (a Supabase CSV snippet) — see the backend's operationalFriction
 // for exact sourcing (fixed notification titles + ParkingTask's own
-// lifecycle columns). Nothing here is a guess: each number is a direct
-// count or a ratio of two direct counts.
+// lifecycle columns). Nothing here is a guess: each axis is either an
+// already-real rate (cancellation, recovery) or a raw count turned into a
+// rate against totalTasks — so every axis sits on the same 0-100 scale a
+// radar chart needs, while the vertex label still shows the real count/%.
 export function ServiceReliabilityPanel({friction}: {friction: OperationalFriction}) {
   const cc = useCc();
-  const stats: {label: string; value: string; sub?: string; tone: 'warn' | 'danger' | 'neutral'}[] = [
-    {
-      label: 'Cancellation Rate', value: `${friction.cancellationRatePct}%`,
-      sub: `${friction.cancelledTasks} of ${friction.totalTasks} tasks`,
-      tone: friction.cancellationRatePct > 5 ? 'danger' : friction.cancellationRatePct > 0 ? 'warn' : 'neutral',
-    },
-    {
-      label: 'Driver No-Response', value: String(friction.driverNoResponseCount),
-      tone: friction.driverNoResponseCount > 0 ? 'warn' : 'neutral',
-    },
-    {
-      label: 'Assignment Expired', value: String(friction.assignmentExpiredCount),
-      tone: friction.assignmentExpiredCount > 0 ? 'warn' : 'neutral',
-    },
-    {
-      label: 'Unstaffed Alerts', value: String(friction.unstaffedAlertCount),
-      tone: friction.unstaffedAlertCount > 0 ? 'warn' : 'neutral',
-    },
-    {
-      label: 'Jobs Recalled', value: String(friction.jobsRecalledCount),
-      tone: friction.jobsRecalledCount > 0 ? 'danger' : 'neutral',
-    },
-    {
-      label: 'Escalated Jobs', value: String(friction.escalatedTasksCount),
-      tone: friction.escalatedTasksCount > 0 ? 'danger' : 'neutral',
-    },
-    {
-      label: 'Retrieval Recovery Rate', value: `${friction.recoveryBroadcastRatePct}%`,
-      sub: `${friction.recoveryBroadcastCount} of ${friction.retrieveTasks} retrievals`,
-      tone: friction.recoveryBroadcastRatePct > 5 ? 'warn' : 'neutral',
-    },
+  const rateOf = (count: number) => friction.totalTasks ? (count / friction.totalTasks) * 100 : 0;
+  const axes: {label: string; raw: string; pct: number; tone: 'warn' | 'danger' | 'neutral'}[] = [
+    {label: 'Cancellations', raw: `${friction.cancellationRatePct}%`, pct: friction.cancellationRatePct, tone: friction.cancellationRatePct > 5 ? 'danger' : friction.cancellationRatePct > 0 ? 'warn' : 'neutral'},
+    {label: 'No-Response', raw: String(friction.driverNoResponseCount), pct: rateOf(friction.driverNoResponseCount), tone: friction.driverNoResponseCount > 0 ? 'warn' : 'neutral'},
+    {label: 'Expired', raw: String(friction.assignmentExpiredCount), pct: rateOf(friction.assignmentExpiredCount), tone: friction.assignmentExpiredCount > 0 ? 'warn' : 'neutral'},
+    {label: 'Unstaffed', raw: String(friction.unstaffedAlertCount), pct: rateOf(friction.unstaffedAlertCount), tone: friction.unstaffedAlertCount > 0 ? 'warn' : 'neutral'},
+    {label: 'Recalled', raw: String(friction.jobsRecalledCount), pct: rateOf(friction.jobsRecalledCount), tone: friction.jobsRecalledCount > 0 ? 'danger' : 'neutral'},
+    {label: 'Escalated', raw: String(friction.escalatedTasksCount), pct: rateOf(friction.escalatedTasksCount), tone: friction.escalatedTasksCount > 0 ? 'danger' : 'neutral'},
+    {label: 'Recovery', raw: `${friction.recoveryBroadcastRatePct}%`, pct: friction.recoveryBroadcastRatePct, tone: friction.recoveryBroadcastRatePct > 5 ? 'warn' : 'neutral'},
   ];
-  const toneColor = (t: 'warn' | 'danger' | 'neutral') => t === 'danger' ? cc.danger : t === 'warn' ? cc.warning : cc.textPrimary;
 
   return (
     <Panel title="Service Reliability">
       {friction.totalTasks === 0 ? <div style={ccEmptyText(cc)}>No tasks in this period.</div> : (
-        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))', gap: 14}}>
-          {stats.map(s => (
-            <div key={s.label}>
-              <div style={{fontSize: 20, fontWeight: 900, color: toneColor(s.tone)}}>{s.value}</div>
-              <div style={{fontSize: 10, fontWeight: 700, color: cc.textSecondary, marginTop: 3}}>{s.label}</div>
-              {s.sub && <div style={{fontSize: 9, color: cc.textMuted, marginTop: 1}}>{s.sub}</div>}
-            </div>
-          ))}
+        <div>
+          <div style={{display: 'flex', justifyContent: 'center', paddingTop: 16}}>
+            <RadarChart axes={axes} />
+          </div>
+          <div style={{textAlign: 'center', fontSize: 9, color: cc.textMuted, marginTop: 4}}>
+            Each axis is scaled to its own range for readability — the number at each point is the real count or rate.
+          </div>
         </div>
       )}
     </Panel>
   );
 }
 
+// ── Timing waterfall ────────────────────────────────────────────────────
+// The whole process drawn as one proportional segmented bar — each stage's
+// width is its share of the total average time, laid left-to-right in
+// pipeline order, so the journey reads as a single flowing timeline instead
+// of a list of separate bars. The bottleneck segment (already identified
+// server-side, never guessed here) breaks the color sequence to red so it
+// pops out of the flow at a glance.
+function TimingWaterfall({stages, bottleneckKey}: {
+  stages: {key: string; label: string; avgMinutes: number; sampleSize: number}[];
+  bottleneckKey?: string;
+}) {
+  const cc = useCc();
+  const total = stages.reduce((s, x) => s + x.avgMinutes, 0) || 1;
+  const colors = [cc.accentBlue, cc.accentIndigo, cc.accentCyan, cc.accentPurple, cc.accentAmber];
+  const fmt = (m: number) => m < 1 ? '<1m' : `${Math.round(m)}m`;
+  return (
+    <div>
+      <div style={{display: 'flex', height: 46, borderRadius: 12, overflow: 'hidden', border: `1px solid ${cc.border}`}}>
+        {stages.map((s, i) => {
+          const isBottleneck = s.key === bottleneckKey;
+          const widthPct = Math.max((s.avgMinutes / total) * 100, 3);
+          return (
+            <div key={s.key} title={`${s.label}: ${fmt(s.avgMinutes)} · n=${s.sampleSize}`} style={{
+              width: `${widthPct}%`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backgroundColor: isBottleneck ? cc.danger : colors[i % colors.length],
+              borderRight: i < stages.length - 1 ? `2px solid ${cc.card}` : 'none',
+            }}>
+              {widthPct > 11 && <span style={{fontSize: 11, fontWeight: 900, color: '#fff'}}>{fmt(s.avgMinutes)}</span>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 10}}>
+        {stages.map((s, i) => {
+          const isBottleneck = s.key === bottleneckKey;
+          return (
+            <div key={s.key} style={{display: 'flex', alignItems: 'center', gap: 5}}>
+              <span style={{width: 8, height: 8, borderRadius: 2, flexShrink: 0, backgroundColor: isBottleneck ? cc.danger : colors[i % colors.length]}} />
+              <span style={{fontSize: 9.5, fontWeight: 700, color: isBottleneck ? cc.danger : cc.textSecondary}}>
+                {s.label}{isBottleneck ? ' ⚠' : ''} <span style={{color: cc.textMuted, fontWeight: 600}}>{fmt(s.avgMinutes)} · n={s.sampleSize}</span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Process Timing ───────────────────────────────────────────────────────
-// A NEW addition — deliberately does not replace or alter TaskFunnelPanel
-// above. That panel shows stage VOLUME (how many tasks reached each
-// stage); this one shows stage DURATION (how long each stage actually
-// takes, averaged from real timestamp columns the backend already
-// computes in taskFunnel — see analytics.service.js's taskFunnel/
-// avgMinutes). Answers a different question at a glance: "where is time
-// actually being lost?" — the true bottleneck stage (already identified
-// server-side, never guessed here) is called out in the danger color so
-// it reads instantly as a horizontal bar chart, not just a stat.
+// Deliberately does not replace or alter TaskFunnelPanel above. That panel
+// shows stage VOLUME (how many tasks reached each stage); this one shows
+// stage DURATION (how long each stage actually takes, averaged from real
+// timestamp columns the backend already computes in taskFunnel — see
+// analytics.service.js's taskFunnel/avgMinutes). Answers a different
+// question at a glance: "where is time actually being lost?"
 export function ProcessTimingPanel({funnel}: {funnel: TaskFunnel}) {
   const cc = useCc();
   const [tab, setTab] = useState<'park' | 'retrieve'>('park');
   const data = funnel[tab];
-  const timedStages = data.stages.filter(s => s.avgMinutes != null);
-  const maxMinutes = Math.max(1, ...timedStages.map(s => s.avgMinutes as number));
+  const timedStages = data.stages
+    .filter(s => s.avgMinutes != null)
+    .map(s => ({...s, avgMinutes: s.avgMinutes as number}));
   return (
     <Panel title="Process Timing" right={
       <div style={{display: 'flex', gap: 4}}>
@@ -628,27 +710,7 @@ export function ProcessTimingPanel({funnel}: {funnel: TaskFunnel}) {
         <div style={ccEmptyText(cc)}>Not enough completed {tab} tasks yet to time this stage-by-stage.</div>
       ) : (
         <>
-          <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
-            {timedStages.map(s => {
-              const isBottleneck = data.bottleneck?.key === s.key;
-              const mins = s.avgMinutes as number;
-              return (
-                <div key={s.key}>
-                  <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 3}}>
-                    <span style={{fontSize: 10.5, fontWeight: 700, color: isBottleneck ? cc.danger : cc.textSecondary}}>
-                      {s.label}{isBottleneck ? ' ⚠' : ''}
-                    </span>
-                    <span style={{fontSize: 10.5, fontWeight: 800, color: cc.textPrimary}}>
-                      {mins < 1 ? '<1m' : `${Math.round(mins)}m`} <span style={{color: cc.textMuted, fontWeight: 600}}>· n={s.sampleSize}</span>
-                    </span>
-                  </div>
-                  <div style={{height: 8, borderRadius: 4, backgroundColor: cc.divider, overflow: 'hidden'}}>
-                    <div style={{height: 8, borderRadius: 4, width: `${(mins / maxMinutes) * 100}%`, backgroundColor: isBottleneck ? cc.danger : cc.accentBlue}} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <TimingWaterfall stages={timedStages} bottleneckKey={data.bottleneck?.key} />
           {data.bottleneck && (
             <div style={{marginTop: 12, fontSize: 10, fontWeight: 600, color: cc.textMuted}}>
               Slowest step: <span style={{color: cc.danger, fontWeight: 800}}>{data.bottleneck.label}</span> averages {Math.round(data.bottleneck.avgMinutes ?? 0)}m — the best place to speed up {tab === 'park' ? 'parking' : 'retrieval'}.
