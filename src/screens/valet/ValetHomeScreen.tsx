@@ -1623,8 +1623,14 @@ export function ValetHomeScreen() {
           )
         )}
         {/* Gate side: confirms a retrieved car has physically arrived back at
-            the front gate, ready to hand to the doctor/visitor. */}
-        {myStation === 'gate' && t.type === 'retrieve' && t.status === 'in_transit' && (
+            the front gate, ready to hand to the doctor/visitor. 'assigned'
+            is the real state now — no GPS left to ever advance a retrieval
+            into 'in_transit' (see task.service.js's widened
+            assertTransition), so gating on that alone made this button
+            unreachable for every retrieval, forever. 'in_transit' stays
+            checked too for any task that predates this change. */}
+        {myStation === 'gate' && t.type === 'retrieve' && !!t.driverId
+          && (t.status === 'assigned' || t.status === 'in_transit') && (
           <PressableScale
             style={{...taskActionBtnBase, marginTop: 12, backgroundColor: colors.success, opacity: confirmingArrivedId === t.id ? 0.6 : 1}}
             disabled={confirmingArrivedId === t.id}
