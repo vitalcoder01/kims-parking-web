@@ -8,7 +8,7 @@ import {DriverPickerList} from '../../components/DriverPickerList';
 import {usersApi, tasksApi, visitorsApi, isJobGone} from '../../services/api';
 import {formatPlate, isCompletePlate} from '../../utils/plate';
 import {VehicleNumberInput} from '../../components/VehicleNumberInput';
-import {useValetActions, isMyJobToRun} from './useValetActions';
+import {useValetActions, isMyJobToRun, isMyStationJob} from './useValetActions';
 import type {ParkingTask} from '../../context/AppStateContext';
 import {useAppState} from '../../context/AppStateContext';
 import {HScrollHint} from '../../components/HScrollHint';
@@ -1309,8 +1309,8 @@ export function ValetHomeScreen() {
   // job with no driver yet are the same "needs a driver" wait from the
   // valet's side, so they now live in one section instead of two screens).
   const dashboardJobs = [...activeTasks, ...retrievalRequests];
-  const dashboardMine = dashboardJobs.filter(t => isMyJobToRun(t, myValetId));
-  const dashboardTeam = dashboardJobs.filter(t => !isMyJobToRun(t, myValetId));
+  const dashboardMine = dashboardJobs.filter(t => isMyJobToRun(t, myValetId) || isMyStationJob(t, myStation));
+  const dashboardTeam = dashboardJobs.filter(t => !isMyJobToRun(t, myValetId) && !isMyStationJob(t, myStation));
   const dashboardJobsForTab = queueTab === 'mine' ? dashboardMine : dashboardTeam;
 
   const isAssignPending = (t: ParkingTask) =>

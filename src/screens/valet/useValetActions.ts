@@ -10,8 +10,8 @@ import {useAuth} from '../../context/AuthContext';
 // character, which meant a change to who may see or run a job had to be
 // made twice, in two repos, with nothing to catch it if it was not. Kept
 // under these names so every existing caller is unaffected.
-import {isMyRetrieval, isMyJobToRun} from '../../core/valet/services/OwnershipService';
-export {isMyRetrieval, isMyJobToRun};
+import {isMyRetrieval, isMyJobToRun, isMyStationJob} from '../../core/valet/services/OwnershipService';
+export {isMyRetrieval, isMyJobToRun, isMyStationJob};
 
 export function useValetActions() {
   const {drivers, tasks, visitors, arrivalNotices, dismissArrivalNotice, addTask, assignDriver, cancelTaskAssignment, markKeyCollected, pushNotification, addVisitor,
