@@ -102,7 +102,14 @@ export function isMyStationJob(t: ParkingTask, myStation: 'gate' | 'lot' | null 
     return t.type === 'park' && (t.status === 'key_collected' || t.status === 'in_transit');
   }
   if (myStation === 'gate') {
-    return t.type === 'retrieve' && t.status === 'in_transit';
+    // 'assigned' is the real state now — no GPS left to ever advance a
+    // retrieval into 'in_transit' (see task.service.js's widened
+    // assertTransition), so checking that alone meant this NEVER matched:
+    // a gate valet's own retrieval confirmations stayed buried in Team
+    // Jobs forever, on top of the confirm-arrived button itself being
+    // unreachable for the same reason (see ValetHomeScreen). 'in_transit'
+    // stays checked too for any task that predates this change.
+    return t.type === 'retrieve' && !!t.driverId && (t.status === 'assigned' || t.status === 'in_transit');
   }
   return false;
 }

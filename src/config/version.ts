@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 66;
-export const APP_VERSION_NAME = '1.11.0';
+export const APP_VERSION_CODE = 67;
+export const APP_VERSION_NAME = '1.11.1';
 export const RELEASE_NOTES =
-  'Drivers no longer have an app at all — no GPS, no login. They\'re now just a name in the valet\'s assign-driver picker, and a valet confirms both ends of every job. The tracking page shows real status timestamps instead of a live map, and admin can now toggle a driver\'s shift status directly.';
+  'Fix a bug from the no-GPS change: the gate valet\'s "Car arrived" button (and its My Jobs placement) required a status retrievals can no longer ever reach, making it impossible to complete any retrieval. Fixed.';

@@ -74,6 +74,12 @@ export function deriveJobAction(
     : recalled && t.status !== 'delivered' ? `${t.driverName ?? 'Driver'} is bringing it back`
     : t.status === 'key_collected' ? `${t.driverName ?? 'Driver'} has the key`
     : t.status === 'in_transit' ? (t.type === 'park' ? `${t.driverName ?? 'Driver'} is parking it` : `${t.driverName ?? 'Driver'} is bringing it`)
+    // A retrieval now sits at 'assigned' (with a driver, already accepted)
+    // for its whole trip — no GPS left to ever advance it to 'in_transit'
+    // (see task.service.js's widened assertTransition) — so this needs its
+    // own note rather than falling through to "waiting for a driver" below,
+    // which would say a driver is needed when one is already on the way.
+    : t.type === 'retrieve' && t.status === 'assigned' && !!t.driverId ? `${t.driverName ?? 'Driver'} is bringing it`
     : (needsDriver || t.status === 'requested' || t.status === 'accepted')
       ? `Waiting for a driver · ${agoLabel(waitedSince, ctx.now)}`
     : null;
