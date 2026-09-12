@@ -17,7 +17,7 @@ export function useValetActions() {
   const {drivers, tasks, visitors, arrivalNotices, dismissArrivalNotice, addTask, assignDriver, cancelTaskAssignment, markKeyCollected, pushNotification, addVisitor,
     assignVisitorDriver, cancelVisitorAssignment, assignRetrievalDriver, assignStaffRetrievalDriver, cancelVisitor, recallVisitor, closeParkedVisitor,
     confirmTaskDelivered, confirmVisitorDelivered, cancelTask, closeParkedSession, recallTask, fetchTaskHistory,
-    acceptRetrieval} = useAppState();
+    acceptRetrieval, gateHandoff, confirmParkedByValet, confirmArrivedByValet, requestOtherStationDriver} = useAppState();
   const {user} = useAuth();
   const myValetId = user?.role === 'valet' ? user.id : null;
 
@@ -63,5 +63,6 @@ export function useValetActions() {
     assignTaskDriver, assignVisitorPickupDriver, assignVisitorRetrievalDriver, assignStaffRetrievalDriver,
     cancelTaskAssignment, cancelVisitorAssignment,
     confirmTaskDelivered, confirmVisitorDelivered, cancelTask, closeParkedSession, recallTask, fetchTaskHistory,
+    gateHandoff, confirmParkedByValet, confirmArrivedByValet, requestOtherStationDriver,
   };
 }

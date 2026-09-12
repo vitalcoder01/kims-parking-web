@@ -190,6 +190,23 @@ export const tasksApi = {
     client.patch(`/tasks/${id}/returned`).then(r => r.data.task),
   updateLocation: (id: number, lat: number, lng: number) =>
     client.patch(`/tasks/${id}/location`, {lat, lng}).then(r => r.data.task),
+  // Two-station handoff model (gate valet collects the key + picks a
+  // driver; the driver no longer accepts/rejects at all — assignDriver
+  // accepts on their behalf). One call replaces create -> assign -> key
+  // collected for a brand-new park job.
+  gateHandoff: (data: {doctorId: number; carNumber: string; slotId?: string; driverId: number}) =>
+    client.post('/tasks/gate-handoff', data).then(r => r.data.task),
+  // Lot valet: confirms a park job is actually in its slot. No driverId
+  // needed — the driver already did their part just by moving.
+  confirmParked: (id: number, slotId: string) =>
+    client.patch(`/tasks/${id}/confirm-parked`, {slotId}).then(r => r.data.task),
+  // Either station: "no driver free on my end" — hands the job to the
+  // other station's queue instead of leaving it stuck.
+  requestOtherStation: (id: number) =>
+    client.patch(`/tasks/${id}/request-other-station`).then(r => r.data.task),
+  // Gate valet: confirms a retrieved car has arrived back at the front gate.
+  confirmArrived: (id: number) =>
+    client.patch(`/tasks/${id}/confirm-arrived`).then(r => r.data.task),
 };
 
 // ── Visitors ─────────────────────────────────────────────────────────────
@@ -314,10 +331,12 @@ export const adminApi = {
   createUser: (data: {
     employeeId: string; name: string; role: 'doctor' | 'staff' | 'valet' | 'driver' | 'admin';
     password: string; department?: string; cardCode?: string; phone?: string; carNumber?: string;
+    valetStation?: 'gate' | 'lot' | null;
   }) => client.post('/admin/users', data).then(r => r.data.user),
   updateUser: (id: number, patch: {
     name?: string; role?: 'doctor' | 'staff' | 'valet' | 'driver' | 'admin';
     department?: string; cardCode?: string; phone?: string; carNumber?: string;
+    valetStation?: 'gate' | 'lot' | null;
   }) => client.patch(`/admin/users/${id}`, patch).then(r => r.data.user),
   resetPassword: (id: number, password: string) =>
     client.patch(`/admin/users/${id}/password`, {password}).then(r => r.data),

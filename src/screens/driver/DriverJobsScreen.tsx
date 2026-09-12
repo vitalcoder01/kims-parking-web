@@ -7,7 +7,6 @@ import {computeTrip} from '../../utils/geo';
 import {Icon, IconName} from '../../components/Icon';
 import {PressableScale} from '../../components/PressableScale';
 import {useDialog} from '../../components/AppDialog';
-import {isJobGone} from '../../services/api';
 
 // Direct port of the mobile app's driver DriverJobsScreen — the driver's
 // current assigned job (accept/reject, key-collected, in-transit, parked,
@@ -46,9 +45,9 @@ function SkeletonCard({lines = 3, style}: {lines?: number; style?: React.CSSProp
 
 export function DriverJobsScreen() {
   const {user} = useAuth();
-  const {tasks, slots, visitors, markParked, markRetrieved, updateTask, pushNotification,
-    acceptTask, rejectTask, fetchTaskHistory, markTaskReturned,
-    hydrated, refreshTasks} = useAppState();
+  const {tasks, slots, visitors, markParked, markRetrieved, pushNotification,
+    fetchTaskHistory, markTaskReturned,
+    hydrated} = useAppState();
   const {colors: c} = useTheme();
   const dialog = useDialog();
 
@@ -63,10 +62,6 @@ export function DriverJobsScreen() {
   // left the button tappable, and a second tap either fired the same action
   // twice or landed after the job had already moved past that stage.
   const [actionBusy, setActionBusy] = useState(false);
-  // Accept/Reject show together and actionBusy alone can't say which one is
-  // running — without this the tapped button gave no visible feedback (just
-  // a dimmed opacity easy to miss), so a driver would tap it again.
-  const [respondingAction, setRespondingAction] = useState<'accept' | 'reject' | null>(null);
 
   const myDriverId = useMyDriverId();
   // 'delivered' means the driver's own part is already done (car dropped at
@@ -110,61 +105,6 @@ export function DriverJobsScreen() {
     mode: 'drive',
   });
   const liveProgress = trip?.progress ?? 0;
-
-  // A driver tapping Accept on a card the server already invalidated is the
-  // normal end of a stalled assignment (watchdog rollback, or the valet
-  // gave it to someone else), not an error — isJobGone (api.ts) tells the
-  // two apart so this can show mobile's softer "reassigned" copy instead of
-  // the server's raw message.
-  const handleActionError = (err: any, fallback: string) => {
-    if (isJobGone(err)) {
-      dialog.alert('This job was reassigned while you were deciding.', {title: 'Job no longer yours'});
-      return;
-    }
-    dialog.alert(err?.message || fallback);
-  };
-
-  const handleAcceptTask = async () => {
-    if (!activeTask || actionBusy) return;
-    setActionBusy(true);
-    setRespondingAction('accept');
-    try {
-      await acceptTask(activeTask.id);
-    } catch (err: any) {
-      handleActionError(err, 'Could not accept task');
-      await refreshTasks().catch(() => {});
-    } finally {
-      setActionBusy(false);
-      setRespondingAction(null);
-    }
-  };
-
-  const handleRejectTask = async () => {
-    if (!activeTask || actionBusy) return;
-    setActionBusy(true);
-    setRespondingAction('reject');
-    try {
-      await rejectTask(activeTask.id);
-    } catch (err: any) {
-      handleActionError(err, 'Could not reject task');
-      await refreshTasks().catch(() => {});
-    } finally {
-      setActionBusy(false);
-      setRespondingAction(null);
-    }
-  };
-
-  const handleStartRetrieval = async () => {
-    if (!activeTask || actionBusy) return;
-    setActionBusy(true);
-    try {
-      await updateTask(activeTask.id, {status: 'in_transit'});
-    } catch (err: any) {
-      dialog.alert(err.message || 'Could not start retrieval');
-    } finally {
-      setActionBusy(false);
-    }
-  };
 
   const handleMarkParked = async () => {
     if (!activeTask || !slotInput.trim() || markingParked) return;
@@ -299,31 +239,9 @@ export function DriverJobsScreen() {
               </div>
             )}
 
-            {/* Accept handshake — a freshly assigned job must be accepted
-                (or rejected) before anything else; not accepting within
-                the admin-set window sends it back to the valet. */}
-            {activeTask.status === 'assigned' && !activeTask.acceptedAt && (
-              <div style={{display: 'flex', gap: 8}}>
-                <PressableScale
-                  style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 14, padding: '0 16px', height: 48, flex: 1, backgroundColor: c.cardAlt, opacity: actionBusy ? 0.6 : 1}}
-                  onClick={handleRejectTask} disabled={actionBusy}
-                >
-                  {respondingAction === 'reject'
-                    ? <span className="spinner" style={{width: 15, height: 15, borderColor: 'rgba(0,0,0,0.15)', borderTopColor: c.primary}} />
-                    : <Icon name="close" size={15} color={c.primary} />}
-                  <span style={{fontSize: 13, fontWeight: 800, color: c.primary}}>{respondingAction === 'reject' ? 'Rejecting…' : 'Reject'}</span>
-                </PressableScale>
-                <PressableScale
-                  style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 14, padding: '0 16px', height: 48, flex: 1, backgroundColor: c.primary, opacity: actionBusy ? 0.6 : 1}}
-                  onClick={handleAcceptTask} disabled={actionBusy}
-                >
-                  {respondingAction === 'accept'
-                    ? <span className="spinner" style={{width: 15, height: 15, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: c.textOnPrimary}} />
-                    : <Icon name="check" size={15} color={c.textOnPrimary} />}
-                  <span style={{fontSize: 13, fontWeight: 800, color: c.textOnPrimary}}>{respondingAction === 'accept' ? 'Accepting…' : 'Accept'}</span>
-                </PressableScale>
-              </div>
-            )}
+            {/* No accept/reject step any more — assignDriver accepts on the
+                driver's behalf server-side (see task.service.js), so a job
+                lands here already accepted. */}
 
             {/* A park job has no destination at all — the driver just
                 drives with the key to whichever free slot they pick, so
@@ -417,14 +335,18 @@ export function DriverJobsScreen() {
               </div>
             )}
 
+            {/* No manual "start" tap either — GPS reporting begins the
+                moment this screen mounts on an 'assigned' retrieve task
+                (see AppStateContext's activeDriverTask), and the backend
+                auto-flips this to in_transit on the first real position fix
+                (task.service.js's updateLocation). */}
             {activeTask.type === 'retrieve' && activeTask.status === 'assigned' && !!activeTask.acceptedAt && (
-              <PressableScale
-                style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 16, padding: 16, backgroundColor: c.primary, opacity: actionBusy ? 0.6 : 1}}
-                onClick={handleStartRetrieval} disabled={actionBusy}
-              >
-                <Icon name="carKey" size={16} color={c.textOnPrimary} />
-                <span style={{fontSize: 14, fontWeight: 800, color: c.textOnPrimary}}>{actionBusy ? 'Please wait…' : 'Start retrieval'}</span>
-              </PressableScale>
+              <div style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: 12, padding: 12, backgroundColor: c.cardAlt}}>
+                <Icon name="carKey" size={16} color={c.textSecondary} />
+                <span style={{fontSize: 13, fontWeight: 700, color: c.textSecondary}}>
+                  Head to the parking slot — tracking starts automatically
+                </span>
+              </div>
             )}
             {activeTask.type === 'retrieve' && activeTask.status === 'in_transit' && (
               <PressableScale
