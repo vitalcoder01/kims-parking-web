@@ -73,6 +73,31 @@ export function isUnderRecovery(t: ParkingTask): boolean {
   return t.recoveryBroadcastAt != null;
 }
 
+/** Two-station handoff model: whether this job counts as "mine" on the
+ *  Dashboard's My Jobs / Team Jobs split, on top of canRun's ownership
+ *  check. A gate valet's park job keeps valetId (and so canRun/"mine")
+ *  pointing at the gate valet for its whole life — write-once, by design,
+ *  it's the record of who ran the arrival. But once that job is out with a
+ *  driver, finishing it is the LOT valet's job right now, not the gate
+ *  valet's — and the mirror is true for a gate valet confirming a
+ *  retrieval has arrived. Without this, canRun's strict valetId ownership
+ *  buried a card asking a specific valet for action under Team Jobs,
+ *  reading as background noise about someone else's job instead of a
+ *  clear, prominent thing to do — the exact report that led here: a lot
+ *  valet couldn't find anything to act on after a gate handoff, because it
+ *  never showed under My Jobs. Purely a display grouping, not a
+ *  permission — confirmParkedByValet/confirmArrivedByValet were always
+ *  callable regardless of this split; this only makes them easy to find. */
+export function isMyStationJob(t: ParkingTask, myStation: 'gate' | 'lot' | null | undefined): boolean {
+  if (myStation === 'lot') {
+    return t.type === 'park' && (t.status === 'key_collected' || t.status === 'in_transit');
+  }
+  if (myStation === 'gate') {
+    return t.type === 'retrieve' && t.status === 'in_transit';
+  }
+  return false;
+}
+
 // Backward-compatible aliases — useValetActions.ts re-exports these under
 // their original names so no call site elsewhere has to change.
 export const isMyJobToRun = canRun;
