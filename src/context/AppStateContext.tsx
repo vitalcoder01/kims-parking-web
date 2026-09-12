@@ -49,9 +49,11 @@ export interface ParkingTask {
   escalatedAt?: number;
   arrivalOwnerValetId?: number;
   arrivalOwnerValetName?: string;
+  arrivalOwnerValetStation?: 'gate' | 'lot' | null;
   arrivalAcceptedAt?: number;
   retrievalOwnerValetId?: number;
   retrievalOwnerValetName?: string;
+  retrievalOwnerValetStation?: 'gate' | 'lot' | null;
   retrievalAcceptedAt?: number;
   retrievalOwnershipSource?: 'OWNER' | 'RECOVERY';
   ownerNotifiedAt?: number;

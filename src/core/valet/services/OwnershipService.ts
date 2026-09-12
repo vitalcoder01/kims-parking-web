@@ -37,11 +37,20 @@ export function canRun(t: ParkingTask, myValetId: number | null | undefined): bo
 
 /** True if a retrieval request should even be VISIBLE to `myValetId` — the
  *  session-ownership gate, distinct from canRun above. Mirrors
- *  isVisibleToValet() in the backend's task.service.js. */
+ *  isVisibleToValet() in the backend's task.service.js, station-awareness
+ *  included: a gate-station owner never personally holds this visibility
+ *  either (see that function's own comment for the full reasoning and the
+ *  real report this came from — a lot valet whose Retrieval Requests count
+ *  stayed at 0 because this client-side mirror kept the request filtered
+ *  out even after the backend started sending it). arrivalOwnerValetStation/
+ *  retrievalOwnerValetStation are denormalized onto the task itself
+ *  (serializeTask) precisely so this check needs no separate lookup. */
 export function canView(t: ParkingTask, myValetId: number | null | undefined): boolean {
   const owner = t.retrievalOwnerValetId ?? t.arrivalOwnerValetId;
   if (owner == null) return true;                       // never owned — open floor
   if (owner === myValetId) return true;                 // mine
+  const ownerStation = t.retrievalOwnerValetId != null ? t.retrievalOwnerValetStation : t.arrivalOwnerValetStation;
+  if (ownerStation === 'gate') return true;
   if (t.retrievalOwnerValetId != null) return t.escalatedAt != null;
   return t.recoveryBroadcastAt != null || t.escalatedAt != null;
 }
