@@ -1563,31 +1563,55 @@ export function ValetHomeScreen() {
             alongside the recall button above. */}
         {myStation === 'lot' && t.type === 'park' && (t.status === 'key_collected' || t.status === 'in_transit') && (
           confirmParkTaskId === t.id ? (
-            <div style={{display: 'flex', gap: 8, marginTop: 12}}>
-              <input
-                autoFocus
-                style={{flex: 1, fontSize: 13, fontWeight: 700, height: 40, borderRadius: 10, border: `1px solid ${colors.border}`, padding: '0 12px', background: colors.surface, color: colors.textPrimary}}
-                value={confirmParkSlotInput}
-                onChange={e => setConfirmParkSlotInput(e.target.value.toUpperCase())}
-                placeholder="Slot (e.g. A-014)"
-              />
-              <PressableScale
-                style={{...taskActionBtnBase, width: 'auto', backgroundColor: colors.success, padding: '0 14px', opacity: confirmingParkedId === t.id ? 0.6 : 1}}
-                disabled={confirmingParkedId === t.id || !confirmParkSlotInput.trim()}
-                onClick={async () => {
-                  if (confirmingParkedId != null) return;
-                  setConfirmingParkedId(t.id);
-                  try {
-                    await confirmParkedByValet(t.id, confirmParkSlotInput.trim().toUpperCase());
-                    setConfirmParkTaskId(null); setConfirmParkSlotInput('');
-                  } catch (err: any) {
-                    dialog.alert(err.message || 'Could not confirm parked', {title: 'Error'});
-                  } finally {
-                    setConfirmingParkedId(null);
-                  }
-                }}>
-                <span style={{fontSize: 12.5, fontWeight: 800, color: '#fff'}}>{confirmingParkedId === t.id ? 'Please wait…' : 'Confirm'}</span>
-              </PressableScale>
+            <div style={{display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12}}>
+              <div style={{display: 'flex', gap: 8}}>
+                <input
+                  autoFocus
+                  style={{flex: 1, fontSize: 13, fontWeight: 700, height: 40, borderRadius: 10, border: `1px solid ${colors.border}`, padding: '0 12px', background: colors.surface, color: colors.textPrimary}}
+                  value={confirmParkSlotInput}
+                  onChange={e => setConfirmParkSlotInput(e.target.value.toUpperCase())}
+                  placeholder="Slot (e.g. A-014)"
+                />
+                <PressableScale
+                  style={{...taskActionBtnBase, width: 'auto', backgroundColor: colors.success, padding: '0 14px', opacity: confirmingParkedId === t.id ? 0.6 : 1}}
+                  disabled={confirmingParkedId === t.id || !confirmParkSlotInput.trim()}
+                  onClick={async () => {
+                    if (confirmingParkedId != null) return;
+                    setConfirmingParkedId(t.id);
+                    try {
+                      await confirmParkedByValet(t.id, confirmParkSlotInput.trim().toUpperCase());
+                      setConfirmParkTaskId(null); setConfirmParkSlotInput('');
+                    } catch (err: any) {
+                      dialog.alert(err.message || 'Could not confirm parked', {title: 'Error'});
+                    } finally {
+                      setConfirmingParkedId(null);
+                    }
+                  }}>
+                  <span style={{fontSize: 12.5, fontWeight: 800, color: '#fff'}}>{confirmingParkedId === t.id ? 'Please wait…' : 'Confirm'}</span>
+                </PressableScale>
+              </div>
+              {(() => {
+                const freeSlots = slots.filter(s => s.status === 'free').slice(0, 6);
+                if (freeSlots.length === 0) return null;
+                return (
+                  <>
+                    <PressableScale
+                      style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 10, border: `1px solid ${colors.border}`, padding: '9px 0', backgroundColor: colors.cardAlt}}
+                      onClick={() => setConfirmParkSlotInput(freeSlots[0].id)}>
+                      <Icon name="bolt" size={13} color={colors.primary} />
+                      <span style={{fontSize: 11.5, fontWeight: 800, color: colors.primary}}>Auto-assign nearest free slot ({freeSlots[0].id})</span>
+                    </PressableScale>
+                    <div style={{display: 'flex', flexWrap: 'wrap', gap: 6}}>
+                      {freeSlots.map(sl => (
+                        <PressableScale key={sl.id} onClick={() => setConfirmParkSlotInput(sl.id)}
+                          style={{borderRadius: 8, border: `1px solid ${colors.border}`, padding: '5px 10px', backgroundColor: colors.cardAlt}}>
+                          <span style={{fontSize: 11, fontWeight: 700, color: colors.primary}}>{sl.id}</span>
+                        </PressableScale>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           ) : (
             <PressableScale
