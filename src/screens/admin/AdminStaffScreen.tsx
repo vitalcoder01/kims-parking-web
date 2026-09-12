@@ -2,7 +2,7 @@ import React, {useState, useEffect, useCallback} from 'react';
 import {PressableScale} from '../../components/PressableScale';
 import {useDialog} from '../../components/AppDialog';
 import {useBackStep} from '../../hooks/useBackStep';
-import {adminApi} from '../../services/api';
+import {adminApi, driversApi} from '../../services/api';
 import {Icon, IconName} from '../../components/Icon';
 import {spacing, radius, typography} from '../../theme';
 import {useAdminOpsTheme, darkCard, DarkPill} from './adminDarkTheme';
@@ -23,6 +23,11 @@ interface AdminUser {
   cardCode?: string;
   phone?: string;
   driverStatus?: 'available' | 'busy' | 'off';
+  // Backend's serializeUser always includes this alongside driverStatus
+  // when the account has a linked Driver row — needed here now that
+  // drivers have no app of their own to toggle their own shift status
+  // from (see handleToggleDriverShift below).
+  linkedDriverId?: number;
   // Two-station handoff model — which physical station this valet works.
   // Only meaningful for role === 'valet'; see task.service.js's
   // gateHandoff/confirmParkedByValet/requestOtherStationDriver.
@@ -84,6 +89,10 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
   const [valetStation, setValetStation] = useState<'gate' | 'lot' | ''>('');
   const [submitting, setSubmitting] = useState(false);
   const [resettingPassword, setResettingPassword] = useState(false);
+  // Drivers have no app of their own to toggle shift status from any more
+  // (no GPS, no login — see the two-station handoff follow-up). This
+  // replaces that self-service toggle from the admin side.
+  const [togglingShift, setTogglingShift] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const loadUsers = useCallback(async () => {
@@ -192,6 +201,26 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
       dialog.alert(err.message || 'Something went wrong');
     } finally {
       setResettingPassword(false);
+    }
+  };
+
+  // Toggles between available/off only — 'busy' (genuinely on a job) stays
+  // read-only here too, same guard the backend itself enforces
+  // (driver.service.js's setStatus refuses to move a driver off 'busy'
+  // while a live task still names them, and there is no such thing as an
+  // admin manually declaring someone "busy" with nothing assigned).
+  const handleToggleDriverShift = async () => {
+    if (!editingUser?.linkedDriverId || togglingShift || editingUser.driverStatus === 'busy') return;
+    const next = editingUser.driverStatus === 'available' ? 'off' : 'available';
+    setTogglingShift(true);
+    try {
+      await driversApi.setStatus(editingUser.linkedDriverId, next);
+      setEditingUser(prev => (prev ? {...prev, driverStatus: next} : prev));
+      loadUsers();
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not change shift status');
+    } finally {
+      setTogglingShift(false);
     }
   };
 
@@ -306,6 +335,44 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
             <>
               <div style={fieldLabel}>PHONE (OPTIONAL)</div>
               <input style={inputStyle} value={phone} onChange={e => setPhone(e.target.value)} placeholder="10-digit number" inputMode="numeric" />
+            </>
+          )}
+
+          {/* Drivers have no app of their own to toggle this from any more
+              — no GPS, no login, nothing to sign into. This is now the only
+              place shift status changes. Only shown editing an existing
+              driver: a brand-new one starts 'available' server-side, and
+              there's nothing to toggle before the account even exists. */}
+          {isEdit && role === 'driver' && editingUser?.linkedDriverId && (
+            <>
+              <div style={fieldLabel}>SHIFT STATUS</div>
+              {editingUser.driverStatus === 'busy' ? (
+                <div style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: 12, padding: '12px 14px', backgroundColor: dark.cardAlt}}>
+                  <Icon name="bolt" size={15} color={dark.warning} />
+                  <span style={{fontSize: 12.5, fontWeight: 700, color: dark.textSecondary}}>
+                    On a job right now — can't change shift status until it's done.
+                  </span>
+                </div>
+              ) : (
+                <PressableScale
+                  onClick={handleToggleDriverShift}
+                  disabled={togglingShift}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, borderRadius: 12, padding: '12px 14px',
+                    border: `1.5px solid ${editingUser.driverStatus === 'available' ? dark.success + '55' : dark.border}`,
+                    backgroundColor: editingUser.driverStatus === 'available' ? dark.success + '18' : dark.cardAlt,
+                    opacity: togglingShift ? 0.6 : 1,
+                  }}>
+                  <Icon name={editingUser.driverStatus === 'available' ? 'check' : 'timer'} size={15}
+                    color={editingUser.driverStatus === 'available' ? dark.success : dark.textMuted} />
+                  <span style={{flex: 1, fontSize: 13, fontWeight: 700, color: dark.textPrimary}}>
+                    {editingUser.driverStatus === 'available' ? 'On shift — ready for jobs' : 'Off shift'}
+                  </span>
+                  <span style={{fontSize: 11.5, fontWeight: 800, color: dark.accent}}>
+                    {togglingShift ? 'Please wait…' : editingUser.driverStatus === 'available' ? 'Tap to go off shift' : 'Tap to go on shift'}
+                  </span>
+                </PressableScale>
+              )}
             </>
           )}
 
