@@ -53,7 +53,11 @@ const SESSION_HOURS = 12;
 // All five roles are usable from the web portal. Enforced at login AND on
 // session restore (kept as an allowlist rather than removed outright so a
 // future role addition has to opt in explicitly).
-const WEB_ROLES: UserRole[] = ['doctor', 'staff', 'admin', 'valet', 'driver'];
+// 'driver' deliberately excluded — drivers no longer get an app at all (no
+// GPS, no login, nothing to tap). They're now purely a name in the valet's
+// assign-driver picker; a driver-role account that tries to sign in here
+// gets the same "not supported on the web portal" rejection below.
+const WEB_ROLES: UserRole[] = ['doctor', 'staff', 'admin', 'valet'];
 
 const Ctx = createContext<AuthContextValue>({
   user: null,

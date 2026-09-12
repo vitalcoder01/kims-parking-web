@@ -5,7 +5,6 @@ import {useAppState} from '../context/AppStateContext';
 import {useTheme} from '../context/ThemeContext';
 import {LiveTrackingScreen} from './LiveTrackingScreen';
 import {useRetrievalRequest} from '../hooks/useRetrievalRequest';
-import {computeTrip} from '../utils/geo';
 import {BRAND_GRADIENT, BRAND_GRADIENT_DARK, gradientCss} from '../theme/colors';
 import {Icon} from '../components/Icon';
 import {useDialog} from '../components/AppDialog';
@@ -240,15 +239,15 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
         {/* Countdown — hidden once 'delivered', the CAR READY banner below
             already covers that. */}
         {activeRetrieve && activeRetrieve.status !== 'delivered' && (() => {
-          const onTheWay = activeRetrieve.status === 'in_transit' && activeRetrieve.startedAt != null;
-          const trip = onTheWay
-            ? computeTrip({
-                startLat: activeRetrieve.driverStartLat, startLng: activeRetrieve.driverStartLng,
-                lat: activeRetrieve.driverLat, lng: activeRetrieve.driverLng,
-                destinationLat: activeRetrieve.destinationLat, destinationLng: activeRetrieve.destinationLng,
-                mode: 'drive',
-              })
-            : null;
+          // No driver GPS any more (no driver app at all — see the
+          // two-station handoff follow-up), so there's no ETA to compute.
+          // 'assigned' already means a driver has been picked — that's the
+          // whole signal now, not a separate "in_transit" stage nothing
+          // ever advances to without GPS (see task.service.js's widened
+          // assertTransition). 'in_transit' stays checked too for any task
+          // that predates this change.
+          const onTheWay = (activeRetrieve.status === 'assigned' || activeRetrieve.status === 'in_transit')
+            && activeRetrieve.driverId != null;
           return (
             <div className={onTheWay ? 'pulse' : undefined}>
               <div style={{
@@ -257,21 +256,15 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
               }}>
                 {onTheWay ? (
                   <>
-                    <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
-                      <Icon name="car" size={13} color="rgba(255,255,255,0.8)" />
-                      <span style={{color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: 700}}>Vehicle on the way</span>
+                    <div style={{
+                      width: 52, height: 52, borderRadius: 26, marginBottom: 14,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: 'rgba(255,255,255,0.18)',
+                    }}>
+                      <Icon name="car" size={24} color="#fff" />
                     </div>
-                    {trip ? (
-                      <>
-                        <div style={{color: '#fff', fontSize: 56, fontWeight: 900, fontVariantNumeric: 'tabular-nums', margin: '6px 0'}}>
-                          {trip.etaMinutes <= 0 ? 'Now' : `~${trip.etaMinutes}`}
-                        </div>
-                        {trip.etaMinutes > 0 && <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 800, marginTop: -6, marginBottom: 6}}>min away</div>}
-                      </>
-                    ) : (
-                      <div style={{color: '#fff', fontSize: 22, fontWeight: 900, margin: '14px 0'}}>Locating your car…</div>
-                    )}
-                    <div style={{color: 'rgba(255,255,255,0.7)', fontSize: 12, textAlign: 'center'}}>
+                    <div style={{color: '#fff', fontSize: 18, fontWeight: 900, marginBottom: 6, textAlign: 'center'}}>Vehicle on the way</div>
+                    <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 13, textAlign: 'center'}}>
                       {activeRetrieve.driverName ?? 'Your driver'} is bringing it to the valet counter
                     </div>
                     <PressableScale
@@ -282,7 +275,7 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
                         padding: '12px 20px', border: '1px solid rgba(255,255,255,0.3)',
                       }}>
                       <Icon name="map" size={15} color="#fff" />
-                      <span style={{color: '#fff', fontSize: 13, fontWeight: 800}}>Track live</span>
+                      <span style={{color: '#fff', fontSize: 13, fontWeight: 800}}>Track status</span>
                     </PressableScale>
                   </>
                 ) : (

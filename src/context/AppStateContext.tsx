@@ -61,6 +61,7 @@ export interface ParkingTask {
   recalledAt?: number;
   keyCollectedAt?: number;
   completedAt?: number;
+  deliveredAt?: number;
   plannedDepartureMinutes?: number;
   plannedDepartureAt?: number;
   retrievalReadyAt?: number;
@@ -269,6 +270,7 @@ function mapTask(t: any): ParkingTask {
     recalledAt: toEpoch(t.recalledAt),
     keyCollectedAt: toEpoch(t.keyCollectedAt),
     completedAt: toEpoch(t.completedAt),
+    deliveredAt: toEpoch(t.deliveredAt),
     locationUpdatedAt: toEpoch(t.locationUpdatedAt),
   };
 }
