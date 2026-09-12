@@ -305,7 +305,7 @@ function displayBrowserNotification(title: string, body: string) {
 }
 
 export function AppStateProvider({children}: {children: React.ReactNode}) {
-  const {user} = useAuth();
+  const {user, updateProfile} = useAuth();
   const [drivers, setDrivers]         = useState<Driver[]>([]);
   const [tasks, setTasks]             = useState<ParkingTask[]>([]);
   const [slots, setSlots]             = useState<ParkingSlot[]>([]);
@@ -539,6 +539,18 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     socket.on('driver:patch', (patch: Partial<Driver> & {id: number}) => {
       bumpMutation(); // snapshot in flight is now stale — see mutationSeqRef
       setDrivers(p => p.map(d => (d.id === patch.id ? {...d, ...patch} : d)));
+      // This is broadcast to every socket (see backend realtime.emitAll),
+      // including the driver it's about — but `drivers` is only ever
+      // populated for a valet/admin session (see DriverDashboardScreen's
+      // comment on why a driver reads user.driverStatus instead), so the
+      // .map() above silently no-ops on a driver's own client. Without
+      // this, a driver's own shift toggle only ever reflected their status
+      // at login or their last manual tap — going 'busy' on a new
+      // assignment, or back to 'available' when a job completed, never
+      // reached the one place (user.driverStatus) their own screen reads.
+      if (patch.status && user?.role === 'driver' && user.linkedDriverId === patch.id) {
+        updateProfile({driverStatus: patch.status});
+      }
     });
 
     socket.on('notification:new', (raw: any) => {
