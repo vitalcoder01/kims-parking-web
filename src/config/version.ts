@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 61;
-export const APP_VERSION_NAME = '1.10.5';
+export const APP_VERSION_CODE = 62;
+export const APP_VERSION_NAME = '1.10.6';
 export const RELEASE_NOTES =
-  'Two-station valet handoff: gate and lot valets now get station-specific one-tap actions (gate handoff, confirm parked, confirm arrived, hand off to the other station), and drivers no longer need to accept or reject a job — assignment starts tracking automatically.';
+  "Fix the driver shift toggle sticking on 'On a job' (or the wrong state generally) after a job actually finished — it now updates live the moment your status actually changes, not just when you tap it yourself.";
