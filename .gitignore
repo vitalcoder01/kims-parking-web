@@ -16,3 +16,4 @@ dist-ssr/
 .idea/
 
 .vercel
+.local-screenshots/

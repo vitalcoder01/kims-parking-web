@@ -187,6 +187,11 @@ interface AppState {
   markKeyCollected: (taskId: number) => Promise<void>;
   markParked: (taskId: number, slotId: string) => Promise<void>;
   markRetrieved: (taskId: number) => Promise<void>;
+  // Two-station handoff model — see api.ts's tasksApi for what each hits.
+  gateHandoff: (data: {doctorId: number; carNumber: string; slotId?: string; driverId: number}) => Promise<void>;
+  confirmParkedByValet: (taskId: number, slotId: string) => Promise<void>;
+  confirmArrivedByValet: (taskId: number) => Promise<void>;
+  requestOtherStationDriver: (taskId: number) => Promise<void>;
   confirmTaskDelivered: (taskId: number) => Promise<void>;
   cancelTask: (taskId: number) => Promise<void>;
   closeParkedSession: (taskId: number) => Promise<void>; // valet: car left without a retrieval — frees the slot
@@ -683,9 +688,15 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
   // every fix streams to the live map; during an active trip it also posts
   // to the task's location endpoint.
   const myDriverId = user?.role === 'driver' ? user.linkedDriverId ?? null : null;
+  // A retrieve job starts at 'assigned' with no key-handoff step (unlike
+  // park, which passes through 'key_collected' first) — so this must
+  // include it too, or GPS reporting never starts for a retrieval and the
+  // backend's auto-in-transit logic (see updateLocation) never gets a ping
+  // to react to. Mirrors the mobile app's identical fix.
   const activeDriverTask = myDriverId != null
     ? tasks.find(t => t.driverId != null && t.driverId === myDriverId
-        && (t.status === 'key_collected' || t.status === 'in_transit'))
+        && (t.status === 'key_collected' || t.status === 'in_transit'
+          || (t.type === 'retrieve' && t.status === 'assigned')))
     : undefined;
   const activeDriverTaskId = activeDriverTask?.id;
   const activeDriverTaskIdRef = useRef(activeDriverTaskId);
@@ -878,6 +889,53 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     }
   }, [tasks]);
 
+  // Gate valet: one tap replaces create -> assign -> key-collected for a
+  // brand-new park job. The driver is auto-accepted server-side, so this
+  // lands the task straight into 'key_collected' state.
+  const gateHandoff = useCallback(async (data: {doctorId: number; carNumber: string; slotId?: string; driverId: number}) => {
+    const created = mapTask(await tasksApi.gateHandoff(data));
+    setTasks(p => upsertById(p, created));
+    setDrivers(p => p.map(d => (d.id === data.driverId ? {...d, status: 'busy', currentTaskId: created.id} : d)));
+  }, []);
+
+  // Lot valet: confirms a park job is actually in its slot — the driver
+  // side of this (mark parked) never accepted/rejected, so there's no
+  // driverId to pass; same slot/driver-freeing effect as markParked above.
+  const confirmParkedByValet = useCallback(async (taskId: number, slotId: string) => {
+    stopAlarm();
+    const updated = mapTask(await tasksApi.confirmParked(taskId, slotId));
+    setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
+    setSlots(p => p.map(s => (s.id === slotId
+      ? {...s, status: 'occupied', taskId, carNumber: updated.carNumber, doctorId: updated.doctorId}
+      : s)));
+    if (updated.driverId) {
+      setDrivers(p => p.map(d => (d.id === updated.driverId ? {...d, status: 'available', currentTaskId: undefined} : d)));
+    }
+  }, []);
+
+  // Gate valet: confirms a retrieved car has arrived back at the front
+  // gate — same slot/driver-freeing effect as markRetrieved above.
+  const confirmArrivedByValet = useCallback(async (taskId: number) => {
+    stopAlarm();
+    const existing = tasks.find(t => t.id === taskId);
+    const updated = mapTask(await tasksApi.confirmArrived(taskId));
+    setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
+    const freedSlotId = existing?.slotId ?? updated.slotId;
+    if (freedSlotId) {
+      setSlots(p => p.map(s => (s.id === freedSlotId
+        ? {...s, status: 'free', taskId: undefined, carNumber: undefined, doctorId: undefined}
+        : s)));
+    }
+    if (updated.driverId) {
+      setDrivers(p => p.map(d => (d.id === updated.driverId ? {...d, status: 'available', currentTaskId: undefined} : d)));
+    }
+  }, [tasks]);
+
+  // Either station: "no driver free on my end" — hands the job to the
+  // other station's queue. Plain status/ownership patch, no slot/driver
+  // side effect (nothing was ever claimed here).
+  const requestOtherStationDriver = useCallback(simpleTaskAction(tasksApi.requestOtherStation), []);
+
   const confirmTaskDelivered = useCallback(simpleTaskAction(tasksApi.confirmDelivered), []);
   const cancelTask = useCallback(simpleTaskAction(tasksApi.cancel), []);
   const markTaskReturned = useCallback(simpleTaskAction(tasksApi.markReturned), []);
@@ -1031,6 +1089,10 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     markKeyCollected,
     markParked,
     markRetrieved,
+    gateHandoff,
+    confirmParkedByValet,
+    confirmArrivedByValet,
+    requestOtherStationDriver,
     confirmTaskDelivered,
     cancelTask,
     closeParkedSession,
@@ -1055,7 +1117,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     markNotificationRead,
     clearNotifications,
     refreshTasks: fetchAll,
-  }), [drivers, tasks, slots, visitors, arrivalNotices, notifications, activeAlert, hydrated, reassignPrompt, clearReassignPrompt, dismissAlert, addTask, requestRetrieval, cancelMyRetrieval, sendArrivalNotice, acceptRetrieval, dismissArrivalNotice, updateTask, assignDriver, cancelTaskAssignment, acceptTask, rejectTask, markKeyCollected, markParked, markRetrieved, confirmTaskDelivered, cancelTask, closeParkedSession, recallTask, markTaskReturned, fetchTaskHistory, reportLocation, myArrivalNotice, refreshMyArrival, cancelMyArrival, setDriverStatus, addVisitor, assignVisitorDriver, cancelVisitorAssignment, cancelVisitor, recallVisitor, closeParkedVisitor, assignRetrievalDriver, assignStaffRetrievalDriver, confirmVisitorDelivered, pushNotification, markNotificationRead, clearNotifications, fetchAll]);
+  }), [drivers, tasks, slots, visitors, arrivalNotices, notifications, activeAlert, hydrated, reassignPrompt, clearReassignPrompt, dismissAlert, addTask, requestRetrieval, cancelMyRetrieval, sendArrivalNotice, acceptRetrieval, dismissArrivalNotice, updateTask, assignDriver, cancelTaskAssignment, acceptTask, rejectTask, markKeyCollected, markParked, markRetrieved, gateHandoff, confirmParkedByValet, confirmArrivedByValet, requestOtherStationDriver, confirmTaskDelivered, cancelTask, closeParkedSession, recallTask, markTaskReturned, fetchTaskHistory, reportLocation, myArrivalNotice, refreshMyArrival, cancelMyArrival, setDriverStatus, addVisitor, assignVisitorDriver, cancelVisitorAssignment, cancelVisitor, recallVisitor, closeParkedVisitor, assignRetrievalDriver, assignStaffRetrievalDriver, confirmVisitorDelivered, pushNotification, markNotificationRead, clearNotifications, fetchAll]);
 
   const locationsValue = useMemo(
     () => ({driverLocations, onlineDriverIds}),

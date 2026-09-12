@@ -23,6 +23,10 @@ interface AdminUser {
   cardCode?: string;
   phone?: string;
   driverStatus?: 'available' | 'busy' | 'off';
+  // Two-station handoff model — which physical station this valet works.
+  // Only meaningful for role === 'valet'; see task.service.js's
+  // gateHandoff/confirmParkedByValet/requestOtherStationDriver.
+  valetStation?: 'gate' | 'lot' | null;
 }
 
 const FILTER_TABS: {key: Filter; label: string}[] = [
@@ -40,6 +44,15 @@ const ROLE_OPTIONS: {key: Role; label: string; icon: IconName}[] = [
   {key: 'valet', label: 'Valet', icon: 'key'},
   {key: 'driver', label: 'Driver', icon: 'car'},
   {key: 'admin', label: 'Admin', icon: 'shield'},
+];
+
+// Two-station handoff model: which physical station a valet works.
+// 'unassigned' isn't a real value sent to the server (null is) — it's the
+// default state, and picking it explicitly clears any station already set.
+const STATION_OPTIONS: {key: 'unassigned' | 'gate' | 'lot'; label: string; icon: IconName}[] = [
+  {key: 'unassigned', label: 'Unassigned', icon: 'help'},
+  {key: 'gate', label: 'Gate', icon: 'car'},
+  {key: 'lot', label: 'Lot', icon: 'key'},
 ];
 
 function genPassword() {
@@ -68,6 +81,7 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
   const [department, setDepartment] = useState('');
   const [cardCode, setCardCode] = useState('');
   const [phone, setPhone] = useState('');
+  const [valetStation, setValetStation] = useState<'gate' | 'lot' | ''>('');
   const [submitting, setSubmitting] = useState(false);
   const [resettingPassword, setResettingPassword] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -88,7 +102,7 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
 
   const resetForm = () => {
     setName(''); setEmployeeId(''); setRole('staff'); setPassword(genPassword());
-    setDepartment(''); setCardCode(''); setPhone('');
+    setDepartment(''); setCardCode(''); setPhone(''); setValetStation('');
   };
 
   const closeForm = () => {
@@ -108,6 +122,7 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
     setDepartment(u.department ?? '');
     setCardCode(u.cardCode ?? '');
     setPhone(u.phone ?? '');
+    setValetStation(u.valetStation ?? '');
     setShowAdd(true);
   };
 
@@ -127,6 +142,7 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
         department: department.trim() || undefined,
         cardCode: (role === 'doctor' || role === 'staff') && cardCode.trim() ? cardCode.trim() : undefined,
         phone: role === 'driver' && phone.trim() ? phone.trim() : undefined,
+        valetStation: role === 'valet' && valetStation ? valetStation : undefined,
       });
       dialog.alert(`Username: ${created.username}\nPassword: ${password.trim()}\n\nShare these credentials securely — they won't be shown again here.`, {title: `${name.trim()} can now sign in`, tone: 'success'});
       closeForm();
@@ -148,6 +164,7 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
         department: department.trim(),
         cardCode: (role === 'doctor' || role === 'staff') ? cardCode.trim() : '',
         phone: role === 'driver' ? phone.trim() : '',
+        valetStation: role === 'valet' ? (valetStation || null) : null,
       });
       closeForm();
       loadUsers();
@@ -289,6 +306,27 @@ export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filte
             <>
               <div style={fieldLabel}>PHONE (OPTIONAL)</div>
               <input style={inputStyle} value={phone} onChange={e => setPhone(e.target.value)} placeholder="10-digit number" inputMode="numeric" />
+            </>
+          )}
+
+          {role === 'valet' && (
+            <>
+              <div style={fieldLabel}>STATION (TWO-STATION HANDOFF)</div>
+              <div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
+                {STATION_OPTIONS.map(s => {
+                  const on = (valetStation || 'unassigned') === s.key;
+                  return (
+                    <PressableScale key={s.key} onClick={() => setValetStation(s.key === 'unassigned' ? '' : s.key)}
+                      style={{display: 'flex', alignItems: 'center', gap: 6, border: `1.5px solid ${on ? dark.accent : dark.border}`, borderRadius: radius.full, padding: '10px 14px', backgroundColor: on ? dark.accent : dark.surface}}>
+                      <Icon name={s.icon} size={18} color={on ? '#fff' : dark.textMuted} />
+                      <span style={{fontSize: 12, fontWeight: 700, color: on ? '#fff' : dark.textSecondary}}>{s.label}</span>
+                    </PressableScale>
+                  );
+                })}
+              </div>
+              <div style={{fontSize: 11, marginTop: 8, lineHeight: '16px', color: dark.textMuted}}>
+                Gate: collects keys at the front gate and hands cars to drivers. Lot: confirms cars parked and dispatches retrieval drivers. Leave unassigned to keep the old single-pool behavior.
+              </div>
             </>
           )}
 

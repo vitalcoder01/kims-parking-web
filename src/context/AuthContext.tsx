@@ -26,6 +26,11 @@ export interface CurrentUser {
   // account has one. Kept in sync by updateProfile() after the driver
   // toggles their own shift, same as any other profile field.
   driverStatus?: 'available' | 'busy' | 'off';
+  // Which physical station this valet works — 'gate' or 'lot'. Only
+  // meaningful for role === 'valet'; null/undefined for everyone else, and
+  // for an unassigned valet account (see the two-station handoff model —
+  // task.service.js's gateHandoff/confirmParkedByValet/requestOtherStationDriver).
+  valetStation?: 'gate' | 'lot' | null;
 }
 
 interface AuthContextValue {
