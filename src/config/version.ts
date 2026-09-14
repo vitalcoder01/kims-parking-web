@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 67;
-export const APP_VERSION_NAME = '1.11.1';
+export const APP_VERSION_CODE = 68;
+export const APP_VERSION_NAME = '1.11.2';
 export const RELEASE_NOTES =
-  'Fix a bug from the no-GPS change: the gate valet\'s "Car arrived" button (and its My Jobs placement) required a status retrievals can no longer ever reach, making it impossible to complete any retrieval. Fixed.';
+  'Staff/doctor "Request retrieval" done by the gate valet now notifies the lot valet to assign a driver, instead of letting the gate valet assign one directly — matching how visitor and self-service retrievals already work.';

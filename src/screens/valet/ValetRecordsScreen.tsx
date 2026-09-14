@@ -6,6 +6,7 @@ import {PressableScale} from '../../components/PressableScale';
 import {HScrollHint} from '../../components/HScrollHint';
 import {CalendarPicker} from '../../components/CalendarPicker';
 import {useDialog} from '../../components/AppDialog';
+import {useAuth} from '../../context/AuthContext';
 import {useBackStep} from '../../hooks/useBackStep';
 import {useValetActions} from './useValetActions';
 import {visitorsApi} from '../../services/api';
@@ -117,8 +118,14 @@ export function ValetRecordsScreen() {
   const {colors} = useTheme();
   const dialog = useDialog();
   const {tasks, visitors, activeVisitors, availableDrivers, hasActiveRetrievalDriver,
-    assignVisitorPickupDriver, assignVisitorRetrievalDriver, assignStaffRetrievalDriver, cancelVisitor, cancelVisitorAssignment, recallVisitor, closeParkedVisitor, confirmVisitorDelivered,
+    assignVisitorPickupDriver, assignVisitorRetrievalDriver, assignStaffRetrievalDriver, requestStaffRetrieval, cancelVisitor, cancelVisitorAssignment, recallVisitor, closeParkedVisitor, confirmVisitorDelivered,
     confirmTaskDelivered, fetchTaskHistory} = useValetActions();
+  const {user} = useAuth();
+  // Two-station handoff model: a gate-station valet only RAISES a staff
+  // retrieval request (the lot valet assigns the driver, same as a doctor's
+  // own self-service request) — see requestStaffRetrieval. A lot-station
+  // valet, or one with no station, keeps the old one-tap raise+assign.
+  const myStation = user?.valetStation ?? null;
 
   const [tab, setTab] = useState<RecordsTab>('visitors');
   const [query, setQuery] = useState('');
@@ -132,6 +139,9 @@ export function ValetRecordsScreen() {
   const [pendingDoctorTaskId, setPendingDoctorTaskId] = useState<number | null>(null);
   const [assigningDriverId, setAssigningDriverId] = useState<number | null>(null);
   const [closingVisitorId, setClosingVisitorId] = useState<number | null>(null);
+  // Gate-station valet's "Request retrieval" — raises the request only, no
+  // driver picker for them, so this just needs a per-doctor busy flag.
+  const [requestingRetrievalDoctorId, setRequestingRetrievalDoctorId] = useState<number | null>(null);
 
   /*
    * "The car has gone and nobody ever asked for it."
@@ -318,6 +328,22 @@ Only do this if the car has physically gone — nobody ever asked for a retrieva
       dialog.alert(err.message || 'Something went wrong');
     } finally {
       setAssigningDriverId(null);
+    }
+  };
+
+  // Gate-station valet taps "Request retrieval" for a staff/doctor member
+  // who called the desk — this only raises it, same as the doctor's own
+  // self-service request. The lot valet picks the driver from there (or
+  // hands it back via "No driver here" if the lot has none).
+  const handleRequestStaffRetrieval = async (doctorId: number) => {
+    if (requestingRetrievalDoctorId != null) return;
+    setRequestingRetrievalDoctorId(doctorId);
+    try {
+      await requestStaffRetrieval(doctorId);
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not send the retrieval request');
+    } finally {
+      setRequestingRetrievalDoctorId(null);
     }
   };
 
@@ -669,10 +695,14 @@ Only do this if the car has physically gone — nobody ever asked for a retrieva
           )}
 
           {canRetrieve && (
-            <PressableScale style={actionBtnStyle(colors.primary)}
-              onClick={() => setPendingDoctorTaskId(t.id)}>
-              <span style={{fontSize: 14, fontWeight: 700, color: colors.textOnPrimary}}>Request retrieval</span>
-              <Icon name="arrowRight" size={15} color={colors.textOnPrimary} />
+            <PressableScale
+              style={{...actionBtnStyle(colors.primary), opacity: requestingRetrievalDoctorId === t.doctorId ? 0.6 : 1}}
+              disabled={requestingRetrievalDoctorId === t.doctorId}
+              onClick={() => (myStation === 'gate' ? handleRequestStaffRetrieval(t.doctorId) : setPendingDoctorTaskId(t.id))}>
+              {requestingRetrievalDoctorId === t.doctorId
+                ? <span className="spinner" style={{width: 15, height: 15, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: colors.textOnPrimary}} />
+                : <span style={{fontSize: 14, fontWeight: 700, color: colors.textOnPrimary}}>Request retrieval</span>}
+              {requestingRetrievalDoctorId !== t.doctorId && <Icon name="arrowRight" size={15} color={colors.textOnPrimary} />}
             </PressableScale>
           )}
 

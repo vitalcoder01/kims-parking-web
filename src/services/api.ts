@@ -147,6 +147,11 @@ export const tasksApi = {
     client.patch(`/tasks/${id}/assign`, {driverId, lat: coords?.lat, lng: coords?.lng}).then(r => r.data.task),
   assignRetrievalDriverForDoctor: (doctorId: number, driverId: number, coords?: {lat: number; lng: number}) =>
     client.patch(`/tasks/doctor/${doctorId}/assign-retrieval`, {driverId, lat: coords?.lat, lng: coords?.lng}).then(r => r.data.task),
+  // Two-station handoff model: raises the request only, no driver — for a
+  // gate-station valet, so it reaches the lot valet the normal way instead
+  // of the calling valet short-circuiting straight to assignRetrievalDriverForDoctor.
+  requestRetrievalForDoctor: (doctorId: number) =>
+    client.post(`/tasks/doctor/${doctorId}/request-retrieval`).then(r => r.data.task),
   cancelAssignment: (id: number) =>
     client.patch(`/tasks/${id}/cancel-assignment`).then(r => r.data.task),
   accept: (id: number) =>
