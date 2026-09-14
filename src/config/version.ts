@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 68;
-export const APP_VERSION_NAME = '1.11.2';
+export const APP_VERSION_CODE = 69;
+export const APP_VERSION_NAME = '1.11.3';
 export const RELEASE_NOTES =
-  'Staff/doctor "Request retrieval" done by the gate valet now notifies the lot valet to assign a driver, instead of letting the gate valet assign one directly — matching how visitor and self-service retrievals already work.';
+  'Fixed a gap in the last release: a gate valet could still assign a driver to a retrieval they had just raised, via the Retrieval Requests inbox. That inbox row is now read-only ("Waiting for the lot valet") until the lot side acts or hands it back with "No driver here".';

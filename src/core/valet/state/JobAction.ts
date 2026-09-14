@@ -1,5 +1,5 @@
 import type {ParkingTask} from '../../../context/AppStateContext';
-import {canRun, isEscalated as ownershipIsEscalated} from '../services/OwnershipService';
+import {canRun, canAssignRetrieval, isEscalated as ownershipIsEscalated} from '../services/OwnershipService';
 import {agoLabel} from '../../../utils/retrievalClocks';
 
 /**
@@ -20,6 +20,7 @@ import {agoLabel} from '../../../utils/retrievalClocks';
  */
 export type JobActionKind =
   | 'assign_retrieval_request' // status requested/accepted — always offer Assign driver, no cancel
+  | 'awaiting_station_assign'  // status requested/accepted, but two-station handoff routes assigning it to the OTHER station right now — read-only here, see canAssignRetrieval
   | 'locked'                    // assigned, no driver, owned by someone else, not escalated
   | 'assign_or_cancel'          // assigned, no driver, mine (or open floor) to staff
   | 'awaiting_accept'           // assigned, has driver, driver hasn't accepted yet
@@ -48,7 +49,7 @@ export interface JobActionResult {
 
 export function deriveJobAction(
   t: ParkingTask,
-  ctx: {myValetId: number | null | undefined; myUserId: number | undefined; now: number},
+  ctx: {myValetId: number | null | undefined; myUserId: number | undefined; now: number; myStation?: 'gate' | 'lot' | null},
 ): JobActionResult {
   const needsDriver = t.status === 'assigned' && !t.driverId;
   const isMine = t.valetId === ctx.myUserId;
@@ -86,7 +87,11 @@ export function deriveJobAction(
 
   let kind: JobActionKind = 'none';
   if (t.status === 'requested' || t.status === 'accepted') {
-    kind = 'assign_retrieval_request';
+    // Two-station handoff: a gate valet sees every retrieval they raised
+    // (canView), but assigning the driver is the lot valet's job unless
+    // the lot side has already punted it back via "No driver here" — see
+    // canAssignRetrieval.
+    kind = canAssignRetrieval(t, ctx.myValetId, ctx.myStation) ? 'assign_retrieval_request' : 'awaiting_station_assign';
   } else if (needsDriver && claimedByOther) {
     kind = 'locked';
   } else if (needsDriver && !claimedByOther) {

@@ -8,7 +8,7 @@ import {DriverPickerList} from '../../components/DriverPickerList';
 import {usersApi, tasksApi, visitorsApi, isJobGone} from '../../services/api';
 import {formatPlate, isCompletePlate} from '../../utils/plate';
 import {VehicleNumberInput} from '../../components/VehicleNumberInput';
-import {useValetActions, isMyJobToRun, isMyStationJob} from './useValetActions';
+import {useValetActions, isMyJobToRun, isMyStationJob, canAssignRetrieval} from './useValetActions';
 import type {ParkingTask} from '../../context/AppStateContext';
 import {useAppState} from '../../context/AppStateContext';
 import {HScrollHint} from '../../components/HScrollHint';
@@ -1073,11 +1073,24 @@ export function ValetHomeScreen() {
                 </div>
               )}
 
-              <PressableScale style={{...taskActionBtnBase, marginTop: 12, backgroundColor: colors.primary}}
-                onClick={() => handleAssignDriverTo(t)}>
-                <Icon name="people" size={13} color={colors.textOnPrimary} />
-                <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textOnPrimary}}>Assign driver</span>
-              </PressableScale>
+              {/* Two-station handoff: a gate valet sees every request they
+                  raised (canView), but assigning the driver is the lot
+                  valet's job unless the lot side has already punted it
+                  back via "No driver here" — see canAssignRetrieval. Read-
+                  only here rather than hidden entirely, so the gate valet
+                  can still see it's in flight and waiting on the lot side. */}
+              {canAssignRetrieval(t, myValetId, myStation) ? (
+                <PressableScale style={{...taskActionBtnBase, marginTop: 12, backgroundColor: colors.primary}}
+                  onClick={() => handleAssignDriverTo(t)}>
+                  <Icon name="people" size={13} color={colors.textOnPrimary} />
+                  <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textOnPrimary}}>Assign driver</span>
+                </PressableScale>
+              ) : (
+                <div style={{display: 'flex', alignItems: 'center', gap: 6, marginTop: 12}}>
+                  <Icon name="clock" size={13} color={colors.textMuted} />
+                  <span style={{fontSize: 12.5, fontWeight: 700, color: colors.textMuted}}>Waiting for the lot valet to assign a driver</span>
+                </div>
+              )}
             </div>
             );
           })}
@@ -1362,7 +1375,7 @@ export function ValetHomeScreen() {
     // mobile app uses. It replaces eight booleans that were re-derived here
     // character-for-character from mobile's version: identical today, and
     // with nothing to keep them identical tomorrow.
-    const action = deriveJobAction(t, {myValetId, myUserId: user?.id, now});
+    const action = deriveJobAction(t, {myValetId, myUserId: user?.id, now, myStation});
     // Urgency wash for a still-unclaimed retrieval — restores the "hot to
     // cool" visual weight the old standalone Retrieval Requests inbox had.
     // Park jobs (no departure deadline) stay a plain card; only a retrieval
@@ -1474,6 +1487,14 @@ export function ValetHomeScreen() {
             <Icon name="lock" size={13} color={colors.textMuted} />
             <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textMuted}}>
               {t.valetName ?? 'Another valet'} is handling this
+            </span>
+          </div>
+        )}
+        {action.kind === 'awaiting_station_assign' && (
+          <div style={{...taskActionBtnBase, marginTop: 12, border: `1px solid ${colors.border}`, backgroundColor: 'transparent'}}>
+            <Icon name="clock" size={13} color={colors.textMuted} />
+            <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textMuted}}>
+              Waiting for the lot valet to assign a driver
             </span>
           </div>
         )}

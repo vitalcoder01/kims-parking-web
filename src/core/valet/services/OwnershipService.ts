@@ -68,6 +68,32 @@ export function canClaim(t: ParkingTask, myValetId: number | null | undefined): 
     && t.retrievalOwnerValetId !== myValetId;
 }
 
+/** Two-station handoff: whether `myStation` may actually ASSIGN A DRIVER to
+ *  this retrieval request right now — distinct from canView (merely seeing
+ *  it) and from canClaim (whether tapping fires the claim call). A
+ *  gate-station arrival owner is visible on this request (canView) but was
+ *  never a real claimant of it: they hand keys to drivers, they don't stand
+ *  next to a parked car to assign one, so the lot valet is who should act.
+ *  Mirrors the backend's own backstop for the same rule in
+ *  task.service.js's assignDriver and jobAlerts.js's claimRetrieval — this
+ *  is what keeps the UI from ever offering an action the server will now
+ *  refuse.
+ *
+ *  Opens to the gate side once: it's already personally theirs, the whole
+ *  team has been opened up (escalation/recovery), the lot side has punted
+ *  it back via "No driver here" (the one and only path that leaves a
+ *  retrieve task at status 'accepted' with no retrievalOwnerValetId —
+ *  every other unclaimed state is 'requested'), or this particular session
+ *  was never gate-routed to begin with. */
+export function canAssignRetrieval(t: ParkingTask, myValetId: number | null | undefined, myStation: 'gate' | 'lot' | null | undefined): boolean {
+  if (t.type !== 'retrieve') return true;
+  if (myValetId != null && t.retrievalOwnerValetId === myValetId) return true;
+  if (t.escalatedAt != null || t.recoveryBroadcastAt != null) return true;
+  if (t.retrievalOwnerValetId == null && t.status === 'accepted') return true; // punted back
+  if (t.arrivalOwnerValetStation !== 'gate') return true; // not gate-routed at all
+  return myStation !== 'gate';
+}
+
 /** Read-only: has this job stalled past its owner and opened to the team?
  *  (The escalation decision itself is the backend watchdog's — this just
  *  reads the flag it sets.) */
