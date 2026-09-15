@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 69;
-export const APP_VERSION_NAME = '1.11.3';
+export const APP_VERSION_CODE = 70;
+export const APP_VERSION_NAME = '1.11.4';
 export const RELEASE_NOTES =
-  'Fixed a gap in the last release: a gate valet could still assign a driver to a retrieval they had just raised, via the Retrieval Requests inbox. That inbox row is now read-only ("Waiting for the lot valet") until the lot side acts or hands it back with "No driver here".';
+  'Two more gaps in the retrieval handoff: the "Request retrieval" button for a VISITOR (not just staff) now also routes through the lot valet for a gate-station valet. And the driver-picker screen opened from the Retrieval Requests inbox now has a "No driver here" option — it never had one before.';

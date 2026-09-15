@@ -240,6 +240,11 @@ export const visitorsApi = {
     client.patch(`/visitors/${id}/recall`).then(r => r.data.visitor),
   assignRetrievalDriver: (id: number, driverId: number) =>
     client.patch(`/visitors/${id}/assign-retrieval`, {driverId}).then(r => r.data.visitor),
+  // Two-station handoff model: raises the request only, no driver — for a
+  // gate-station valet, so it reaches the lot valet the normal way instead
+  // of the calling valet short-circuiting straight to assignRetrievalDriver.
+  requestRetrieval: (id: number) =>
+    client.post(`/visitors/${id}/request-retrieval`).then(r => r.data),
   confirmDelivered: (id: number) =>
     client.patch(`/visitors/${id}/confirm-delivered`).then(r => r.data.visitor),
   /** Valet: the car left without a retrieval ever being raised — closes the

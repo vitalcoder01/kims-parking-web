@@ -214,6 +214,7 @@ interface AppState {
   /** Valet: car gone, nobody asked — closes the session and frees the bay. */
   closeParkedVisitor: (visitorId: number) => Promise<void>;
   assignRetrievalDriver: (visitorId: number, driverId: number) => Promise<void>;
+  requestVisitorRetrieval: (visitorId: number) => Promise<void>;
   assignStaffRetrievalDriver: (doctorId: number, driverId: number) => Promise<void>;
   requestStaffRetrieval: (doctorId: number) => Promise<number>;
   confirmVisitorDelivered: (visitorId: number) => Promise<void>;
@@ -1043,6 +1044,14 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     setDrivers(p => p.map(d => (d.id === driverId ? {...d, status: 'busy', currentTaskId: linkedTaskId} : d)));
   }, [tasks]);
 
+  // Two-station handoff model: raises the request only, no driver — see
+  // api.ts's requestRetrieval (visitorsApi). Mirrors requestStaffRetrieval.
+  const requestVisitorRetrieval = useCallback(async (visitorId: number) => {
+    const res = await visitorsApi.requestRetrieval(visitorId);
+    setVisitors(p => p.map(v => (v.id === visitorId ? mapVisitor(res.visitor) : v)));
+    setTasks(p => upsertById(p, mapTask(res.task)));
+  }, []);
+
   const assignStaffRetrievalDriver = useCallback(async (doctorId: number, driverId: number) => {
     stopAlarm();
     const coords = await getCurrentPositionSafe();
@@ -1136,6 +1145,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     recallVisitor,
     closeParkedVisitor,
     assignRetrievalDriver,
+    requestVisitorRetrieval,
     assignStaffRetrievalDriver,
     requestStaffRetrieval,
     confirmVisitorDelivered,
@@ -1143,7 +1153,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     markNotificationRead,
     clearNotifications,
     refreshTasks: fetchAll,
-  }), [drivers, tasks, slots, visitors, arrivalNotices, notifications, activeAlert, hydrated, reassignPrompt, clearReassignPrompt, dismissAlert, addTask, requestRetrieval, cancelMyRetrieval, sendArrivalNotice, acceptRetrieval, dismissArrivalNotice, updateTask, assignDriver, cancelTaskAssignment, acceptTask, rejectTask, markKeyCollected, markParked, markRetrieved, gateHandoff, confirmParkedByValet, confirmArrivedByValet, requestOtherStationDriver, confirmTaskDelivered, cancelTask, closeParkedSession, recallTask, markTaskReturned, fetchTaskHistory, reportLocation, myArrivalNotice, refreshMyArrival, cancelMyArrival, setDriverStatus, addVisitor, assignVisitorDriver, cancelVisitorAssignment, cancelVisitor, recallVisitor, closeParkedVisitor, assignRetrievalDriver, assignStaffRetrievalDriver, requestStaffRetrieval, confirmVisitorDelivered, pushNotification, markNotificationRead, clearNotifications, fetchAll]);
+  }), [drivers, tasks, slots, visitors, arrivalNotices, notifications, activeAlert, hydrated, reassignPrompt, clearReassignPrompt, dismissAlert, addTask, requestRetrieval, cancelMyRetrieval, sendArrivalNotice, acceptRetrieval, dismissArrivalNotice, updateTask, assignDriver, cancelTaskAssignment, acceptTask, rejectTask, markKeyCollected, markParked, markRetrieved, gateHandoff, confirmParkedByValet, confirmArrivedByValet, requestOtherStationDriver, confirmTaskDelivered, cancelTask, closeParkedSession, recallTask, markTaskReturned, fetchTaskHistory, reportLocation, myArrivalNotice, refreshMyArrival, cancelMyArrival, setDriverStatus, addVisitor, assignVisitorDriver, cancelVisitorAssignment, cancelVisitor, recallVisitor, closeParkedVisitor, assignRetrievalDriver, requestVisitorRetrieval, assignStaffRetrievalDriver, requestStaffRetrieval, confirmVisitorDelivered, pushNotification, markNotificationRead, clearNotifications, fetchAll]);
 
   const locationsValue = useMemo(
     () => ({driverLocations, onlineDriverIds}),

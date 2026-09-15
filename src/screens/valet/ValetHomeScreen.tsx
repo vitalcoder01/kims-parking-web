@@ -919,6 +919,33 @@ export function ValetHomeScreen() {
 
           <DriverPickerList drivers={visibleDrivers} onAssign={handleAssignDriver} assigningId={assigningDriverId} />
 
+          {/* Two-station handoff model: this screen is also what opens from
+              the Retrieval Requests inbox — it never had this escape hatch
+              at all (only the Dashboard's inline job card did), so a lot
+              valet with nobody free had no way to hand the job back to the
+              gate side without leaving the screen first. */}
+          {isRetrieve && !!pendingTask && !!myStation && (
+            <PressableScale
+              style={{...actionBtnBase, marginTop: 10, border: `1px solid ${colors.border}`, backgroundColor: colors.cardAlt}}
+              disabled={handingOffTaskId === pendingTask.id}
+              onClick={async () => {
+                if (handingOffTaskId != null) return;
+                setHandingOffTaskId(pendingTask.id);
+                try {
+                  await requestOtherStationDriver(pendingTask.id);
+                  closeAssign();
+                } catch (err: any) {
+                  dialog.alert(err.message || 'Could not hand off this job', {title: 'Error'});
+                } finally {
+                  setHandingOffTaskId(null);
+                }
+              }}>
+              <span style={{fontSize: 14, fontWeight: 800, color: colors.textSecondary}}>
+                {handingOffTaskId === pendingTask.id ? 'Sending…' : 'No driver here'}
+              </span>
+            </PressableScale>
+          )}
+
           <div style={{display: 'flex', alignItems: 'center', gap: 10, borderRadius: 14, border: `1px solid ${colors.border}`, padding: 14, marginTop: 8, backgroundColor: colors.cardAlt}}>
             <div style={{width: 32, height: 32, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: colors.successLight}}>
               <Icon name="shield" size={16} color={colors.success} />
