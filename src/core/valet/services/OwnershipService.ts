@@ -125,7 +125,21 @@ export function isUnderRecovery(t: ParkingTask): boolean {
  *  callable regardless of this split; this only makes them easy to find. */
 export function isMyStationJob(t: ParkingTask, myStation: 'gate' | 'lot' | null | undefined): boolean {
   if (myStation === 'lot') {
-    return t.type === 'park' && (t.status === 'key_collected' || t.status === 'in_transit');
+    return (t.type === 'park' && (t.status === 'key_collected' || t.status === 'in_transit'))
+      // Two-station handoff: an unclaimed retrieval routed to the lot
+      // (arrival owner is gate-station) is the lot valet's to STAFF —
+      // it belongs in their Dashboard's My Jobs > Driver assign pending
+      // capsule, not buried under Team Jobs. Without this, a fresh
+      // gate-raised retrieval request appeared in Team Jobs on the lot
+      // valet's screen even though the lot valet was the one meant to
+      // assign a driver, and the "task landed in the wrong capsule"
+      // report followed directly from that. 'requested' and 'accepted'
+      // are the two unclaimed states — every other retrieve status
+      // already implies a claim.
+      || (t.type === 'retrieve'
+          && (t.status === 'requested' || t.status === 'accepted')
+          && !t.retrievalOwnerValetId
+          && t.arrivalOwnerValetStation === 'gate');
   }
   if (myStation === 'gate') {
     // 'assigned' is the real state now — no GPS left to ever advance a
