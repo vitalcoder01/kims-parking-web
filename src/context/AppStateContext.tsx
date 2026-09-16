@@ -572,6 +572,14 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
         // Owner-scoped valet pushes (backend task.service.js's markParked,
         // `valet:${parkOwner}`) — parallel to driver:<id> above.
         n.targetRole === `valet:${me?.id}` ||
+        // Two-station handoff model: 'valetStation:<gate|lot>' addresses
+        // every valet currently on that physical station (backend's
+        // notifyRetrievalOwner / requestOtherStationDriver) — without this
+        // branch the alarm silently never fired for a station-routed
+        // request even though the socket event correctly reached this
+        // client's room; only the generic role/user/all branches above were
+        // ever checked, and none of them match a station-scoped tag.
+        (me?.role === 'valet' && !!me?.valetStation && n.targetRole === `valetStation:${me.valetStation}`) ||
         n.targetRole === 'all';
       if (!isForMe) return;
       // A reassign event fires both as task:needs-reassign (dialog) and
