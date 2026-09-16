@@ -6,7 +6,7 @@
 // step the way there is for an APK — this only exists to (a) show a real,
 // current version in Settings, and (b) let ReleaseNotesModal announce what
 // changed. Bump both whenever a release worth telling users about ships.
-export const APP_VERSION_CODE = 72;
-export const APP_VERSION_NAME = '1.11.6';
+export const APP_VERSION_CODE = 73;
+export const APP_VERSION_NAME = '1.11.7';
 export const RELEASE_NOTES =
-  'Two-station handoff cleanup: the "Key handed over" button now only appears for the gate valet (it was rendering on both sides even though only the gate valet actually holds the key). The lot valet sees "Driver X is at the gate to collect the key" instead. New cross-station heads-up alerts: the lot valet rings when a car is on its way to be parked; the gate valet rings when a retrieval is dispatched from the lot.';
+  'Gate valet now sees the retrieval delivery leg. Once the lot valet dispatches a driver, the card appears on the gate dashboard with the "Car arrived at gate" button — the visitor tab also stops offering "Assign driver" for a retrieval whose driver is already on the way. Fixes the "empty dashboard while Sudheer was bringing the car" gap: the socket/REST filter was scoping the claimed retrieval to the lot valet alone, hiding it from the very valet who needs to receive the car.';
