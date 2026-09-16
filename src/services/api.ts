@@ -295,6 +295,10 @@ export const driversApi = {
     client.get('/drivers', {params}).then(r => r.data.drivers),
   setStatus: (id: number, status: 'available' | 'busy' | 'off') =>
     client.patch(`/drivers/${id}/status`, {status}).then(r => r.data.driver),
+  // Admin-only escape hatch for a driver stuck 'busy' with no live job the
+  // normal flow can reach — cancels whatever's holding them and frees them.
+  forceFree: (id: number) =>
+    client.patch(`/drivers/${id}/force-free`).then(r => r.data.driver),
 };
 
 // ── Admin ────────────────────────────────────────────────────────────────

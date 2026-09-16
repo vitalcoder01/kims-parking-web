@@ -81,6 +81,14 @@ export function deriveJobAction(
     // own note rather than falling through to "waiting for a driver" below,
     // which would say a driver is needed when one is already on the way.
     : t.type === 'retrieve' && t.status === 'assigned' && !!t.driverId ? `${t.driverName ?? 'Driver'} is bringing it`
+    // A park job at 'assigned' with a driver already accepted is the
+    // "waiting for gate to hand the key over" state — the team perspective
+    // (lot valet seeing it as Team Jobs) needs an honest line here or the
+    // card sits with just its plate and nothing else. The gate valet gets
+    // the "Key handed over" action button, which is what changes the state
+    // and clears this note.
+    : t.type === 'park' && t.status === 'assigned' && !!t.driverId
+      ? `${t.driverName ?? 'Driver'} is at the gate to collect the key`
     : (needsDriver || t.status === 'requested' || t.status === 'accepted')
       ? `Waiting for a driver · ${agoLabel(waitedSince, ctx.now)}`
     : null;

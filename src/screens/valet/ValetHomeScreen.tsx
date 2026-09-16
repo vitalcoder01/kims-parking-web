@@ -1554,7 +1554,14 @@ export function ValetHomeScreen() {
                 </span>
               </PressableScale>
             </div>
-          ) : (
+          ) : action.isMine ? (
+            // Only the gate valet who physically has the key gets to say
+            // "handed over" — for anyone else this button was actionable but
+            // firing markKeyCollected as someone who doesn't hold the key is
+            // dishonest and just as importantly the backend refuses it (see
+            // task.service.js's markKeyCollected + canRun). The team view
+            // (lot valet, admin) gets the waitingNote line from JobAction
+            // instead: "Driver X is at the gate to collect the key".
             <PressableScale
               style={{...taskActionBtnBase, marginTop: 12, backgroundColor: colors.success, opacity: collectingKeyTaskId === t.id ? 0.6 : 1}}
               disabled={collectingKeyTaskId === t.id}
@@ -1576,7 +1583,7 @@ export function ValetHomeScreen() {
                 {collectingKeyTaskId === t.id ? 'Please wait…' : 'Key handed over'}
               </span>
             </PressableScale>
-          )
+          ) : null
         )}
         {action.canRecall && (
           <PressableScale style={{...taskActionBtnBase, marginTop: 12, border: `1px solid ${colors.warning}`, backgroundColor: 'transparent'}}
