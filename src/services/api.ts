@@ -193,8 +193,6 @@ export const tasksApi = {
   // Driver: "car returned to the valet counter" after a recall.
   markReturned: (id: number) =>
     client.patch(`/tasks/${id}/returned`).then(r => r.data.task),
-  updateLocation: (id: number, lat: number, lng: number) =>
-    client.patch(`/tasks/${id}/location`, {lat, lng}).then(r => r.data.task),
   // Two-station handoff model (gate valet collects the key + picks a
   // driver; the driver no longer accepts/rejects at all — assignDriver
   // accepts on their behalf). One call replaces create -> assign -> key

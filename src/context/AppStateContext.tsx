@@ -1,6 +1,6 @@
 import React, {createContext, useContext, useState, useCallback, useMemo, useEffect, useRef} from 'react';
 import {tasksApi, slotsApi, notificationsApi, arrivalsApi, driversApi, visitorsApi, getAuthToken} from '../services/api';
-import {connectSocket, disconnectSocket, emitDriverLocation} from '../services/socket';
+import {connectSocket, disconnectSocket} from '../services/socket';
 import {ringAlarm, stopAlarm, playChime} from '../services/alarm';
 import {initWebPush} from '../services/webPush';
 import {getSwRegistration} from '../services/swRegistration';
@@ -204,7 +204,6 @@ interface AppState {
   recallTask: (taskId: number) => Promise<void>;
   markTaskReturned: (taskId: number) => Promise<void>;
   fetchTaskHistory: (params?: {doctorId?: number; driverId?: number}) => Promise<ParkingTask[]>;
-  reportLocation: (taskId: number, lat: number, lng: number) => Promise<void>;
   setDriverStatus: (driverId: number, status: DriverStatus) => Promise<void>;
   addVisitor: (v: {name: string; carNumber?: string; mobile: string; vehicleType?: 'car' | 'bike'}) => Promise<Visitor>;
   assignVisitorDriver: (visitorId: number, driverId: number) => Promise<void>;
@@ -229,9 +228,10 @@ const Ctx = createContext<AppState>({} as AppState);
 /*
  * The live-map feed lives in its own context, deliberately.
  *
- * Drivers emit GPS on a ~2-3s watch (see the watchPosition config below),
- * so with a handful of drivers on shift these two values change several
- * times a second. They were part of the main AppState value, which meant
+ * Drivers used to emit GPS on a ~2-3s watch (removed along with driver
+ * sign-in; the feed and this split remain), so with a handful of drivers
+ * on shift these two values changed several times a second. They were part
+ * of the main AppState value, which meant
  * every one of those pings changed that value's identity and re-rendered
  * every screen subscribed to it -- the doctor's home, the driver's job
  * list, the admin dashboards -- none of which read a driver's coordinates.
@@ -471,8 +471,19 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     });
   }, []);
 
-  // Dismiss + advance to whatever's next in the queue, if anything.
-  const clearReassignPrompt = useCallback(() => closeReassignPromptFor(() => true), [closeReassignPromptFor]);
+  // Dismiss the current prompt and advance to whatever's next in the queue,
+  // if anything. Not closeReassignPromptFor(() => true): that filters the
+  // whole queue away before looking for a successor, so a second job's
+  // prompt was discarded instead of shown next.
+  const clearReassignPrompt = useCallback(() => {
+    setReassignPrompt(prev => {
+      if (!prev) return prev;
+      const [next, ...rest] = reassignQueueRef.current;
+      reassignQueueRef.current = rest;
+      if (next) reassignShownAt.current = Date.now();
+      return next ?? null;
+    });
+  }, []);
 
   // ── True-WebSocket sync — full fetch on connect/reconnect, deltas after.
   useEffect(() => {
@@ -695,72 +706,16 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     if (!stillNeedsDriver) clearReassignPrompt();
   }, [reassignPrompt, tasks, visitors, clearReassignPrompt]);
 
-  // A GPS ping only carries position — merge just those fields, leave the
-  // rest of the task record alone.
-  const reportLocation = useCallback(async (taskId: number, lat: number, lng: number) => {
-    const fresh = mapTask(await tasksApi.updateLocation(taskId, lat, lng));
-    setTasks(p => p.map(t => (t.id === taskId
-      ? {...t,
-         driverLat: fresh.driverLat,
-         driverLng: fresh.driverLng,
-         locationUpdatedAt: fresh.locationUpdatedAt,
-         driverStartLat: t.driverStartLat ?? fresh.driverStartLat,
-         driverStartLng: t.driverStartLng ?? fresh.driverStartLng,
-         trackingProgress: fresh.trackingProgress ?? t.trackingProgress}
-      : t)));
-  }, []);
-
-  // One GPS watcher for the whole driver session, not just active trips:
-  // every fix streams to the live map; during an active trip it also posts
-  // to the task's location endpoint.
+  // Driver GPS reporting removed with the driver-app era (see audit B5).
+  // The backend PATCH /tasks/:id/location endpoint no longer exists, and
+  // drivers can no longer log in either (AuthContext.tsx's WEB_ROLES).
+  // The old client chain — reportLocation + tasksApi.updateLocation + the
+  // navigator.geolocation.watchPosition effect + its one-shot companion —
+  // used to fire from a driver session on every position tick, would 404
+  // silently now, and would ask the browser for geolocation permission on
+  // login. Kept myDriverId (still used elsewhere for freeing a driver on
+  // task-done) and the driver screens themselves per policy.
   const myDriverId = user?.role === 'driver' ? user.linkedDriverId ?? null : null;
-  // A retrieve job starts at 'assigned' with no key-handoff step (unlike
-  // park, which passes through 'key_collected' first) — so this must
-  // include it too, or GPS reporting never starts for a retrieval and the
-  // backend's auto-in-transit logic (see updateLocation) never gets a ping
-  // to react to. Mirrors the mobile app's identical fix.
-  const activeDriverTask = myDriverId != null
-    ? tasks.find(t => t.driverId != null && t.driverId === myDriverId
-        && (t.status === 'key_collected' || t.status === 'in_transit'
-          || (t.type === 'retrieve' && t.status === 'assigned')))
-    : undefined;
-  const activeDriverTaskId = activeDriverTask?.id;
-  const activeDriverTaskIdRef = useRef(activeDriverTaskId);
-  activeDriverTaskIdRef.current = activeDriverTaskId;
-
-  useEffect(() => {
-    if (user?.role !== 'driver') return;
-    if (!('geolocation' in navigator)) return;
-
-    const watchId = navigator.geolocation.watchPosition(
-      pos => {
-        const {latitude, longitude} = pos.coords;
-        emitDriverLocation(latitude, longitude);
-        const taskId = activeDriverTaskIdRef.current;
-        if (taskId) reportLocation(taskId, latitude, longitude).catch(() => {});
-      },
-      () => {},
-      {enableHighAccuracy: true, maximumAge: 0, timeout: 15000},
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [user?.role, user?.id, reportLocation]);
-
-  // One-shot fix the moment tracking starts, instead of waiting for the
-  // ambient watch's next callback — avoids "Waiting for location…" hanging
-  // on the doctor's tracking screen.
-  useEffect(() => {
-    if (user?.role !== 'driver' || !activeDriverTaskId) return;
-    if (!('geolocation' in navigator)) return;
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        const {latitude, longitude} = pos.coords;
-        emitDriverLocation(latitude, longitude);
-        reportLocation(activeDriverTaskId, latitude, longitude).catch(() => {});
-      },
-      () => {},
-      {enableHighAccuracy: true, timeout: 8000, maximumAge: 0},
-    );
-  }, [user?.role, activeDriverTaskId, reportLocation]);
 
   const addTask = useCallback(async (task: Omit<ParkingTask, 'id'>) => {
     const created = await tasksApi.create({
@@ -1141,7 +1096,6 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     recallTask,
     markTaskReturned,
     fetchTaskHistory,
-    reportLocation,
     myArrivalNotice,
     refreshMyArrival,
     cancelMyArrival,
@@ -1161,7 +1115,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     markNotificationRead,
     clearNotifications,
     refreshTasks: fetchAll,
-  }), [drivers, tasks, slots, visitors, arrivalNotices, notifications, activeAlert, hydrated, reassignPrompt, clearReassignPrompt, dismissAlert, addTask, requestRetrieval, cancelMyRetrieval, sendArrivalNotice, acceptRetrieval, dismissArrivalNotice, updateTask, assignDriver, cancelTaskAssignment, acceptTask, rejectTask, markKeyCollected, markParked, markRetrieved, gateHandoff, confirmParkedByValet, confirmArrivedByValet, requestOtherStationDriver, confirmTaskDelivered, cancelTask, closeParkedSession, recallTask, markTaskReturned, fetchTaskHistory, reportLocation, myArrivalNotice, refreshMyArrival, cancelMyArrival, setDriverStatus, addVisitor, assignVisitorDriver, cancelVisitorAssignment, cancelVisitor, recallVisitor, closeParkedVisitor, assignRetrievalDriver, requestVisitorRetrieval, assignStaffRetrievalDriver, requestStaffRetrieval, confirmVisitorDelivered, pushNotification, markNotificationRead, clearNotifications, fetchAll]);
+  }), [drivers, tasks, slots, visitors, arrivalNotices, notifications, activeAlert, hydrated, reassignPrompt, clearReassignPrompt, dismissAlert, addTask, requestRetrieval, cancelMyRetrieval, sendArrivalNotice, acceptRetrieval, dismissArrivalNotice, updateTask, assignDriver, cancelTaskAssignment, acceptTask, rejectTask, markKeyCollected, markParked, markRetrieved, gateHandoff, confirmParkedByValet, confirmArrivedByValet, requestOtherStationDriver, confirmTaskDelivered, cancelTask, closeParkedSession, recallTask, markTaskReturned, fetchTaskHistory, myArrivalNotice, refreshMyArrival, cancelMyArrival, setDriverStatus, addVisitor, assignVisitorDriver, cancelVisitorAssignment, cancelVisitor, recallVisitor, closeParkedVisitor, assignRetrievalDriver, requestVisitorRetrieval, assignStaffRetrievalDriver, requestStaffRetrieval, confirmVisitorDelivered, pushNotification, markNotificationRead, clearNotifications, fetchAll]);
 
   const locationsValue = useMemo(
     () => ({driverLocations, onlineDriverIds}),
