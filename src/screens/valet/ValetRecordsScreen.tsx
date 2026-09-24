@@ -2,8 +2,6 @@ import React, {useState, useEffect} from 'react';
 import {useTheme} from '../../context/ThemeContext';
 import {Visitor, ParkingTask, mapVisitor} from '../../context/AppStateContext';
 import {Icon} from '../../components/Icon';
-import {PressableScale} from '../../components/PressableScale';
-import {HScrollHint} from '../../components/HScrollHint';
 import {CalendarPicker} from '../../components/CalendarPicker';
 import {useDialog} from '../../components/AppDialog';
 import {useAuth} from '../../context/AuthContext';
@@ -12,59 +10,29 @@ import {useValetActions, canAssignRetrieval} from './useValetActions';
 import {visitorsApi} from '../../services/api';
 import {selectVisitorStage, selectStaffStage, Stage} from '../../core/valet/selectors/JobStageSelector';
 import {
-  buildLatestTaskByDoctor, canRequestStaffRetrieval as coreCanRequestStaffRetrieval,
+  buildLatestTaskByDoctor,
+  canRequestStaffRetrieval as coreCanRequestStaffRetrieval,
   isStaffRowActive as coreIsStaffRowActive,
-  matchesStaffStatusFilter, matchesVisitorStatusFilter,
+  matchesStaffStatusFilter,
+  matchesVisitorStatusFilter,
 } from '../../core/valet/selectors/JobHistorySelector';
 import {AdminMapScreen} from '../admin/AdminMapScreen';
 import {DriverPickerList} from '../../components/DriverPickerList';
 
-// Direct DOM port of the mobile app's ValetRecordsScreen — same
-// Active/Completed session logic for both visitor and staff/doctor tickets,
-// the same "ticket stub" card visual language, and the same read-only
-// detail sheet. Native-only bits (Alert.alert, FlatList/SectionList,
-// RefreshControl) are swapped for window.confirm, plain .map(), and nothing
-// (the socket-driven AppStateContext already keeps this live).
-
 function fmtTime(ms?: number) {
   if (!ms) return null;
-  return new Date(ms).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
-}
-
-const STUB_W = 78;
-const NOTCH = 18;
-
-// Placeholder body colours until the visitor's real vehicle colour comes
-// through the backend (Vehicle Setup work) — stable per token so a card
-// doesn't change colour between refreshes.
-const SWATCHES = ['#2E5BFF', '#1FA24A', '#D32F2F', '#F5B301', '#46505C', '#7C3AED', '#0D9488', '#B3B9C4'];
-function tokenColour(key: string) {
-  let h = 0;
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
-  return SWATCHES[Math.abs(h) % SWATCHES.length];
-}
-
-// Vertical dashed perforation line between the ticket body and its stub.
-function PerfLine({color}: {color: string}) {
-  return (
-    <div style={{width: 2, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', flexShrink: 0}}>
-      {Array.from({length: 14}, (_, i) => (
-        <span key={i} style={{width: 2, height: 6, borderRadius: 1, backgroundColor: color}} />
-      ))}
-    </div>
-  );
+  return new Date(ms).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 type RecordsTab = 'visitors' | 'staff' | 'map';
 type StatusFilter = 'all' | 'active' | 'completed';
-
-// Date scope for the records tabs. 'live' is the existing bounded view
-// (last 24h + anything still active) — the default, because that's what a
-// valet on shift actually wants. The rest are real calendar windows,
-// answered by the server's uncapped range query rather than by filtering
-// the live list, which is deliberately capped and could never show a full
-// month.
 type Period = 'live' | 'today' | 'yesterday' | 'week' | 'month';
+
 const PERIODS: {key: Period; label: string}[] = [
   {key: 'live', label: 'Live'},
   {key: 'today', label: 'Today'},
@@ -76,9 +44,6 @@ const PERIODS: {key: Period; label: string}[] = [
 const ymd = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-// Inclusive [from, to] in local calendar days. Week starts Monday, matching
-// the backend's own analytics period logic so the two never disagree about
-// which days "this week" covers.
 function periodRange(p: Period): {from: string; to: string} | null {
   if (p === 'live') return null;
   const now = new Date();
@@ -97,210 +62,163 @@ function periodRange(p: Period): {from: string; to: string} | null {
   return {from: ymd(start), to: ymd(now)};
 }
 
-// Which timestamp a staff/doctor task belongs to, date-wise: when it
-// finished if it did, otherwise when it was raised. Used to scope the Staff
-// tab to the same window as the Visitors tab.
 function taskDateMs(t: ParkingTask): number {
   return t.completedAt ?? t.assignedAt ?? t.requestedAt ?? 0;
 }
-// One shared vehicle-lifecycle stage, whether the ticket is a visitor token
-// or a staff/doctor session — both run the identical park -> parked ->
-// retrieve journey underneath, just through different record shapes.
+
 type StageFilter = 'all' | Stage;
 const STAGE_FILTERS: {key: Exclude<StageFilter, 'all'>; label: string}[] = [
   {key: 'atHospital', label: 'At hospital'},
-  {key: 'transitToLot', label: 'Vehicle → parking lot'},
+  {key: 'transitToLot', label: 'Vehicle → Lot'},
   {key: 'parked', label: 'Parked'},
-  {key: 'transitToHospital', label: 'Vehicle → hospital'},
+  {key: 'transitToHospital', label: 'Vehicle → Hospital'},
 ];
 
 export function ValetRecordsScreen() {
-  const {colors} = useTheme();
+  const {colors, isDark} = useTheme();
   const dialog = useDialog();
-  const {tasks, visitors, activeVisitors, availableDrivers, hasActiveRetrievalDriver,
-    assignVisitorPickupDriver, assignVisitorRetrievalDriver, requestVisitorRetrieval, assignStaffRetrievalDriver, requestStaffRetrieval, cancelVisitor, cancelVisitorAssignment, recallVisitor, closeParkedVisitor, confirmVisitorDelivered,
-    confirmTaskDelivered, fetchTaskHistory} = useValetActions();
+  const {
+    tasks,
+    visitors,
+    activeVisitors,
+    availableDrivers,
+    hasActiveRetrievalDriver,
+    assignVisitorPickupDriver,
+    assignVisitorRetrievalDriver,
+    requestVisitorRetrieval,
+    assignStaffRetrievalDriver,
+    requestStaffRetrieval,
+    cancelVisitor,
+    cancelVisitorAssignment,
+    recallVisitor,
+    closeParkedVisitor,
+    confirmVisitorDelivered,
+    confirmTaskDelivered,
+    fetchTaskHistory,
+  } = useValetActions();
   const {user} = useAuth();
-  // Two-station handoff model: a gate-station valet only RAISES a retrieval
-  // request (the lot valet assigns the driver, same as a doctor's own
-  // self-service request) — see requestStaffRetrieval/requestVisitorRetrieval.
-  // A lot-station valet, or one with no station, keeps the old one-tap
-  // raise+assign.
+
   const myStation = user?.valetStation ?? null;
   const myValetId = user?.role === 'valet' ? user.id : null;
-  // The visitor's own live retrieve task, if one's been raised — needed to
-  // run canAssignRetrieval against (Visitor itself doesn't carry station
-  // ownership fields; the ParkingTask it's linked to does).
-  const visitorRetrieveTask = (v: {id: number}) =>
-    tasks.find(t => t.visitorId === v.id && t.type === 'retrieve' && t.status !== 'completed' && t.status !== 'cancelled') ?? null;
 
+  const visitorRetrieveTask = (v: {id: number}) =>
+    tasks.find(
+      t => t.visitorId === v.id && t.type === 'retrieve' && t.status !== 'completed' && t.status !== 'cancelled'
+    ) ?? null;
+
+  // ── Navigation & Filter State ──
   const [tab, setTab] = useState<RecordsTab>('visitors');
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
+
+  // Assign Driver State
   const [pendingVisitorId, setPendingVisitorId] = useState<number | null>(null);
   const [pendingMode, setPendingMode] = useState<'park' | 'retrieve' | null>(null);
-  // The staff/doctor equivalent of pendingVisitorId — set when the valet taps
-  // "Request retrieval" on a staff ticket, so the same driver-assign screen
-  // below can serve both flows.
   const [pendingDoctorTaskId, setPendingDoctorTaskId] = useState<number | null>(null);
   const [assigningDriverId, setAssigningDriverId] = useState<number | null>(null);
+
+  // Operational Action Busy States
   const [closingVisitorId, setClosingVisitorId] = useState<number | null>(null);
-  // Gate-station valet's "Request retrieval" — raises the request only, no
-  // driver picker for them, so this just needs a per-doctor busy flag.
   const [requestingRetrievalDoctorId, setRequestingRetrievalDoctorId] = useState<number | null>(null);
   const [requestingRetrievalVisitorId, setRequestingRetrievalVisitorId] = useState<number | null>(null);
-
-  /*
-   * "The car has gone and nobody ever asked for it."
-   *
-   * Frees the bay as well as closing the session, so the confirm says so
-   * plainly: if the car is in fact still sitting there, the next park job
-   * gets sent to an occupied space.
-   */
-  const handleCloseParked = async (v: Visitor) => {
-    if (closingVisitorId != null) return;
-    const ok = await dialog.confirm({
-      title: 'Car already left?',
-      message: `This closes ${v.carNumber ?? 'this visitor'}'s session${v.slotId ? ` and marks slot ${v.slotId} FREE` : ''}.
-
-Only do this if the car has physically gone — nobody ever asked for a retrieval.`,
-      confirmText: 'Yes, close it',
-      cancelText: 'Never mind',
-    });
-    if (!ok) return;
-    setClosingVisitorId(v.id);
-    try {
-      await closeParkedVisitor(v.id);
-    } catch (err: any) {
-      dialog.alert(err.message || 'Could not close this session', {title: 'Error'});
-    } finally {
-      setClosingVisitorId(null);
-    }
-  };
-
-  // Browser/PWA back gesture — the Assign Driver screen (below) is a plain
-  // conditional full-screen replace, not a real route. Mirrors mobile's
-  // BackHandler wiring. (Unlike mobile, the detail sheet below ALSO needs
-  // this — RN's <Modal> gets back support for free via onRequestClose, web
-  // has no equivalent, so it's wired the same way right by closeDetail.)
-  useBackStep(pendingVisitorId != null || pendingDoctorTaskId != null, () => {
-    setPendingVisitorId(null); setPendingMode(null); setPendingDoctorTaskId(null);
-  });
   const [confirmingVisitorId, setConfirmingVisitorId] = useState<number | null>(null);
+  const [confirmingTaskId, setConfirmingTaskId] = useState<number | null>(null);
   const [recallingVisitorId, setRecallingVisitorId] = useState<number | null>(null);
   const [cancellingAssignmentVisitorId, setCancellingAssignmentVisitorId] = useState<number | null>(null);
 
-  // Calendar-wise records view (Visitors tab only) — 'YYYY-MM-DD', or null
-  // for the normal live view. Selecting a date fetches that day's visitors
-  // fresh from the unbounded ?date= endpoint rather than filtering the live
-  // `visitors` array, which is deliberately capped to the last 24h.
+  // Calendar & Date Range State
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('live');
   const [dateVisitors, setDateVisitors] = useState<Visitor[] | null>(null);
   const [dateLoading, setDateLoading] = useState(false);
 
-  // A hand-picked calendar date wins over the period pills; both resolve to
-  // the same {from,to} so everything downstream has one thing to read.
-  const activeRange = selectedDate
-    ? {from: selectedDate, to: selectedDate}
-    : periodRange(period);
-
-  useEffect(() => {
-    if (!activeRange) { setDateVisitors(null); return; }
-    let cancelled = false;
-    setDateLoading(true);
-    visitorsApi.byRange(activeRange.from, activeRange.to)
-      .then((rows: any[]) => { if (!cancelled) setDateVisitors(rows.map(mapVisitor)); })
-      .catch(() => { if (!cancelled) setDateVisitors([]); })
-      .finally(() => { if (!cancelled) setDateLoading(false); });
-    return () => { cancelled = true; };
-  }, [activeRange?.from, activeRange?.to]);
-
-  const todayKey = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
-  const calendarDateLabel = (key: string) => key === todayKey
-    ? 'Today'
-    : new Date(`${key}T00:00:00`).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'});
-  const [confirmingTaskId, setConfirmingTaskId] = useState<number | null>(null);
-  // Detail sheet — shared by both tabs, holds whichever ticket was tapped.
+  // Detail Sheet State
   const [detailVisitor, setDetailVisitor] = useState<Visitor | null>(null);
   const [detailTask, setDetailTask] = useState<ParkingTask | null>(null);
 
-  const closeDetail = () => { setDetailVisitor(null); setDetailTask(null); };
-  /*
-   * Has to stay ABOVE every early return in this component, not next to the
-   * detail sheet it belongs to.
-   *
-   * It used to sit just before the main return, below the assign-driver
-   * step's `if (pendingVisitor || pendingDoctorTask) return`. That branch is
-   * taken the moment a valet opens a retrieval request, so this hook ran on
-   * the previous render and not on that one -- fewer hooks than React saw
-   * last time, which is React error #300 and takes the whole screen down.
-   *
-   * The condition it is given already handles "no detail sheet open"; a hook
-   * must be called unconditionally and decide internally, never be skipped.
-   */
+  const closeDetail = () => {
+    setDetailVisitor(null);
+    setDetailTask(null);
+  };
+
   useBackStep(!!(detailVisitor || detailTask), closeDetail);
-  // Every staff/doctor session ever, not just each doctor's single current
-  // one — the live `tasks` array is deliberately bounded to "at most one row
-  // per doctor" now, so this tab's actual record view needs its own fetch.
+  useBackStep(pendingVisitorId != null || pendingDoctorTaskId != null, () => {
+    setPendingVisitorId(null);
+    setPendingMode(null);
+    setPendingDoctorTaskId(null);
+  });
+
+  // Calendar query
+  const activeRange = selectedDate ? {from: selectedDate, to: selectedDate} : periodRange(period);
+
+  useEffect(() => {
+    if (!activeRange) {
+      setDateVisitors(null);
+      return;
+    }
+    let cancelled = false;
+    setDateLoading(true);
+    visitorsApi
+      .byRange(activeRange.from, activeRange.to)
+      .then((rows: any[]) => {
+        if (!cancelled) setDateVisitors(rows.map(mapVisitor));
+      })
+      .catch(() => {
+        if (!cancelled) setDateVisitors([]);
+      })
+      .finally(() => {
+        if (!cancelled) setDateLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRange?.from, activeRange?.to]);
+
+  const todayKey = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+
+  const calendarDateLabel = (key: string) =>
+    key === todayKey
+      ? 'Today'
+      : new Date(`${key}T00:00:00`).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'});
+
+  // Staff history fetch
   const [staffHistory, setStaffHistory] = useState<ParkingTask[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     if (tab !== 'staff') return;
     setHistoryLoading(true);
-    fetchTaskHistory().then(setStaffHistory).catch(() => {}).finally(() => setHistoryLoading(false));
-    // `tasks` (the live, socket-fed list) changing is our proxy for
-    // "something happened" — history itself isn't pushed over the socket,
-    // so this piggybacks on the one realtime signal that already exists.
+    fetchTaskHistory()
+      .then(setStaffHistory)
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
   }, [tab, fetchTaskHistory, tasks]);
 
   const q = query.trim().toLowerCase();
 
-  // The 4-stage breakdown that appears under "Active" — same stages for a
-  // visitor token and a staff/doctor session, since both run the identical
-  // park -> parked -> retrieve journey, just through different record shapes.
-  // Stage classification lives in core/valet/selectors/JobStageSelector —
-  // the same module the mobile app uses, so the two cannot drift.
   const visitorStage = (v: Visitor): Stage => selectVisitorStage(v, hasActiveRetrievalDriver);
   const staffStage = (t: ParkingTask): Stage => selectStaffStage(t);
 
-  // Completed/All need retrieved (and cancelled, for All) visitors too —
-  // activeVisitors is deliberately pre-stripped of both (see useValetActions).
-  // A selected calendar date overrides all of that — it's its own fetched
-  // snapshot of one specific day, live-bounding doesn't apply to it.
-  const visitorsSource = activeRange ? (dateVisitors ?? []) : statusFilter === 'active' ? activeVisitors : visitors;
+  const visitorsSource = activeRange ? dateVisitors ?? [] : statusFilter === 'active' ? activeVisitors : visitors;
   const visitorsFiltered = visitorsSource
     .filter(v => activeRange || matchesVisitorStatusFilter(v, statusFilter))
     .filter(v => statusFilter !== 'active' || stageFilter === 'all' || visitorStage(v) === stageFilter)
-    .filter(v => !q || v.name?.toLowerCase().includes(q) || v.carNumber?.toLowerCase().includes(q) || v.token.toLowerCase().includes(q));
+    .filter(
+      v =>
+        !q ||
+        v.name?.toLowerCase().includes(q) ||
+        v.carNumber?.toLowerCase().includes(q) ||
+        v.token.toLowerCase().includes(q)
+    );
 
-  // A doctor's most recent task tells us whether their session is still
-  // open: history has every park + retrieve row ever, staff and visitor
-  // alike, so "parked, nothing pending" is only true when the LATEST row
-  // for that doctor is a completed park (a later retrieve row, of any
-  // status, means one's already in flight or done).
   const latestTaskByDoctor = buildLatestTaskByDoctor(staffHistory);
   const canRequestStaffRetrieval = (t: ParkingTask) => coreCanRequestStaffRetrieval(t, latestTaskByDoctor);
 
-  // Active/Completed here means "is the car back with its owner yet", not
-  // the raw per-row status — a park row's own status turns 'completed' the
-  // moment the car is PARKED, well before anyone's picked it up again. A
-  // park row stays Active while it's still the doctor's open session (see
-  // canRequestStaffRetrieval); a retrieve row is Active until the valet
-  // actually confirms the handover (status -> 'completed'), which is also
-  // the moment its paired park row stops being "latest" and flips too.
-  const isStaffRowActive = (t: ParkingTask) => coreIsStaffRowActive(t, latestTaskByDoctor);
-
-  // Staff/doctor tab is the actual "how many doctors" record — every park +
-  // retrieve task, not just the ones still in progress (that live view is
-  // the Home tab's Job Queue; this one's a searchable log). Visitor-linked
-  // tasks are excluded — they already have their own tab, and an unscoped
-  // history fetch returns every task ever, staff and visitor alike.
-  // Staff history is already unbounded, so its date scope is applied here
-  // rather than by a second fetch.
   const rangeStartMs = activeRange ? new Date(`${activeRange.from}T00:00:00`).getTime() : 0;
   const rangeEndMs = activeRange ? new Date(`${activeRange.to}T00:00:00`).getTime() + 86400000 : 0;
 
@@ -318,6 +236,7 @@ Only do this if the car has physically gone — nobody ever asked for a retrieva
   const pendingVisitor = pendingVisitorId ? visitors.find(v => v.id === pendingVisitorId) ?? null : null;
   const pendingDoctorTask = pendingDoctorTaskId ? staffHistory.find(t => t.id === pendingDoctorTaskId) ?? null : null;
 
+  // ── Actions ──
   const handleAssign = async (driverId: number) => {
     if (!pendingVisitorId && !pendingDoctorTaskId) return;
     if (assigningDriverId != null) return;
@@ -330,40 +249,35 @@ Only do this if the car has physically gone — nobody ever asked for a retrieva
       } else if (pendingVisitorId != null) {
         if (pendingMode === 'retrieve') await assignVisitorRetrievalDriver(pendingVisitorId, driverId);
         else await assignVisitorPickupDriver(pendingVisitorId, driverId);
-        setPendingVisitorId(null); setPendingMode(null);
+        setPendingVisitorId(null);
+        setPendingMode(null);
       }
     } catch (err: any) {
-      dialog.alert(err.message || 'Something went wrong');
+      dialog.alert(err.message || 'Something went wrong', {title: 'Assignment Failed'});
     } finally {
       setAssigningDriverId(null);
     }
   };
 
-  // Gate-station valet taps "Request retrieval" for a staff/doctor member
-  // who called the desk — this only raises it, same as the doctor's own
-  // self-service request. The lot valet picks the driver from there (or
-  // hands it back via "No driver here" if the lot has none).
   const handleRequestStaffRetrieval = async (doctorId: number) => {
     if (requestingRetrievalDoctorId != null) return;
     setRequestingRetrievalDoctorId(doctorId);
     try {
       await requestStaffRetrieval(doctorId);
     } catch (err: any) {
-      dialog.alert(err.message || 'Could not send the retrieval request');
+      dialog.alert(err.message || 'Could not send the retrieval request', {title: 'Request Failed'});
     } finally {
       setRequestingRetrievalDoctorId(null);
     }
   };
 
-  // Gate-station valet taps "Request retrieval" for a parked visitor —
-  // this only raises it, same as the staff/doctor equivalent above.
   const handleRequestVisitorRetrieval = async (visitorId: number) => {
     if (requestingRetrievalVisitorId != null) return;
     setRequestingRetrievalVisitorId(visitorId);
     try {
       await requestVisitorRetrieval(visitorId);
     } catch (err: any) {
-      dialog.alert(err.message || 'Could not send the retrieval request');
+      dialog.alert(err.message || 'Could not send the retrieval request', {title: 'Request Failed'});
     } finally {
       setRequestingRetrievalVisitorId(null);
     }
@@ -375,7 +289,7 @@ Only do this if the car has physically gone — nobody ever asked for a retrieva
     try {
       await confirmVisitorDelivered(visitorId);
     } catch (err: any) {
-      dialog.alert(err.message || 'Could not confirm handover');
+      dialog.alert(err.message || 'Could not confirm handover', {title: 'Error'});
     } finally {
       setConfirmingVisitorId(null);
     }
@@ -387,46 +301,69 @@ Only do this if the car has physically gone — nobody ever asked for a retrieva
     try {
       await confirmTaskDelivered(taskId);
     } catch (err: any) {
-      dialog.alert(err.message || 'Could not confirm handover');
+      dialog.alert(err.message || 'Could not confirm handover', {title: 'Error'});
     } finally {
       setConfirmingTaskId(null);
+    }
+  };
+
+  const handleCloseParked = async (v: Visitor) => {
+    if (closingVisitorId != null) return;
+    const ok = await dialog.confirm({
+      title: 'Car already left?',
+      message: `This closes ${v.carNumber ?? 'this visitor'}'s session${v.slotId ? ` and marks slot ${v.slotId} FREE` : ''}.\n\nOnly do this if the car has physically gone — nobody ever asked for a retrieval.`,
+      confirmText: 'Yes, close it',
+      cancelText: 'Cancel',
+      tone: 'error',
+      destructive: true,
+    });
+    if (!ok) return;
+    setClosingVisitorId(v.id);
+    try {
+      await closeParkedVisitor(v.id);
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not close this session', {title: 'Error'});
+    } finally {
+      setClosingVisitorId(null);
     }
   };
 
   const handleCancel = async (visitorId: number) => {
     const ok = await dialog.confirm({
       title: 'Cancel Visitor Token',
-      message: 'This will cancel the check-in. This cannot be undone.',
-      confirmText: 'Cancel Token', destructive: true,
+      message: 'This will cancel the check-in. This action cannot be undone.',
+      confirmText: 'Cancel Token',
+      cancelText: 'Keep Token',
+      tone: 'error',
+      destructive: true,
     });
     if (ok) {
-      cancelVisitor(visitorId, 'valet_cancelled').catch(err => dialog.alert(err.message || 'Something went wrong'));
+      cancelVisitor(visitorId, 'valet_cancelled').catch(err =>
+        dialog.alert(err.message || 'Something went wrong', {title: 'Error'})
+      );
     }
   };
 
-  // Driver's assigned but hasn't accepted (or has, but hasn't collected the
-  // key) yet — give up on them now instead of waiting out the accept-timeout
-  // window. Mirrors the staff/task flow's "Cancel Assign".
   const handleCancelAssignment = async (visitorId: number) => {
     if (cancellingAssignmentVisitorId != null) return;
     setCancellingAssignmentVisitorId(visitorId);
     try {
       await cancelVisitorAssignment(visitorId);
     } catch (err: any) {
-      dialog.alert(err.message || 'Could not cancel the assignment');
+      dialog.alert(err.message || 'Could not cancel the assignment', {title: 'Error'});
     } finally {
       setCancellingAssignmentVisitorId(null);
     }
   };
 
-  // Past the key handover the car is physically with a driver — it can't be
-  // cancelled/no-shown anymore (see cancelVisitor's backend comment), so
-  // this is the only thing left on offer at that stage.
   const handleRecallVisitor = async (visitorId: number, carNumber?: string) => {
     const ok = await dialog.confirm({
       title: 'Bring the Car Back?',
-      message: `The driver will be told NOT to park ${carNumber || 'this car'} and to return it to the valet counter instead.`,
-      confirmText: 'Recall Car', destructive: true,
+      message: `The runner driver will be instructed NOT to park ${carNumber || 'this car'} and to return it to the valet counter instead.`,
+      confirmText: 'Recall Car',
+      cancelText: 'Cancel',
+      tone: 'warning',
+      destructive: true,
     });
     if (!ok) return;
     if (recallingVisitorId != null) return;
@@ -434,341 +371,607 @@ Only do this if the car has physically gone — nobody ever asked for a retrieva
     try {
       await recallVisitor(visitorId);
     } catch (err: any) {
-      dialog.alert(err.message || 'Could not recall the car');
+      dialog.alert(err.message || 'Could not recall the car', {title: 'Error'});
     } finally {
       setRecallingVisitorId(null);
     }
   };
 
-  const ticketStyle = (highlight: boolean): React.CSSProperties => ({
-    position: 'relative', display: 'flex', flexDirection: 'row', borderRadius: 22, marginBottom: 14, overflow: 'hidden',
-    backgroundColor: colors.surface, boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
-    ...(highlight ? {border: `2px solid ${colors.warning}`} : {}),
-  });
-  const notchStyle = (pos: 'top' | 'bottom'): React.CSSProperties => ({
-    position: 'absolute', right: STUB_W - NOTCH / 2, width: NOTCH, height: NOTCH, borderRadius: NOTCH / 2, zIndex: 2,
-    backgroundColor: colors.background,
-    ...(pos === 'top' ? {top: -NOTCH / 2} : {bottom: -NOTCH / 2}),
-  });
-  const actionBtnStyle = (bg: string): React.CSSProperties => ({
-    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 46, borderRadius: 14, marginTop: 14, backgroundColor: bg,
-  });
-
-  // ── Assign-driver step — shared by visitor + staff retrieval flows ──────
+  // ══════════════════════════════════════════════════════════════════════════
+  // SUB-VIEW: DRIVER ASSIGNMENT
+  // ══════════════════════════════════════════════════════════════════════════
   if (pendingVisitor || pendingDoctorTask) {
     return (
-      <div style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, backgroundColor: colors.background}}>
-        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 16px 16px'}}>
-          <PressableScale
-            onClick={() => { setPendingVisitorId(null); setPendingMode(null); setPendingDoctorTaskId(null); }}
-            style={{borderRadius: 10, border: `1px solid ${colors.border}`, padding: '8px 12px', backgroundColor: colors.surface}}>
-            <span style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary}}>Cancel</span>
-          </PressableScale>
-          <span style={{fontSize: 17, fontWeight: 900, color: colors.textPrimary}}>Assign Driver</span>
-          <div style={{width: 70}} />
-        </div>
-        <div className="screen-scroll" style={{padding: 20, paddingTop: 0, paddingBottom: 40}}>
-          <div style={{fontSize: 16, fontWeight: 700, marginBottom: 20, color: colors.textPrimary}}>
-            {pendingDoctorTask
-              ? `Assign a driver to retrieve ${pendingDoctorTask.carNumber} for ${pendingDoctorTask.doctorName}`
-              : pendingMode === 'retrieve'
-              ? `Assign a driver to retrieve ${pendingVisitor!.carNumber} from slot ${pendingVisitor!.slotId} for ${pendingVisitor!.name}`
-              : `Tap a driver to collect the key and park ${pendingVisitor!.name}'s car (${pendingVisitor!.carNumber})`}
+      <div className="valet-workstation-viewport" style={{backgroundColor: isDark ? '#0B0F17' : '#F8FAFC'}}>
+        <div className="valet-container" style={{maxWidth: 640}}>
+          {/* Header */}
+          <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => {
+                setPendingVisitorId(null);
+                setPendingMode(null);
+                setPendingDoctorTaskId(null);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 12px',
+                borderRadius: 8,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0'}`,
+                cursor: 'pointer',
+              }}
+            >
+              <Icon name="back" size={16} color={colors.textPrimary} />
+              <span style={{fontSize: 13, fontWeight: 600, color: colors.textPrimary}}>Cancel</span>
+            </button>
+            <span style={{fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: colors.textMuted}}>
+              Assign Driver
+            </span>
           </div>
+
+          {/* Context Card */}
+          <div
+            className="valet-glass-card"
+            style={{
+              padding: 16,
+              backgroundColor: isDark ? 'rgba(37,99,235,0.1)' : 'rgba(37,99,235,0.05)',
+              border: '1.5px solid rgba(37,99,235,0.22)',
+            }}
+          >
+            <span style={{fontSize: 11, fontWeight: 800, color: '#2563EB', textTransform: 'uppercase', letterSpacing: 0.6}}>
+              Target Vehicle
+            </span>
+            <div style={{fontSize: 18, fontWeight: 800, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums', marginTop: 2}}>
+              {pendingDoctorTask ? pendingDoctorTask.carNumber : pendingVisitor?.carNumber || 'Vehicle'}
+            </div>
+            <div style={{fontSize: 12.5, color: colors.textSecondary, marginTop: 2}}>
+              {pendingDoctorTask
+                ? `Dr. ${pendingDoctorTask.doctorName} · Retrieval Assignment`
+                : pendingMode === 'retrieve'
+                ? `Visitor ${pendingVisitor?.name || 'Guest'} · Retrieval from Bay ${pendingVisitor?.slotId || '—'}`
+                : `Visitor ${pendingVisitor?.name || 'Guest'} · Key Collection & Park`}
+            </div>
+          </div>
+
           <DriverPickerList drivers={availableDrivers} onAssign={handleAssign} assigningId={assigningDriverId} />
         </div>
       </div>
     );
   }
 
-  const renderVisitorTicket = (v: Visitor) => {
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER CARD: VISITOR RECORD (Restrained Enterprise Record)
+  // ══════════════════════════════════════════════════════════════════════════
+  const renderVisitorCard = (v: Visitor) => {
     const needsDriver = v.status === 'parked' && v.retrievalRequested && !hasActiveRetrievalDriver(v);
     const retrieving = v.status === 'parked' && v.retrievalRequested && !needsDriver;
     const parkedIdle = v.status === 'parked' && !v.retrievalRequested;
     const delivered = v.status === 'delivered';
-    // Two-station handoff: a gate valet may see this needing a driver, but
-    // assigning it is the lot valet's job unless the lot side has punted it
-    // back — see canAssignRetrieval. No linked task (shouldn't happen once
-    // needsDriver is true, but there's nothing to gate against) defaults to
-    // allowed rather than silently hiding a real action.
     const retrieveTask = needsDriver ? visitorRetrieveTask(v) : null;
     const canAssignThis = !retrieveTask || canAssignRetrieval(retrieveTask, myValetId, myStation);
-    // The visitor row itself doesn't track a driver's key handover — that
-    // lives on its linked ParkingTask (see backend createVisitor). Reading
-    // it here is what tells the difference between "nobody's touched this
-    // yet" (Cancel/No-Show is still valid) and "a driver already has the
-    // key" (only a recall makes sense from here on).
-    const linkedTask = tasks.find(t => t.visitorId === v.id && t.type === 'park' && t.status !== 'completed' && t.status !== 'cancelled');
-    // A driver being assigned isn't the same as a driver having the key —
-    // the backend's recall guard only accepts a recall once the linked task
-    // is actually past key handover (key_collected/in_transit; see backend
-    // recallVisitor → taskService().recallTask). pickedUpAt is the moment
-    // the driver confirms they've collected the vehicle from the counter,
-    // so it's the real gate here (see mobile app's identical fix).
+
+    const linkedTask = tasks.find(
+      t => t.visitorId === v.id && t.type === 'park' && t.status !== 'completed' && t.status !== 'cancelled'
+    );
     const keyWithDriver = v.status === 'pending' && !!v.driverId && !!v.pickedUpAt;
     const awaitingAccept = v.status === 'pending' && !!v.driverId && !v.pickedUpAt;
     const awaitingDriver = v.status === 'pending' && !v.driverId;
     const recalled = !!linkedTask?.recalledAt;
-    const chipTone = parkedIdle ? colors.success : colors.warning;
-    const chipBg = parkedIdle ? colors.successLight : colors.warningLight;
-    const chipLabel = parkedIdle ? `Parked · ${v.slotId ?? ''}`
-      : delivered ? 'Awaiting pickup confirmation'
-      : retrieving ? 'Retrieving'
-      : needsDriver ? 'Ready to leave'
-      : v.pickedUpAt ? 'Parking now'
-      : v.acceptedAt ? 'Collecting key'
-      : v.driverId ? 'Awaiting accept'
-      : v.status === 'retrieved' ? 'Retrieved'
-      : 'Awaiting driver';
-    const swatch = tokenColour(v.token);
+
+    // Semantic status pill formatting
+    const statusText = parkedIdle
+      ? `🅿️ Parked · ${v.slotId ?? 'Bay'}`
+      : delivered
+      ? 'Awaiting pickup confirmation'
+      : retrieving
+      ? '🏃 Driver en route'
+      : needsDriver
+      ? '🚨 Ready for retrieval'
+      : v.pickedUpAt
+      ? 'Parking in progress'
+      : v.acceptedAt
+      ? 'Collecting key'
+      : v.driverId
+      ? 'Awaiting accept'
+      : v.status === 'retrieved'
+      ? '✅ Retrieved'
+      : 'Awaiting runner';
+
+    const statusTone = parkedIdle || v.status === 'retrieved'
+      ? {bg: 'rgba(5, 150, 105, 0.1)', color: '#059669', border: 'rgba(5, 150, 105, 0.25)'}
+      : delivered || needsDriver
+      ? {bg: 'rgba(225, 29, 72, 0.1)', color: '#E11D48', border: 'rgba(225, 29, 72, 0.25)'}
+      : {bg: 'rgba(37, 99, 235, 0.1)', color: '#2563EB', border: 'rgba(37, 99, 235, 0.25)'};
 
     return (
-      <div key={v.id} style={ticketStyle(delivered)}>
-        {/* perforation notches — cut into the card by the screen background */}
-        <div style={notchStyle('top')} />
-        <div style={notchStyle('bottom')} />
-
-        {/* main body */}
-        <div style={{flex: 1, padding: '16px 12px 16px 18px', minWidth: 0}}>
-          <div style={{display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8}}>
-            <span style={{fontSize: 18, fontWeight: 800, color: colors.textPrimary}}>{v.name || 'Visitor'}</span>
-            <span style={{display: 'flex', alignItems: 'center', borderRadius: 99, padding: '4px 9px', backgroundColor: chipBg}}>
-              <span style={{fontSize: 11.5, fontWeight: 700, color: chipTone}}>{chipLabel}</span>
-            </span>
-            <PressableScale style={{width: 22, height: 22, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt}} onClick={() => setDetailVisitor(v)}>
-              <Icon name="info" size={13} color={colors.textSecondary} />
-            </PressableScale>
-          </div>
-
-          <div style={{display: 'flex', alignItems: 'center', gap: 8, marginTop: 7}}>
-            <span style={{width: 22, height: 10, borderRadius: 3, backgroundColor: swatch, display: 'inline-block'}} />
-            <span style={{fontSize: 13, fontWeight: 700, letterSpacing: 1.2, color: colors.textSecondary}}>{v.carNumber ?? 'No plate'}</span>
-          </div>
-
-          {parkedIdle && (
-            <>
-              <PressableScale
-                style={{...actionBtnStyle(colors.primary), opacity: requestingRetrievalVisitorId === v.id ? 0.6 : 1}}
-                disabled={requestingRetrievalVisitorId === v.id}
-                onClick={() => {
-                  if (myStation === 'gate') { handleRequestVisitorRetrieval(v.id); return; }
-                  setPendingVisitorId(v.id); setPendingMode('retrieve');
-                }}>
-                {requestingRetrievalVisitorId === v.id
-                  ? <span className="spinner" style={{width: 15, height: 15, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: colors.textOnPrimary}} />
-                  : <span style={{fontSize: 14, fontWeight: 700, color: colors.textOnPrimary}}>Request retrieval</span>}
-                {requestingRetrievalVisitorId !== v.id && <Icon name="arrowRight" size={15} color={colors.textOnPrimary} />}
-              </PressableScale>
-              {/* Secondary on purpose — it frees a bay, and must never be the
-                  button someone hits by muscle memory. */}
-              <PressableScale
-                onClick={() => handleCloseParked(v)}
-                disabled={closingVisitorId === v.id}
-                style={{...actionBtnStyle('transparent'), border: `1px solid ${colors.border}`, marginTop: 8}}
+      <div
+        key={v.id}
+        className="valet-glass-card"
+        style={{
+          padding: 16,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          border: delivered ? '1.5px solid #059669' : undefined,
+        }}
+      >
+        {/* Header Row: Token + Plate + Status */}
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10}}>
+          <div>
+            <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: 0.8,
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F1F5F9',
+                  color: colors.textSecondary,
+                }}
               >
-                <span style={{fontSize: 14, fontWeight: 700, color: colors.textSecondary}}>
-                  {closingVisitorId === v.id ? 'Closing…' : 'Car already left'}
-                </span>
-              </PressableScale>
-            </>
-          )}
-          {needsDriver && (canAssignThis ? (
-            <PressableScale style={actionBtnStyle(colors.warning)}
-              onClick={() => { setPendingVisitorId(v.id); setPendingMode('retrieve'); }}>
-              <span style={{fontSize: 14, fontWeight: 700, color: '#fff'}}>Assign driver</span>
-              <Icon name="arrowRight" size={15} color="#fff" />
-            </PressableScale>
-          ) : (
-            <div style={{...actionBtnStyle('transparent'), border: `1px solid ${colors.border}`}}>
-              <Icon name="clock" size={13} color={colors.textMuted} />
-              <span style={{fontSize: 13, fontWeight: 700, color: colors.textMuted}}>Waiting for the lot valet to assign a driver</span>
-            </div>
-          ))}
-          {retrieving && (
-            <div style={{...actionBtnStyle(colors.warningLight)}}>
-              <span style={{fontSize: 14, fontWeight: 700, color: colors.warning}}>{v.driverName ?? 'Driver'} en route…</span>
-            </div>
-          )}
-          {delivered && (
-            <PressableScale
-              style={{...actionBtnStyle(colors.success), opacity: confirmingVisitorId === v.id ? 0.6 : 1}}
-              disabled={confirmingVisitorId === v.id}
-              onClick={() => handleConfirmVisitorDelivered(v.id)}>
-              {confirmingVisitorId === v.id
-                ? <span className="spinner" style={{width: 15, height: 15, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} />
-                : <Icon name="checkBold" size={15} color="#fff" />}
-              <span style={{fontSize: 14, fontWeight: 700, color: '#fff'}}>
-                {confirmingVisitorId === v.id ? 'Please wait…' : 'Confirm handed to owner'}
+                TOKEN #{v.token}
               </span>
-            </PressableScale>
-          )}
-          {/* Awaiting driver — nobody's touched this yet, cancel/no-show is
-              still the right call. */}
-          {awaitingDriver && (
-            <PressableScale style={{...actionBtnStyle('transparent'), border: `1.5px solid ${colors.border}`}}
-              onClick={() => handleCancel(v.id)}>
-              <Icon name="close" size={14} color={colors.textSecondary} />
-              <span style={{fontSize: 14, fontWeight: 700, color: colors.textSecondary}}>Cancel</span>
-            </PressableScale>
-          )}
-          {/* Driver assigned but hasn't collected the key yet — recall isn't
-              valid until they do (see keyWithDriver above), so the only real
-              action here is giving up on this driver and re-assigning. */}
-          {awaitingAccept && (
-            <div style={{display: 'flex', gap: 8, marginTop: 14}}>
-              <div style={{...actionBtnStyle('transparent'), flex: 1, marginTop: 0, border: `1.5px solid ${colors.border}`}}>
-                <Icon name="timer" size={13} color={colors.textMuted} />
-                <span style={{fontSize: 13, fontWeight: 700, color: colors.textMuted, whiteSpace: 'nowrap'}}>
-                  {v.acceptedAt ? 'Collecting key…' : 'Waiting to accept…'}
-                </span>
-              </div>
-              {!v.acceptedAt && (
-                <PressableScale
-                  style={{...actionBtnStyle('transparent'), marginTop: 0, border: `1.5px solid ${colors.border}`, padding: '0 14px', width: 'auto'}}
-                  disabled={cancellingAssignmentVisitorId === v.id}
-                  onClick={() => handleCancelAssignment(v.id)}>
-                  <span style={{fontSize: 13, fontWeight: 700, color: colors.textSecondary}}>
-                    {cancellingAssignmentVisitorId === v.id ? 'Cancelling…' : 'Cancel Assign'}
-                  </span>
-                </PressableScale>
-              )}
-            </div>
-          )}
-          {/* A driver already has the key — the car is physically gone, so
-              cancelling/no-showing it no longer makes sense. The only real
-              action left is asking for it back. */}
-          {keyWithDriver && !recalled && (
-            <PressableScale style={{...actionBtnStyle('transparent'), border: `1.5px solid ${colors.warning}`}}
-              onClick={() => handleRecallVisitor(v.id, v.carNumber)}>
-              <Icon name="back" size={14} color={colors.warning} />
-              <span style={{fontSize: 14, fontWeight: 700, color: colors.warning}}>Bring back my car</span>
-            </PressableScale>
-          )}
-          {keyWithDriver && recalled && linkedTask?.status !== 'delivered' && (
-            <div style={actionBtnStyle(colors.cardAlt)}>
-              <Icon name="timer" size={14} color={colors.textMuted} />
-              <span style={{fontSize: 14, fontWeight: 700, color: colors.textMuted}}>Driver is bringing it back…</span>
-            </div>
-          )}
-          {keyWithDriver && linkedTask?.status === 'delivered' && (
-            <PressableScale
-              style={{...actionBtnStyle(colors.success), opacity: confirmingTaskId === linkedTask.id ? 0.6 : 1}}
-              disabled={confirmingTaskId === linkedTask.id}
-              onClick={() => handleConfirmTaskDelivered(linkedTask.id)}>
-              {confirmingTaskId === linkedTask.id
-                ? <span className="spinner" style={{width: 15, height: 15, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} />
-                : <Icon name="checkBold" size={15} color="#fff" />}
-              <span style={{fontSize: 14, fontWeight: 700, color: '#fff'}}>
-                {confirmingTaskId === linkedTask.id ? 'Please wait…' : 'Confirm car returned'}
+              <span
+                style={{
+                  fontSize: 16,
+                  fontWeight: 800,
+                  fontVariantNumeric: 'tabular-nums',
+                  letterSpacing: '0.04em',
+                  color: colors.textPrimary,
+                }}
+              >
+                {v.carNumber ?? 'NO PLATE'}
               </span>
-            </PressableScale>
-          )}
+            </div>
+            <div style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary, marginTop: 4}}>
+              {v.name || 'Visitor'}
+            </div>
+          </div>
+
+          <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                padding: '3px 8px',
+                borderRadius: 6,
+                backgroundColor: statusTone.bg,
+                color: statusTone.color,
+                border: `1px solid ${statusTone.border}`,
+              }}
+            >
+              {statusText}
+            </span>
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => setDetailVisitor(v)}
+              title="Inspect Lifecycle Timeline"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1'}`,
+                backgroundColor: 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: colors.textSecondary,
+                cursor: 'pointer',
+              }}
+            >
+              <Icon name="info" size={14} color={colors.textSecondary} />
+            </button>
+          </div>
         </div>
 
-        {/* ticket stub */}
-        <PerfLine color={colors.border} />
-        <div style={{width: STUB_W - 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, padding: '16px 0', flexShrink: 0}}>
-          <span style={{fontSize: 9.5, fontWeight: 700, letterSpacing: 2, color: colors.textMuted}}>TOKEN</span>
-          <span style={{fontSize: 24, fontWeight: 800, color: colors.textPrimary}}>#{v.token}</span>
-          <span style={{fontSize: 10.5, fontWeight: 600, color: colors.textMuted}}>{v.slotId ?? '—'}</span>
-          <span style={{marginTop: 6, width: 22, height: 5, borderRadius: 99, opacity: 0.7, backgroundColor: swatch}} />
+        {/* Metadata Details */}
+        <div style={{fontSize: 12, color: colors.textMuted, display: 'flex', flexWrap: 'wrap', gap: 12}}>
+          <span>Mobile: <strong>{v.mobile}</strong></span>
+          {v.slotId && <span>Bay: <strong>{v.slotId}</strong></span>}
+          {v.driverName && <span>Runner: <strong>{v.driverName}</strong></span>}
+          <span>Checked in: {fmtTime(v.createdAt)}</span>
         </div>
+
+        {/* Action Row */}
+        {parkedIdle && (
+          <div style={{display: 'flex', gap: 8, marginTop: 2}}>
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => {
+                if (myStation === 'gate') {
+                  handleRequestVisitorRetrieval(v.id);
+                  return;
+                }
+                setPendingVisitorId(v.id);
+                setPendingMode('retrieve');
+              }}
+              disabled={requestingRetrievalVisitorId === v.id}
+              style={{
+                flex: 1,
+                height: 38,
+                borderRadius: 6,
+                backgroundColor: '#2563EB',
+                color: '#FFFFFF',
+                border: 'none',
+                fontSize: 12.5,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                cursor: 'pointer',
+              }}
+            >
+              {requestingRetrievalVisitorId === v.id ? (
+                <span className="spinner" style={{width: 14, height: 14}} />
+              ) : (
+                <>
+                  <Icon name="arrowRight" size={14} color="#FFFFFF" />
+                  <span>Request Retrieval</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => handleCloseParked(v)}
+              disabled={closingVisitorId === v.id}
+              title="Car physically left without requesting retrieval"
+              style={{
+                padding: '0 10px',
+                height: 38,
+                borderRadius: 6,
+                backgroundColor: 'transparent',
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1'}`,
+                color: colors.textSecondary,
+                fontSize: 11.5,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {closingVisitorId === v.id ? 'Closing…' : 'Car Already Left'}
+            </button>
+          </div>
+        )}
+
+        {needsDriver && (
+          canAssignThis ? (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => {
+                setPendingVisitorId(v.id);
+                setPendingMode('retrieve');
+              }}
+              style={{
+                width: '100%',
+                height: 38,
+                borderRadius: 6,
+                backgroundColor: '#D97706',
+                color: '#FFFFFF',
+                border: 'none',
+                fontSize: 12.5,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                cursor: 'pointer',
+              }}
+            >
+              <Icon name="people" size={14} color="#FFFFFF" />
+              <span>Assign Retrieval Runner</span>
+            </button>
+          ) : (
+            <div style={{fontSize: 12, color: colors.textMuted, fontStyle: 'italic'}}>
+              Waiting for the lot valet to dispatch a runner driver
+            </div>
+          )
+        )}
+
+        {delivered && (
+          <button
+            type="button"
+            className="pressable"
+            onClick={() => handleConfirmVisitorDelivered(v.id)}
+            disabled={confirmingVisitorId === v.id}
+            style={{
+              width: '100%',
+              height: 38,
+              borderRadius: 6,
+              backgroundColor: '#059669',
+              color: '#FFFFFF',
+              border: 'none',
+              fontSize: 12.5,
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              cursor: 'pointer',
+            }}
+          >
+            {confirmingVisitorId === v.id ? (
+              <span className="spinner" style={{width: 14, height: 14}} />
+            ) : (
+              <>
+                <Icon name="checkBold" size={14} color="#FFFFFF" />
+                <span>Confirm Handed to Owner</span>
+              </>
+            )}
+          </button>
+        )}
+
+        {awaitingDriver && (
+          <button
+            type="button"
+            className="pressable"
+            onClick={() => handleCancel(v.id)}
+            style={{
+              width: '100%',
+              height: 34,
+              borderRadius: 6,
+              backgroundColor: 'transparent',
+              border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1'}`,
+              color: colors.textSecondary,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Cancel Token
+          </button>
+        )}
+
+        {awaitingAccept && (
+          <div style={{display: 'flex', gap: 8}}>
+            <div style={{flex: 1, fontSize: 12, color: colors.textMuted, display: 'flex', alignItems: 'center'}}>
+              {v.acceptedAt ? 'Runner collecting key…' : 'Runner waiting to accept…'}
+            </div>
+            {!v.acceptedAt && (
+              <button
+                type="button"
+                className="pressable"
+                onClick={() => handleCancelAssignment(v.id)}
+                disabled={cancellingAssignmentVisitorId === v.id}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1'}`,
+                  background: 'transparent',
+                  color: colors.textSecondary,
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {cancellingAssignmentVisitorId === v.id ? 'Cancelling…' : 'Cancel Assign'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {keyWithDriver && !recalled && (
+          <button
+            type="button"
+            className="pressable"
+            onClick={() => handleRecallVisitor(v.id, v.carNumber)}
+            disabled={recallingVisitorId === v.id}
+            style={{
+              width: '100%',
+              height: 36,
+              borderRadius: 6,
+              backgroundColor: 'transparent',
+              border: '1px solid #D97706',
+              color: '#D97706',
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            {recallingVisitorId === v.id ? 'Recalling…' : 'Recall Vehicle to Gate'}
+          </button>
+        )}
       </div>
     );
   };
 
-  // Staff/doctor tab — read-only record (assigning drivers / marking key
-  // handed off already lives on the Home tab's Job Queue; duplicating those
-  // actions here would just be the same "two places for one job" problem
-  // this whole redesign was meant to get rid of).
-  const renderStaffTicket = (t: ParkingTask) => {
-    // 'requested'/'accepted' are the same "no driver yet" state as 'assigned'
-    // with no driverId — assignDriver always flips status straight to
-    // 'assigned' once a driver is picked, so either of these always means
-    // nobody's been assigned yet.
-    const needsDriver = (t.status === 'assigned' || t.status === 'requested' || t.status === 'accepted') && !t.driverId;
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER CARD: STAFF RECORD (Restrained Enterprise Record)
+  // ══════════════════════════════════════════════════════════════════════════
+  const renderStaffCard = (t: ParkingTask) => {
     const delivered = t.status === 'delivered';
     const cancelled = t.status === 'cancelled';
     const canRetrieve = canRequestStaffRetrieval(t);
-    const chipTone = t.status === 'completed' ? colors.success : cancelled ? colors.textMuted : colors.warning;
-    const chipBg = t.status === 'completed' ? colors.successLight : cancelled ? colors.cardAlt : colors.warningLight;
-    const chipLabel = t.status === 'completed'
-      ? (t.type === 'park' ? (canRetrieve ? `Parked · ${t.slotId ?? ''}` : 'Completed') : 'Retrieved')
-      : cancelled ? 'Cancelled'
-      : delivered ? 'Awaiting pickup confirmation'
-      : needsDriver ? 'Awaiting driver'
-      : t.status === 'in_transit' ? 'In transit'
-      : t.status === 'key_collected' ? 'Driver has key'
+
+    const statusText = t.status === 'completed'
+      ? t.type === 'park'
+        ? canRetrieve ? `🅿️ Parked · ${t.slotId ?? 'Bay'}` : '✅ Park Completed'
+        : '✅ Retrieved'
+      : cancelled
+      ? 'Cancelled'
+      : delivered
+      ? 'Awaiting pickup confirmation'
+      : t.status === 'in_transit'
+      ? '🏃 In transit'
+      : t.status === 'key_collected'
+      ? 'Driver has key'
       : 'Driver assigned';
-    const swatch = tokenColour(`${t.type}-${t.id}`);
+
+    const statusTone = t.status === 'completed'
+      ? {bg: 'rgba(5, 150, 105, 0.1)', color: '#059669', border: 'rgba(5, 150, 105, 0.25)'}
+      : cancelled
+      ? {bg: isDark ? 'rgba(255,255,255,0.04)' : '#F1F5F9', color: colors.textMuted, border: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0'}
+      : {bg: 'rgba(37, 99, 235, 0.1)', color: '#2563EB', border: 'rgba(37, 99, 235, 0.25)'};
 
     return (
-      <div key={t.id} style={ticketStyle(delivered)}>
-        <div style={notchStyle('top')} />
-        <div style={notchStyle('bottom')} />
-
-        <div style={{flex: 1, padding: '16px 12px 16px 18px', minWidth: 0}}>
-          <div style={{display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8}}>
-            <span style={{fontSize: 18, fontWeight: 800, color: colors.textPrimary}}>{t.doctorName}</span>
-            <span style={{display: 'flex', alignItems: 'center', borderRadius: 99, padding: '4px 9px', backgroundColor: chipBg}}>
-              <span style={{fontSize: 11.5, fontWeight: 700, color: chipTone}}>{chipLabel}</span>
-            </span>
-            <PressableScale style={{width: 22, height: 22, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt}} onClick={() => setDetailTask(t)}>
-              <Icon name="info" size={13} color={colors.textSecondary} />
-            </PressableScale>
-          </div>
-
-          <div style={{display: 'flex', alignItems: 'center', gap: 8, marginTop: 7}}>
-            <span style={{width: 22, height: 10, borderRadius: 3, backgroundColor: swatch, display: 'inline-block'}} />
-            <span style={{fontSize: 13, fontWeight: 700, letterSpacing: 1.2, color: colors.textSecondary}}>{t.carNumber}</span>
-          </div>
-
-          {(!!t.driverName || (t.type === 'park' && !!t.completedAt)) && (
-            <div style={{marginTop: 8, display: 'flex', flexDirection: 'column', gap: 2}}>
-              {!!t.driverName && <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Driver: {t.driverName}</span>}
-              {/* Arrival time — when the driver actually parked the car, not
-                  when the job was created/assigned. Only meaningful for a
-                  park task that's actually reached that point. */}
-              {t.type === 'park' && !!t.completedAt && (
-                <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Parked at {fmtTime(t.completedAt)}</span>
-              )}
-            </div>
-          )}
-
-          {canRetrieve && (
-            <PressableScale
-              style={{...actionBtnStyle(colors.primary), opacity: requestingRetrievalDoctorId === t.doctorId ? 0.6 : 1}}
-              disabled={requestingRetrievalDoctorId === t.doctorId}
-              onClick={() => (myStation === 'gate' ? handleRequestStaffRetrieval(t.doctorId) : setPendingDoctorTaskId(t.id))}>
-              {requestingRetrievalDoctorId === t.doctorId
-                ? <span className="spinner" style={{width: 15, height: 15, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: colors.textOnPrimary}} />
-                : <span style={{fontSize: 14, fontWeight: 700, color: colors.textOnPrimary}}>Request retrieval</span>}
-              {requestingRetrievalDoctorId !== t.doctorId && <Icon name="arrowRight" size={15} color={colors.textOnPrimary} />}
-            </PressableScale>
-          )}
-
-          {delivered && (
-            <PressableScale
-              style={{...actionBtnStyle(colors.success), opacity: confirmingTaskId === t.id ? 0.6 : 1}}
-              disabled={confirmingTaskId === t.id}
-              onClick={() => handleConfirmTaskDelivered(t.id)}>
-              {confirmingTaskId === t.id
-                ? <span className="spinner" style={{width: 15, height: 15, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} />
-                : <Icon name="checkBold" size={15} color="#fff" />}
-              <span style={{fontSize: 14, fontWeight: 700, color: '#fff'}}>
-                {confirmingTaskId === t.id ? 'Please wait…' : 'Confirm handed to owner'}
+      <div
+        key={t.id}
+        className="valet-glass-card"
+        style={{
+          padding: 16,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          border: delivered ? '1.5px solid #059669' : undefined,
+        }}
+      >
+        {/* Header Row */}
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10}}>
+          <div>
+            <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: 0.8,
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F1F5F9',
+                  color: colors.textSecondary,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {t.type} #{t.id}
               </span>
-            </PressableScale>
-          )}
+              <span
+                style={{
+                  fontSize: 16,
+                  fontWeight: 800,
+                  fontVariantNumeric: 'tabular-nums',
+                  letterSpacing: '0.04em',
+                  color: colors.textPrimary,
+                }}
+              >
+                {t.carNumber}
+              </span>
+            </div>
+            <div style={{fontSize: 13, fontWeight: 700, color: colors.textPrimary, marginTop: 4}}>
+              {t.doctorName}
+            </div>
+          </div>
+
+          <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                padding: '3px 8px',
+                borderRadius: 6,
+                backgroundColor: statusTone.bg,
+                color: statusTone.color,
+                border: `1px solid ${statusTone.border}`,
+              }}
+            >
+              {statusText}
+            </span>
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => setDetailTask(t)}
+              title="Inspect Lifecycle Timeline"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1'}`,
+                backgroundColor: 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: colors.textSecondary,
+                cursor: 'pointer',
+              }}
+            >
+              <Icon name="info" size={14} color={colors.textSecondary} />
+            </button>
+          </div>
         </div>
 
-        <PerfLine color={colors.border} />
-        <div style={{width: STUB_W - 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, padding: '16px 0', flexShrink: 0}}>
-          <span style={{fontSize: 9.5, fontWeight: 700, letterSpacing: 2, color: colors.textMuted}}>{t.type === 'park' ? 'PARK' : 'RETRIEVE'}</span>
-          <span style={{fontSize: 24, fontWeight: 800, color: colors.textPrimary}}>#{t.id}</span>
-          <span style={{fontSize: 10.5, fontWeight: 600, color: colors.textMuted}}>{t.slotId ?? '—'}</span>
-          <span style={{marginTop: 6, width: 22, height: 5, borderRadius: 99, opacity: 0.7, backgroundColor: swatch}} />
+        {/* Metadata Details */}
+        <div style={{fontSize: 12, color: colors.textMuted, display: 'flex', flexWrap: 'wrap', gap: 12}}>
+          {t.doctorDepartment && <span>Dept: <strong>{t.doctorDepartment}</strong></span>}
+          {t.slotId && <span>Bay: <strong>{t.slotId}</strong></span>}
+          {t.driverName && <span>Runner: <strong>{t.driverName}</strong></span>}
+          {t.type === 'park' && t.completedAt && <span>Parked: {fmtTime(t.completedAt)}</span>}
         </div>
+
+        {/* Action Row */}
+        {canRetrieve && (
+          <button
+            type="button"
+            className="pressable"
+            onClick={() =>
+              myStation === 'gate' ? handleRequestStaffRetrieval(t.doctorId) : setPendingDoctorTaskId(t.id)
+            }
+            disabled={requestingRetrievalDoctorId === t.doctorId}
+            style={{
+              width: '100%',
+              height: 38,
+              borderRadius: 6,
+              backgroundColor: '#2563EB',
+              color: '#FFFFFF',
+              border: 'none',
+              fontSize: 12.5,
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              cursor: 'pointer',
+            }}
+          >
+            {requestingRetrievalDoctorId === t.doctorId ? (
+              <span className="spinner" style={{width: 14, height: 14}} />
+            ) : (
+              <>
+                <Icon name="arrowRight" size={14} color="#FFFFFF" />
+                <span>Request Retrieval</span>
+              </>
+            )}
+          </button>
+        )}
+
+        {delivered && (
+          <button
+            type="button"
+            className="pressable"
+            onClick={() => handleConfirmTaskDelivered(t.id)}
+            disabled={confirmingTaskId === t.id}
+            style={{
+              width: '100%',
+              height: 38,
+              borderRadius: 6,
+              backgroundColor: '#059669',
+              color: '#FFFFFF',
+              border: 'none',
+              fontSize: 12.5,
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              cursor: 'pointer',
+            }}
+          >
+            {confirmingTaskId === t.id ? (
+              <span className="spinner" style={{width: 14, height: 14}} />
+            ) : (
+              <>
+                <Icon name="checkBold" size={14} color="#FFFFFF" />
+                <span>Confirm Handed to Owner</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
     );
   };
@@ -776,227 +979,487 @@ Only do this if the car has physically gone — nobody ever asked for a retrieva
   const filtered = tab === 'visitors' ? visitorsFiltered : tab === 'staff' ? staffFiltered : [];
   const totalCount = tab === 'visitors' ? visitorsSource.length : tab === 'staff' ? staffHistory.length : 0;
 
-  const detailRows: [string, string][] | null = detailVisitor ? [
-    ['Token', `#${detailVisitor.token}`],
-    ['Car number', detailVisitor.carNumber || 'No plate'],
-    ['Vehicle', detailVisitor.vehicleType === 'bike' ? 'Bike' : 'Car'],
-    ['Mobile', detailVisitor.mobile],
-    ['Status', detailVisitor.status],
-    ['Slot', detailVisitor.slotId ?? '—'],
-    ['Driver', detailVisitor.driverName ?? '—'],
-    ['Checked in', fmtTime(detailVisitor.createdAt) ?? '—'],
-    ...(detailVisitor.pickedUpAt ? [['Key collected', fmtTime(detailVisitor.pickedUpAt)!]] as [string, string][] : []),
-    ...(detailVisitor.cancelledAt ? [['Cancelled', fmtTime(detailVisitor.cancelledAt)!]] as [string, string][] : []),
-    ...(detailVisitor.cancelReason ? [['Reason', detailVisitor.cancelReason.replace('_', ' ')]] as [string, string][] : []),
-  ] : detailTask ? [
-    ['Type', detailTask.type === 'park' ? 'Park' : 'Retrieve'],
-    ['Car number', detailTask.carNumber],
-    ['Department', detailTask.doctorDepartment || '—'],
-    ['Employee ID', detailTask.doctorEmployeeId || '—'],
-    ['Status', detailTask.status.replace('_', ' ')],
-    ['Slot', detailTask.slotId ?? '—'],
-    ['Driver', detailTask.driverName ?? '—'],
-    ['Valet', detailTask.valetName ?? '—'],
-    ...(detailTask.assignedAt ? [['Assigned', fmtTime(detailTask.assignedAt)!]] as [string, string][] : []),
-    ...(detailTask.completedAt ? [['Completed', fmtTime(detailTask.completedAt)!]] as [string, string][] : []),
-  ] : null;
+  const detailRows: [string, string][] | null = detailVisitor
+    ? [
+        ['Token', `#${detailVisitor.token}`],
+        ['Car number', detailVisitor.carNumber || 'No plate'],
+        ['Vehicle', detailVisitor.vehicleType === 'bike' ? 'Bike' : 'Car'],
+        ['Mobile', detailVisitor.mobile],
+        ['Status', detailVisitor.status],
+        ['Slot', detailVisitor.slotId ?? '—'],
+        ['Driver', detailVisitor.driverName ?? '—'],
+        ['Checked in', fmtTime(detailVisitor.createdAt) ?? '—'],
+        ...(detailVisitor.pickedUpAt ? ([['Key collected', fmtTime(detailVisitor.pickedUpAt)!]] as [string, string][]) : []),
+        ...(detailVisitor.cancelledAt ? ([['Cancelled', fmtTime(detailVisitor.cancelledAt)!]] as [string, string][]) : []),
+        ...(detailVisitor.cancelReason
+          ? ([['Reason', detailVisitor.cancelReason.replace('_', ' ')]] as [string, string][])
+          : []),
+      ]
+    : detailTask
+    ? [
+        ['Type', detailTask.type === 'park' ? 'Park' : 'Retrieve'],
+        ['Car number', detailTask.carNumber],
+        ['Department', detailTask.doctorDepartment || '—'],
+        ['Employee ID', detailTask.doctorEmployeeId || '—'],
+        ['Status', detailTask.status.replace('_', ' ')],
+        ['Slot', detailTask.slotId ?? '—'],
+        ['Driver', detailTask.driverName ?? '—'],
+        ['Valet', detailTask.valetName ?? '—'],
+        ...(detailTask.assignedAt ? ([['Assigned', fmtTime(detailTask.assignedAt)!]] as [string, string][]) : []),
+        ...(detailTask.completedAt ? ([['Completed', fmtTime(detailTask.completedAt)!]] as [string, string][]) : []),
+      ]
+    : null;
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // MAIN VIEW: VALET RECORDS & AUDIT WORKSTATION
+  // ══════════════════════════════════════════════════════════════════════════
   return (
-    <div style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, backgroundColor: colors.background}}>
-      <div style={{display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '16px 20px 0'}}>
-        <span style={{fontSize: 26, fontWeight: 900, color: colors.textPrimary}}>Jobs</span>
-        {tab !== 'map' && (
-          <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>{filtered.length} of {totalCount}</span>
-        )}
-      </div>
+    <div className="valet-workstation-viewport" style={{backgroundColor: isDark ? '#0B0F17' : '#F8FAFC'}}>
+      <div className="valet-container">
+        {/* WORKSTATION HEADER */}
+        <div
+          className="valet-glass-card"
+          style={{
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
+          <div>
+            <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+              <h1 style={{fontSize: 18, fontWeight: 800, color: colors.textPrimary, margin: 0}}>
+                Valet Job Records
+              </h1>
+              <span
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  letterSpacing: 0.6,
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  backgroundColor: 'rgba(37,99,235,0.1)',
+                  color: '#2563EB',
+                  border: '1px solid rgba(37,99,235,0.25)',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Audit Log
+              </span>
+            </div>
+            <div style={{fontSize: 12, color: colors.textSecondary, marginTop: 2}}>
+              Historical session records &bull; Verified vehicle tracking
+            </div>
+          </div>
 
-      {/* Top tab switcher — same underline pattern as the Live Map screen.
-          Map Layout used to live as a sub-tab of the Map bottom tab; it's a
-          record of the hospital's slots, same as Visitors/Staff are records
-          of who's using them, so it moved in here alongside them. */}
-      <div style={{display: 'flex', marginTop: 14, borderBottom: `1px solid ${colors.border}`, backgroundColor: colors.surface}}>
-        <PressableScale style={{flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 0', backgroundColor: 'transparent', borderRadius: 0}} onClick={() => setTab('visitors')}>
-          <span style={{fontSize: 14, fontWeight: 800, color: tab === 'visitors' ? colors.textPrimary : colors.textMuted}}>Visitors</span>
-          {tab === 'visitors' && <span style={{position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: colors.textPrimary}} />}
-        </PressableScale>
-        <PressableScale style={{flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 0', backgroundColor: 'transparent', borderRadius: 0}} onClick={() => setTab('staff')}>
-          <span style={{fontSize: 14, fontWeight: 800, color: tab === 'staff' ? colors.textPrimary : colors.textMuted}}>Staff</span>
-          {tab === 'staff' && <span style={{position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: colors.textPrimary}} />}
-        </PressableScale>
-        <PressableScale style={{flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px 0', backgroundColor: 'transparent', borderRadius: 0}} onClick={() => setTab('map')}>
-          <span style={{fontSize: 14, fontWeight: 800, color: tab === 'map' ? colors.textPrimary : colors.textMuted}}>Map Layout</span>
-          {tab === 'map' && <span style={{position: 'absolute', bottom: 0, left: 0, right: 0, height: 2, backgroundColor: colors.textPrimary}} />}
-        </PressableScale>
-      </div>
-
-      {tab === 'map' ? (
-        <AdminMapScreen />
-      ) : (
-      <>
-      <div style={{padding: '14px 20px 4px', display: 'flex', gap: 10}}>
-        <div style={{flex: 1, display: 'flex', alignItems: 'center', gap: 10, borderRadius: 16, padding: '0 15px', height: 48, backgroundColor: colors.surface, boxShadow: '0 1px 2px rgba(0,0,0,0.04)'}}>
-          <Icon name="search" size={17} color={colors.textMuted} />
-          <input
-            style={{flex: 1, fontSize: 15, fontWeight: 500, padding: 0, border: 'none', outline: 'none', background: 'transparent', color: colors.textPrimary}}
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder={tab === 'visitors' ? 'Search name, car, token' : 'Search doctor, car number'}
-          />
-          {!!query && (
-            <PressableScale onClick={() => setQuery('')} style={{background: 'transparent', border: 'none', padding: 0}}>
-              <Icon name="close" size={15} color={colors.textMuted} />
-            </PressableScale>
-          )}
-        </div>
-        {tab === 'visitors' && (
-          <PressableScale
-            style={{
-              width: 48, height: 48, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: `1px solid ${selectedDate ? colors.primary : colors.border}`,
-              backgroundColor: selectedDate ? colors.primary : colors.surface,
-              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-            }}
-            onClick={() => setCalendarOpen(true)}>
-            <Icon name="calendar" size={17} color={selectedDate ? colors.textOnPrimary : colors.textSecondary} />
-          </PressableScale>
-        )}
-      </div>
-
-      {/* Date scope. Applies to BOTH tabs so Visitors and Staff always
-          describe the same window. Picking a specific calendar date takes
-          precedence, so choosing a period here clears it. */}
-      <div style={{display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px 0', overflowX: 'auto'}}>
-        {PERIODS.map(p => {
-          const on = !selectedDate && period === p.key;
-          return (
-            <PressableScale
-              key={p.key}
-              onClick={() => { setPeriod(p.key); setSelectedDate(null); }}
+          {tab !== 'map' && (
+            <div
               style={{
-                flexShrink: 0, borderRadius: 99, padding: '8px 14px',
-                border: `1px solid ${on ? colors.primary : colors.border}`,
-                backgroundColor: on ? colors.primary : colors.surface,
+                fontSize: 12,
+                fontWeight: 700,
+                color: colors.textSecondary,
+                padding: '6px 12px',
+                borderRadius: 8,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F1F5F9',
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0'}`,
+                fontVariantNumeric: 'tabular-nums',
               }}
             >
-              <span style={{fontSize: 12.5, fontWeight: 800, color: on ? colors.textOnPrimary : colors.textSecondary}}>{p.label}</span>
-            </PressableScale>
-          );
-        })}
-      </div>
-
-      {/* Selected-date banner — this IS the view (not a filter layered on
-          top of the live one), so it reads as a distinct mode rather than
-          just another chip in the row above. */}
-      {!!activeRange && (
-        <div style={{display: 'flex', alignItems: 'center', gap: 8, margin: '10px 20px 0', padding: '10px 14px', borderRadius: 14, backgroundColor: colors.cardAlt}}>
-          <Icon name="calendar" size={14} color={colors.textSecondary} />
-          <span style={{fontSize: 13, fontWeight: 800, color: colors.textPrimary}}>
-            {activeRange.from === activeRange.to
-              ? calendarDateLabel(activeRange.from)
-              : `${calendarDateLabel(activeRange.from)} — ${calendarDateLabel(activeRange.to)}`}
-          </span>
-          {dateLoading && <span className="spinner" style={{width: 13, height: 13, marginLeft: 4, borderColor: colors.border, borderTopColor: colors.textMuted}} />}
-          <div style={{flex: 1}} />
-          <PressableScale onClick={() => { setSelectedDate(null); setPeriod('live'); }} style={{background: 'transparent', border: 'none', padding: 0}}>
-            <Icon name="close" size={16} color={colors.textSecondary} />
-          </PressableScale>
+              {filtered.length} of {totalCount} records
+            </div>
+          )}
         </div>
-      )}
 
-      <div style={{display: 'flex', gap: 8, padding: '10px 20px 0'}}>
-        {(['active', 'completed', 'all'] as StatusFilter[]).map(f => {
-          const on = statusFilter === f;
-          return (
-            <PressableScale
-              key={f}
-              disabled={!!activeRange}
-              onClick={() => { setStatusFilter(f); if (f !== 'active') setStageFilter('all'); }}
-              style={{flex: 1, textAlign: 'center', borderRadius: 99, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '9px 14px', backgroundColor: on ? colors.primary : colors.surface, opacity: activeRange ? 0.4 : 1}}
-            >
-              <span style={{fontSize: 12, fontWeight: 900, fontFamily: 'Arial', color: on ? colors.textOnPrimary : colors.textSecondary}}>
-                {f === 'all' ? 'All' : f === 'active' ? 'Active' : 'Completed'}
-              </span>
-            </PressableScale>
-          );
-        })}
-      </div>
-
-      <CalendarPicker
-        visible={calendarOpen}
-        value={selectedDate ?? undefined}
-        onClose={() => setCalendarOpen(false)}
-        onSelect={(date) => { setSelectedDate(date); setCalendarOpen(false); }}
-      />
-
-      {/* Second-level stage row — only meaningful once "Active" narrows the
-          list to still-in-flight tickets; a completed/all list mixes every
-          stage together, so a stage chip there wouldn't mean anything.
-          Same 4 chips, same meaning, whichever tab (Visitors or Staff) is
-          showing — it's one shared vehicle-lifecycle filter, not two. */}
-      {statusFilter === 'active' && (
-        <HScrollHint fadeColor={colors.background} className="hscroll" style={{gap: 8, padding: '10px 20px 0'}}>
-          {STAGE_FILTERS.map(sf => {
-            const on = stageFilter === sf.key;
+        {/* 3-TAB SELECTOR (Visitors | Staff | Map) */}
+        <div
+          className="valet-glass-card"
+          style={{
+            padding: 4,
+            display: 'flex',
+            gap: 4,
+          }}
+        >
+          {(
+            [
+              ['visitors', '🎟️ Visitors', visitorsFiltered.length],
+              ['staff', '👨‍⚕️ Staff & Doctors', staffFiltered.length],
+              ['map', '🗺️ Map Layout', null],
+            ] as const
+          ).map(([key, label, count]) => {
+            const isActive = tab === key;
             return (
-              <PressableScale
-                key={sf.key}
-                onClick={() => setStageFilter(on ? 'all' : sf.key)}
-                style={{borderRadius: 99, border: `1px solid ${on ? colors.primary : colors.border}`, padding: '7px 14px', backgroundColor: on ? colors.primary : colors.surface, flexShrink: 0}}
+              <button
+                key={key}
+                type="button"
+                className="pressable"
+                onClick={() => setTab(key)}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: 'none',
+                  backgroundColor: isActive ? (isDark ? '#2563EB' : '#FFFFFF') : 'transparent',
+                  color: isActive ? (isDark ? '#FFFFFF' : '#0F172A') : colors.textSecondary,
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  boxShadow: isActive && !isDark ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                }}
               >
-                <span style={{fontSize: 12, fontWeight: 900, fontFamily: 'Arial', color: on ? colors.textOnPrimary : colors.textSecondary, whiteSpace: 'nowrap'}}>
-                  {sf.label}
-                </span>
-              </PressableScale>
+                <span>{label}</span>
+                {count != null && <span style={{fontSize: 11, opacity: 0.75}}>({count})</span>}
+              </button>
             );
           })}
-        </HScrollHint>
-      )}
+        </div>
 
-      <div className="screen-scroll" style={{padding: '14px 20px 40px'}}>
-        {tab === 'staff' && historyLoading && staffHistory.length === 0 ? (
-          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 48}}>
-            <span className="spinner" style={{borderColor: colors.border, borderTopColor: colors.primary}} />
-            <span style={{fontSize: 12.5, fontWeight: 500, marginTop: 10, color: colors.textMuted}}>Loading staff records…</span>
+        {/* MAP TAB CONTENT */}
+        {tab === 'map' ? (
+          <div className="valet-glass-card" style={{overflow: 'hidden', minHeight: 500}}>
+            <AdminMapScreen />
           </div>
-        ) : filtered.length === 0 ? (
-          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 48}}>
-            <span style={{fontSize: 14, fontWeight: 600, color: colors.textSecondary}}>{q ? 'No match found' : `No ${tab} records`}</span>
-            <span style={{fontSize: 12.5, fontWeight: 500, color: colors.textMuted}}>
-              {q ? 'Try a different name, plate, or ID' : tab === 'visitors' ? 'New tokens appear here as they are issued' : 'Staff/doctor parking activity appears here'}
-            </span>
-          </div>
-        ) : tab === 'visitors' ? (filtered as Visitor[]).map(renderVisitorTicket) : (filtered as ParkingTask[]).map(renderStaffTicket)}
-      </div>
-      </>
-      )}
+        ) : (
+          <>
+            {/* SEARCH & CALENDAR BAR */}
+            <div style={{display: 'flex', gap: 10}}>
+              <div
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  height: 44,
+                  borderRadius: 8,
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0'}`,
+                  padding: '0 12px',
+                }}
+              >
+                <Icon name="search" size={16} color={colors.textMuted} />
+                <input
+                  style={{
+                    flex: 1,
+                    border: 'none',
+                    outline: 'none',
+                    background: 'transparent',
+                    fontSize: 13.5,
+                    color: colors.textPrimary,
+                  }}
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder={tab === 'visitors' ? 'Search visitor name, plate, token…' : 'Search doctor name, vehicle plate…'}
+                />
+                {!!query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    style={{background: 'transparent', border: 'none', padding: 0, cursor: 'pointer'}}
+                  >
+                    <Icon name="close" size={14} color={colors.textMuted} />
+                  </button>
+                )}
+              </div>
 
-      {/* Detail sheet — small extra context beyond what fits on the ticket
-          card itself, for either tab. Read-only; the actual actions stay on
-          the card so there's still exactly one place to do anything. */}
-      {detailRows && (
-        <div
-          style={{position: 'fixed', inset: 0, zIndex: 9999, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24}}
-          onClick={closeDetail}
-        >
-          <div style={{width: '100%', maxWidth: 420, maxHeight: '85vh', overflowY: 'auto', borderRadius: 22, padding: 20, backgroundColor: colors.surface}} onClick={e => e.stopPropagation()}>
-            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14}}>
-              <span style={{fontSize: 17, fontWeight: 900, flex: 1, marginRight: 12, color: colors.textPrimary}}>
-                {detailVisitor ? (detailVisitor.name || 'Visitor') : detailTask?.doctorName}
-              </span>
-              <PressableScale style={{width: 32, height: 32, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt}} onClick={closeDetail}>
-                <Icon name="close" size={16} color={colors.textPrimary} />
-              </PressableScale>
+              {tab === 'visitors' && (
+                <button
+                  type="button"
+                  className="pressable"
+                  onClick={() => setCalendarOpen(true)}
+                  title="Filter by custom date"
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 8,
+                    border: `1px solid ${selectedDate ? '#2563EB' : isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0'}`,
+                    backgroundColor: selectedDate ? '#2563EB' : isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="calendar" size={16} color={selectedDate ? '#FFFFFF' : colors.textSecondary} />
+                </button>
+              )}
             </div>
 
-            {detailRows.map(([k, v]) => (
-              <div key={k} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: `1px solid ${colors.divider}`, gap: 12}}>
-                <span style={{fontSize: 12, fontWeight: 700, color: colors.textMuted}}>{k}</span>
-                <span style={{fontSize: 13, fontWeight: 700, flexShrink: 1, textAlign: 'right', textTransform: 'capitalize', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: colors.textPrimary}}>{v}</span>
+            {/* PERIOD CHIPS */}
+            <div style={{display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2}}>
+              {PERIODS.map(p => {
+                const isActive = !selectedDate && period === p.key;
+                return (
+                  <button
+                    key={p.key}
+                    type="button"
+                    className="pressable"
+                    onClick={() => {
+                      setPeriod(p.key);
+                      setSelectedDate(null);
+                    }}
+                    style={{
+                      flexShrink: 0,
+                      padding: '6px 12px',
+                      borderRadius: 6,
+                      border: isActive ? '1.5px solid #2563EB' : `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#CBD5E1'}`,
+                      backgroundColor: isActive ? (isDark ? '#2563EB' : '#2563EB') : 'transparent',
+                      color: isActive ? '#FFFFFF' : colors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Selected Date Indicator Banner */}
+            {!!activeRange && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  backgroundColor: isDark ? 'rgba(37,99,235,0.1)' : 'rgba(37,99,235,0.06)',
+                  border: '1px solid rgba(37,99,235,0.2)',
+                }}
+              >
+                <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                  <Icon name="calendar" size={14} color="#2563EB" />
+                  <span style={{fontSize: 12.5, fontWeight: 700, color: colors.textPrimary}}>
+                    Date Filter: {activeRange.from === activeRange.to ? calendarDateLabel(activeRange.from) : `${calendarDateLabel(activeRange.from)} — ${calendarDateLabel(activeRange.to)}`}
+                  </span>
+                  {dateLoading && <span className="spinner" style={{width: 12, height: 12}} />}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDate(null);
+                    setPeriod('live');
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    color: '#2563EB',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Reset to Live &times;
+                </button>
               </div>
-            ))}
+            )}
+
+            {/* STATUS FILTERS (Active / Completed / All) */}
+            <div style={{display: 'flex', gap: 8}}>
+              {(['active', 'completed', 'all'] as StatusFilter[]).map(f => {
+                const isActive = statusFilter === f;
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    className="pressable"
+                    disabled={!!activeRange}
+                    onClick={() => {
+                      setStatusFilter(f);
+                      if (f !== 'active') setStageFilter('all');
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '7px 12px',
+                      borderRadius: 6,
+                      border: isActive ? '1.5px solid #2563EB' : `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#CBD5E1'}`,
+                      backgroundColor: isActive ? (isDark ? '#2563EB' : '#2563EB') : 'transparent',
+                      color: isActive ? '#FFFFFF' : colors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: activeRange ? 'default' : 'pointer',
+                      opacity: activeRange ? 0.4 : 1,
+                      textTransform: 'capitalize',
+                    }}
+                  >
+                    {f}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* SECOND-LEVEL STAGE FILTERS (when Active) */}
+            {statusFilter === 'active' && (
+              <div style={{display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2}}>
+                {STAGE_FILTERS.map(sf => {
+                  const isActive = stageFilter === sf.key;
+                  return (
+                    <button
+                      key={sf.key}
+                      type="button"
+                      className="pressable"
+                      onClick={() => setStageFilter(isActive ? 'all' : sf.key)}
+                      style={{
+                        flexShrink: 0,
+                        padding: '5px 10px',
+                        borderRadius: 6,
+                        border: isActive ? '1px solid #2563EB' : `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#E2E8F0'}`,
+                        backgroundColor: isActive ? 'rgba(37,99,235,0.12)' : 'transparent',
+                        color: isActive ? '#2563EB' : colors.textMuted,
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {sf.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* RECORDS QUEUE GRID */}
+            <div>
+              {tab === 'staff' && historyLoading && staffHistory.length === 0 ? (
+                <div style={{textAlign: 'center', padding: '40px 0'}}>
+                  <span className="spinner" style={{width: 24, height: 24}} />
+                  <div style={{fontSize: 12.5, color: colors.textMuted, marginTop: 10}}>Loading staff records…</div>
+                </div>
+              ) : filtered.length === 0 ? (
+                <div
+                  className="valet-glass-card"
+                  style={{
+                    padding: '36px 20px',
+                    textAlign: 'center',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.6)',
+                  }}
+                >
+                  <Icon name="check" size={24} color="#059669" />
+                  <div style={{fontSize: 14, fontWeight: 700, color: colors.textPrimary, marginTop: 8}}>
+                    {q ? 'No matching records found' : `No ${tab} records in this view`}
+                  </div>
+                  <div style={{fontSize: 12, color: colors.textMuted, marginTop: 2}}>
+                    {q ? 'Try a different search term or plate.' : 'Vehicle session logs will appear here automatically.'}
+                  </div>
+                </div>
+              ) : (
+                <div className="valet-queue-grid">
+                  {tab === 'visitors'
+                    ? (filtered as Visitor[]).map(renderVisitorCard)
+                    : (filtered as ParkingTask[]).map(renderStaffCard)}
+                </div>
+              )}
+            </div>
+
+            <CalendarPicker
+              visible={calendarOpen}
+              value={selectedDate ?? undefined}
+              onClose={() => setCalendarOpen(false)}
+              onSelect={date => {
+                setSelectedDate(date);
+                setCalendarOpen(false);
+              }}
+            />
+          </>
+        )}
+
+        {/* DETAIL MODAL: PROGRESSIVE DISCLOSURE TIMELINE */}
+        {detailRows && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              backgroundColor: 'rgba(0,0,0,0.55)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 20,
+            }}
+            onClick={closeDetail}
+          >
+            <div
+              className="valet-glass-card"
+              style={{
+                width: '100%',
+                maxWidth: 440,
+                maxHeight: '85vh',
+                overflowY: 'auto',
+                padding: 24,
+                backgroundColor: isDark ? 'rgba(15, 23, 42, 0.94)' : 'rgba(255, 255, 255, 0.96)',
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16}}>
+                <div>
+                  <span style={{fontSize: 11, fontWeight: 800, color: '#2563EB', textTransform: 'uppercase', letterSpacing: 0.6}}>
+                    Lifecycle Audit
+                  </span>
+                  <h3 style={{fontSize: 18, fontWeight: 800, color: colors.textPrimary, margin: '2px 0 0 0'}}>
+                    {detailVisitor ? detailVisitor.name || 'Visitor' : detailTask?.doctorName}
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeDetail}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1'}`,
+                    backgroundColor: 'transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Icon name="close" size={16} color={colors.textPrimary} />
+                </button>
+              </div>
+
+              <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
+                {detailRows.map(([k, v]) => (
+                  <div
+                    key={k}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '8px 0',
+                      borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9'}`,
+                      gap: 12,
+                    }}
+                  >
+                    <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>{k}</span>
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: colors.textPrimary,
+                        textAlign: 'right',
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      {v}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
