@@ -57,7 +57,7 @@ const SESSION_HOURS = 12;
 // GPS, no login, nothing to tap). They're now purely a name in the valet's
 // assign-driver picker; a driver-role account that tries to sign in here
 // gets the same "not supported on the web portal" rejection below.
-const WEB_ROLES: UserRole[] = ['doctor', 'staff', 'admin', 'valet'];
+const WEB_ROLES: UserRole[] = ['doctor', 'staff', 'admin', 'valet', 'driver'];
 
 const Ctx = createContext<AuthContextValue>({
   user: null,

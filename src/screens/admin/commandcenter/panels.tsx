@@ -398,9 +398,10 @@ export function SlotUtilizationPanel({liveSlots, onViewAll}: {liveSlots: Parking
 
 const SLOT_STATE_COLORS = {available: '#22C55E', occupied: '#EF4444', underutilized: '#E8C23A', overloaded: '#F0703A', reserved: '#F59E0B'};
 
-export function ParkingSlotMapPanel({liveSlots, classById, onOpenSlots}: {liveSlots: ParkingSlot[]; classById: Map<string, SlotClassification>; onOpenSlots: () => void}) {
+export function ParkingSlotMapPanel({liveSlots, classById, onOpenSlots, searchQuery = ''}: {liveSlots: ParkingSlot[]; classById: Map<string, SlotClassification>; onOpenSlots: () => void; searchQuery?: string}) {
   const cc = useCc();
   const [selected, setSelected] = useState<string | null>(null);
+  const q = searchQuery.trim().toLowerCase();
   const byBlock = useMemo(() => {
     const m = new Map<string, ParkingSlot[]>();
     for (const s of liveSlots) { const l = m.get(s.block) ?? []; l.push(s); m.set(s.block, l); }
@@ -430,12 +431,20 @@ export function ParkingSlotMapPanel({liveSlots, classById, onOpenSlots}: {liveSl
             <div style={{display: 'flex', flexWrap: 'wrap', gap: 5}}>
               {b.slots.map(s => {
                 const st = stateOf(s);
-                const on = s.id === selected;
+                const isMatch = Boolean(q && (
+                  s.id.toLowerCase().includes(q) ||
+                  s.block.toLowerCase() === q ||
+                  (s.carNumber && s.carNumber.toLowerCase().includes(q))
+                ));
+                const on = s.id === selected || isMatch;
                 return (
                   <button key={s.id} onClick={() => setSelected(on ? null : s.id)} title={s.id}
                     style={{
-                      width: 26, height: 24, borderRadius: 5, border: on ? `1.5px solid ${cc.textPrimary}` : 'none',
+                      width: 26, height: 24, borderRadius: 5,
+                      border: isMatch ? `2px solid ${cc.accentBlue}` : on ? `1.5px solid ${cc.textPrimary}` : 'none',
                       backgroundColor: st.color, cursor: 'pointer', opacity: on ? 1 : 0.85,
+                      transform: isMatch ? 'scale(1.15)' : 'none',
+                      transition: 'transform 0.15s ease, border 0.15s ease',
                     }} />
                 );
               })}

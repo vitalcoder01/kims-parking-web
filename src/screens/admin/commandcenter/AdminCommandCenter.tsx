@@ -252,6 +252,7 @@ function DashboardSection({
             liveSlots={liveSlots}
             classById={classById}
             onOpenSlots={() => onNavigate('slots')}
+            searchQuery={query}
           />
         </div>
         <div style={{gridColumn: '2', gridRow: '2'}}>
