@@ -354,3 +354,59 @@ input:focus {
 .screen-enter {
   animation: kims-fade-in 0.18s ease-out;
 }
+
+/* ── Valet Workstation System (Restrained Glassmorphism) ── */
+.valet-workstation-viewport {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.valet-container {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+@media (max-width: 768px) {
+  .valet-container {
+    padding: 14px 12px 36px;
+    gap: 14px;
+  }
+}
+
+.valet-glass-card {
+  border-radius: 12px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background-color: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dark .valet-glass-card {
+  background-color: rgba(15, 23, 42, 0.82);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.25);
+}
+
+.valet-queue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 640px) {
+  .valet-queue-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+

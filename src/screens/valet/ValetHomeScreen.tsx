@@ -20,6 +20,7 @@ import {
 } from '../../utils/retrievalClocks';
 import {EnRouteTimer} from '../../components/EnRouteTimer';
 import {deriveJobAction} from '../../core/valet/state/JobAction';
+import {GateValetScreen} from './GateValetScreen';
 
 // Web (DOM) port of the mobile app's ValetHomeScreen — same screens, same
 // state machine, same business logic. Navigation between the five
@@ -104,6 +105,36 @@ const ellipsis1: React.CSSProperties = {whiteSpace: 'nowrap', overflow: 'hidden'
 const clamp2: React.CSSProperties = {display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'};
 
 export function ValetHomeScreen() {
+  const {user} = useAuth();
+  const myStation = user?.valetStation ?? null;
+  const [supervisorStation, setSupervisorStation] = useState<'gate' | 'lot'>('gate');
+
+  const effectiveStation = myStation ?? supervisorStation;
+
+  if (effectiveStation === 'gate') {
+    return (
+      <GateValetScreen
+        isSupervisor={myStation === null}
+        onSwitchStation={myStation === null ? () => setSupervisorStation('lot') : undefined}
+      />
+    );
+  }
+
+  return (
+    <LotValetHomeScreen
+      isSupervisor={myStation === null}
+      onSwitchStation={myStation === null ? () => setSupervisorStation('gate') : undefined}
+    />
+  );
+}
+
+function LotValetHomeScreen({
+  onSwitchStation,
+  isSupervisor,
+}: {
+  onSwitchStation?: () => void;
+  isSupervisor?: boolean;
+}) {
   const {user} = useAuth();
   const dialog = useDialog();
   const {drivers, tasks, visitors, addTask, addVisitor, markKeyCollected,
@@ -1716,6 +1747,30 @@ export function ValetHomeScreen() {
     <div className="screen-scroll" style={{backgroundColor: colors.background}}>
       {/* Header */}
       <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), padding: '16px 20px 20px', borderBottomLeftRadius: 28, borderBottomRightRadius: 28}}>
+        {isSupervisor && onSwitchStation && (
+          <button
+            type="button"
+            className="pressable"
+            onClick={onSwitchStation}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '5px 12px',
+              borderRadius: 6,
+              backgroundColor: 'rgba(255,255,255,0.18)',
+              border: '1px solid rgba(255,255,255,0.3)',
+              color: '#fff',
+              fontSize: 12,
+              fontWeight: 700,
+              marginBottom: 12,
+              cursor: 'pointer',
+            }}
+          >
+            <Icon name="map" size={13} color="#fff" />
+            <span>Switch to Gate Counter</span>
+          </button>
+        )}
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
           <div>
             <div style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6}}>
