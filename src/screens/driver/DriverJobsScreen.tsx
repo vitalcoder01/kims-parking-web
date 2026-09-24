@@ -8,24 +8,6 @@ import {Icon, IconName} from '../../components/Icon';
 import {PressableScale} from '../../components/PressableScale';
 import {useDialog} from '../../components/AppDialog';
 
-// Direct port of the mobile app's driver DriverJobsScreen — the driver's
-// current assigned job (accept/reject, key-collected, in-transit, parked,
-// delivered/returned) plus today's completed list, DOM/CSS in place of RN's
-// View/Text/StyleSheet/Animated. The route progress bar that mobile animates
-// with Animated.Value is done here with a plain CSS width transition instead
-// — same visual result, no native driver to opt out of.
-//
-// Also adds a "Visitor Pickups" section that mobile doesn't have yet: a
-// visitor's park/retrieve leg already runs through the exact same
-// ParkingTask machinery as a staff job (see the backend's visitor.service.js
-// and task.service.js), so it already shows up as this driver's Active Job
-// above with the normal actions — but serializeTask deliberately withholds
-// the visitor's phone number from every driver's task view (the same
-// widening-of-privacy-surface the backend comment there warns about), so
-// there's genuinely new information to show here: the Visitor record itself,
-// filtered to the ones assigned to this driver, has the mobile number the
-// task card doesn't.
-
 function SkeletonBlock({height, width = '100%', radius = 10, style}: {height: number; width?: number | string; radius?: number; style?: React.CSSProperties}) {
   const {colors} = useTheme();
   return <div className="pulse" style={{height, width, borderRadius: radius, backgroundColor: colors.cardAlt, ...style}} />;
@@ -34,7 +16,7 @@ function SkeletonBlock({height, width = '100%', radius = 10, style}: {height: nu
 function SkeletonCard({lines = 3, style}: {lines?: number; style?: React.CSSProperties}) {
   const {colors} = useTheme();
   return (
-    <div style={{borderRadius: 22, border: `1px solid ${colors.border}`, padding: 20, backgroundColor: colors.surface, ...style}}>
+    <div style={{borderRadius: 18, border: `1px solid ${colors.border}`, padding: 20, backgroundColor: colors.surface, ...style}}>
       <SkeletonBlock height={14} width="40%" style={{marginBottom: 14}} />
       {Array.from({length: lines}, (_, i) => (
         <SkeletonBlock key={i} height={16} width={i === lines - 1 ? '55%' : '85%'} style={{marginBottom: 10}} />
@@ -45,46 +27,25 @@ function SkeletonCard({lines = 3, style}: {lines?: number; style?: React.CSSProp
 
 export function DriverJobsScreen() {
   const {user} = useAuth();
-  const {tasks, visitors, markTaskReturned,
-    fetchTaskHistory,
-    hydrated} = useAppState();
-  const {colors: c} = useTheme();
+  const {tasks, visitors, markTaskReturned, fetchTaskHistory, hydrated} = useAppState();
+  const {colors: c, isDark} = useTheme();
   const dialog = useDialog();
 
-  // Guards the one remaining one-tap job action below (mark returned, for
-  // a recalled car) against a double-tap firing it twice while the first
-  // is still in flight.
   const [actionBusy, setActionBusy] = useState(false);
 
   const myDriverId = useMyDriverId();
-  // 'delivered' means the driver's own part is already done (car dropped at
-  // the valet counter) — it's just awaiting the valet's confirmation now,
-  // so it shouldn't keep sitting here as this driver's "current job".
   const myTasks = tasks.filter(t => isMyJob(t.driverId, myDriverId) && t.status !== 'completed' && t.status !== 'delivered' && t.status !== 'cancelled');
   const activeTask = myTasks[0] ?? null;
 
-  // The live `tasks` array is bounded to "at most one row per doctor" —
-  // a completed job vanishes from it once that doctor's next car comes in,
-  // so "completed today" needs the real history, not this list.
-  //
-  // Depends on `tasks` itself, not `tasks.length` — completing a job
-  // replaces a row in place, so the array's length never changes even
-  // though the effect needs to refire.
   const [history, setHistory] = useState<typeof tasks>([]);
   useEffect(() => {
     if (!myDriverId) return;
     fetchTaskHistory({driverId: myDriverId}).then(setHistory).catch(() => {});
   }, [myDriverId, fetchTaskHistory, tasks]);
+
   const today = new Date().toDateString();
   const completedToday = history.filter(t => t.status === 'completed' && t.completedAt && new Date(t.completedAt).toDateString() === today);
 
-  // Visitor pickups/retrievals assigned to this driver. Informational only —
-  // actions live on the Active Job card above (same underlying task); this
-  // surfaces the visitor's phone number, which that card doesn't show.
-  // The retrieval half requires an actual live retrieve-type task assigned
-  // to this driver, not the visitor row's own driverId — that field is
-  // reused from the park leg and stays stale after it completes (see
-  // visitor.service.js's assignRetrievalDriver).
   const myVisitorJobs = visitors.filter(v =>
     (isMyJob(v.driverId, myDriverId) && v.status === 'pending')
     || (v.status === 'parked' && v.retrievalRequested
@@ -99,8 +60,6 @@ export function DriverJobsScreen() {
   });
   const liveProgress = trip?.progress ?? 0;
 
-  // Valet pulled this park job back mid-drive — the car goes back to the
-  // counter instead of into a slot. They still have to confirm receipt.
   const handleMarkReturned = async () => {
     if (!activeTask || actionBusy) return;
     setActionBusy(true);
@@ -114,217 +73,485 @@ export function DriverJobsScreen() {
   };
 
   const statusMeta: Record<string, {label: string; color: string; bg: string; icon: IconName}> = {
-    assigned:      {label: activeTask?.type === 'retrieve' ? 'Go to parking slot' : 'Go to valet counter', color: c.warning, bg: c.warningLight, icon: 'bellAlert'},
-    key_collected: {label: 'Driving to park', color: c.primary, bg: c.cardAlt, icon: 'carKey'},
-    in_transit:    {label: 'In transit', color: c.primary, bg: c.cardAlt, icon: 'navigate'},
-    completed:     {label: 'Done', color: c.success, bg: c.successLight, icon: 'check'},
+    assigned: {
+      label: activeTask?.type === 'retrieve' ? 'Go to parking slot' : 'Go to valet counter',
+      color: '#D97706',
+      bg: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FFFBEB',
+      icon: 'bellAlert',
+    },
+    key_collected: {
+      label: 'Driving vehicle to park',
+      color: c.primary,
+      bg: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF',
+      icon: 'carKey',
+    },
+    in_transit: {
+      label: 'Vehicle in transit',
+      color: c.primary,
+      bg: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF',
+      icon: 'navigate',
+    },
+    completed: {
+      label: 'Mission Completed',
+      color: c.success,
+      bg: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5',
+      icon: 'check',
+    },
+  };
+
+  const glassCardStyle: React.CSSProperties = {
+    backgroundColor: c.surface,
+    border: `1px solid ${c.border}`,
+    borderRadius: 18,
+    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.25)' : '0 2px 10px rgba(0, 0, 0, 0.03)',
   };
 
   return (
-    <div className="screen-scroll" style={{backgroundColor: c.background, padding: 20, paddingBottom: 40}}>
-
-      {/* Header */}
-      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20}}>
+    <div className="screen-scroll" style={{backgroundColor: c.background, padding: 16, paddingBottom: 40}}>
+      {/* 1. Restrained Header */}
+      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
         <div>
-          <div style={{fontSize: 12, fontWeight: 600, color: c.textSecondary}}>Your jobs</div>
-          <div style={{fontSize: 22, fontWeight: 800, marginTop: 2, color: c.primary}}>{user?.name}</div>
+          <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+            <span style={{fontSize: 16, fontWeight: 900, color: c.textPrimary, letterSpacing: -0.2}}>
+              Active Missions
+            </span>
+            <span style={{
+              fontSize: 10,
+              fontWeight: 800,
+              padding: '2px 7px',
+              borderRadius: 6,
+              backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF',
+              color: c.primary,
+              letterSpacing: 0.4,
+            }}>
+              RUNNER QUEUE
+            </span>
+          </div>
+          <div style={{fontSize: 11.5, fontWeight: 600, color: c.textSecondary, marginTop: 2}}>
+            {user?.name ?? 'Runner Dispatch'} · Real-time task telemetry
+          </div>
         </div>
-        <div style={{borderRadius: 14, border: `1px solid ${c.border}`, padding: '8px 14px', textAlign: 'center', backgroundColor: c.surface}}>
-          <div style={{fontSize: 22, fontWeight: 900, color: c.primary}}>{completedToday.length}</div>
-          <div style={{fontSize: 10, fontWeight: 600, color: c.textSecondary}}>done today</div>
+
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '6px 12px',
+          borderRadius: 12,
+          backgroundColor: c.surface,
+          border: `1px solid ${c.border}`,
+          flexShrink: 0,
+        }}>
+          <span style={{fontSize: 15, fontWeight: 900, color: c.primary, fontVariantNumeric: 'tabular-nums'}}>
+            {completedToday.length}
+          </span>
+          <span style={{fontSize: 10.5, fontWeight: 700, color: c.textSecondary}}>
+            DONE TODAY
+          </span>
         </div>
       </div>
 
-      {/* Active task */}
+      {/* 2. Active Mission Card */}
       {!hydrated ? (
-        <SkeletonCard lines={3} style={{marginBottom: 20}} />
+        <SkeletonCard lines={3} style={{marginBottom: 18}} />
       ) : activeTask ? (
-        <div style={{borderRadius: 22, border: `1px solid ${c.border}`, overflow: 'hidden', marginBottom: 20, backgroundColor: c.surface}}>
-          <div style={{display: 'flex', alignItems: 'center', gap: 8, padding: 14, backgroundColor: c.primary}}>
-            <Icon name={activeTask.type === 'park' ? 'arrowDown' : 'arrowUp'} size={16} color={c.textOnPrimary} />
-            <span style={{fontSize: 13, fontWeight: 800, letterSpacing: 1, color: c.textOnPrimary}}>{activeTask.type === 'park' ? 'PARKING JOB' : 'RETRIEVAL JOB'}</span>
+        <div style={{
+          ...glassCardStyle,
+          overflow: 'hidden',
+          marginBottom: 18,
+          border: `1.5px solid ${activeTask.type === 'park' ? '#10B981' : '#F59E0B'}`,
+        }}>
+          {/* Mission Category Banner */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px 16px',
+            backgroundColor: activeTask.type === 'park' ? '#10B981' : '#F59E0B',
+          }}>
+            <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+              <Icon
+                name={activeTask.type === 'park' ? 'arrowDown' : 'arrowUp'}
+                size={16}
+                color="#fff"
+              />
+              <span style={{fontSize: 12, fontWeight: 900, letterSpacing: 0.8, color: '#fff', textTransform: 'uppercase'}}>
+                {activeTask.type === 'park' ? 'PARKING MISSION' : 'RETRIEVAL MISSION'}
+              </span>
+            </div>
+            <span style={{
+              fontSize: 10,
+              fontWeight: 900,
+              padding: '2px 7px',
+              borderRadius: 4,
+              backgroundColor: 'rgba(255,255,255,0.25)',
+              color: '#fff',
+              letterSpacing: 0.5,
+            }}>
+              ACTIVE RUN
+            </span>
           </div>
 
           <div style={{padding: 16, display: 'flex', flexDirection: 'column', gap: 12}}>
-            <div style={{display: 'flex', borderRadius: 14, overflow: 'hidden', border: `1px solid ${c.border}`}}>
-              <div style={{flex: 1, padding: 12}}>
-                <div style={{fontSize: 9, fontWeight: 700, letterSpacing: 1, marginBottom: 4, color: c.textMuted}}>CUSTOMER</div>
-                <div style={{fontSize: 14, fontWeight: 800, color: c.primary}}>{activeTask.doctorName}</div>
+            {/* Customer & Vehicle Split Information */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: 8,
+            }}>
+              <div style={{
+                padding: '10px 12px',
+                borderRadius: 12,
+                backgroundColor: c.cardAlt,
+                border: `1px solid ${c.border}`,
+              }}>
+                <div style={{fontSize: 9.5, fontWeight: 800, letterSpacing: 0.8, color: c.textMuted, textTransform: 'uppercase'}}>
+                  GUEST / DOCTOR
+                </div>
+                <div style={{fontSize: 14, fontWeight: 800, color: c.textPrimary, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                  {activeTask.doctorName}
+                </div>
               </div>
-              <div style={{flex: 1, padding: 12, borderLeft: `1px solid ${c.border}`}}>
-                <div style={{fontSize: 9, fontWeight: 700, letterSpacing: 1, marginBottom: 4, color: c.textMuted}}>CAR</div>
-                <div style={{fontSize: 14, fontWeight: 800, color: c.primary}}>{activeTask.carNumber}</div>
+
+              <div style={{
+                padding: '10px 12px',
+                borderRadius: 12,
+                backgroundColor: c.cardAlt,
+                border: `1px solid ${c.border}`,
+              }}>
+                <div style={{fontSize: 9.5, fontWeight: 800, letterSpacing: 0.8, color: c.textMuted, textTransform: 'uppercase'}}>
+                  VEHICLE REGISTRATION
+                </div>
+                <div style={{fontFamily: 'monospace', fontSize: 14, fontWeight: 900, color: c.textPrimary, marginTop: 2}}>
+                  {activeTask.carNumber}
+                </div>
               </div>
             </div>
 
+            {/* Target Bay Allocation Beacon */}
             {activeTask.slotId && (
-              <div style={{borderRadius: 14, padding: 14, textAlign: 'center', backgroundColor: c.cardAlt}}>
-                <div style={{fontSize: 9, fontWeight: 700, letterSpacing: 1, color: c.textSecondary}}>
-                  {activeTask.type === 'retrieve' ? 'RETRIEVE FROM' : 'DESTINATION SLOT'}
+              <div style={{
+                borderRadius: 14,
+                padding: '12px 14px',
+                textAlign: 'center',
+                backgroundColor: isDark ? 'rgba(59, 130, 246, 0.12)' : '#EFF6FF',
+                border: `1px solid ${isDark ? 'rgba(59, 130, 246, 0.25)' : '#BFDBFE'}`,
+              }}>
+                <div style={{fontSize: 10, fontWeight: 800, letterSpacing: 1, color: c.primary, textTransform: 'uppercase'}}>
+                  {activeTask.type === 'retrieve' ? 'TARGET RETRIEVAL BAY' : 'DESTINATION PARKING BAY'}
                 </div>
-                <div style={{fontSize: 28, fontWeight: 900, marginTop: 2, color: c.primary}}>{activeTask.slotId}</div>
+                <div style={{fontSize: 26, fontWeight: 900, marginTop: 2, color: c.primary, letterSpacing: 0.5}}>
+                  BAY {activeTask.slotId}
+                </div>
               </div>
             )}
 
+            {/* Status Step Indicator */}
             {activeTask.status in statusMeta && (
-              <div style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: 12, padding: 12, backgroundColor: statusMeta[activeTask.status]?.bg}}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                borderRadius: 12,
+                padding: '10px 12px',
+                backgroundColor: statusMeta[activeTask.status]?.bg,
+                border: `1px solid ${statusMeta[activeTask.status]?.color}40`,
+              }}>
                 <Icon name={statusMeta[activeTask.status]?.icon!} size={16} color={statusMeta[activeTask.status]?.color} />
-                <span style={{fontSize: 13, fontWeight: 700, color: statusMeta[activeTask.status]?.color}}>
+                <span style={{fontSize: 12.5, fontWeight: 800, color: statusMeta[activeTask.status]?.color}}>
                   {statusMeta[activeTask.status]?.label}
                 </span>
               </div>
             )}
 
-            {/* No accept/reject step any more — assignDriver accepts on the
-                driver's behalf server-side (see task.service.js), so a job
-                lands here already accepted. */}
-
-            {/* A park job has no destination at all — the driver just
-                drives with the key to whichever free slot they pick, so
-                there's nothing to route/ETA against (this used to show
-                "Waiting for GPS…" forever for exactly that reason). A
-                retrieve job does have a real destination (the assigning
-                valet's location, captured in task.service.js
-                assignDriver), so the route/ETA panel stays for that. */}
+            {/* Live Route & ETA Telemetry for Retrieval */}
             {activeTask.type === 'retrieve' && (activeTask.status === 'key_collected' || activeTask.status === 'in_transit') && (
-              <div style={{borderRadius: 16, border: `1px solid ${c.border}`, padding: 14}}>
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10}}>
-                  <span style={{fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: c.textSecondary}}>LIVE ROUTE</span>
+              <div style={{
+                borderRadius: 14,
+                border: `1px solid ${c.border}`,
+                padding: 12,
+                backgroundColor: c.cardAlt,
+              }}>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
+                  <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 1, color: c.textSecondary, textTransform: 'uppercase'}}>
+                    LIVE TURNAROUND ROUTE
+                  </span>
                   {trip ? (
-                    <span style={{fontSize: 11, fontWeight: 800, color: c.primary}}>
-                      {trip.etaMinutes} min{trip.distanceRemainingM != null ? ` · ${trip.distanceRemainingM}m` : ''}
+                    <span style={{fontSize: 11.5, fontWeight: 800, color: c.primary, fontVariantNumeric: 'tabular-nums'}}>
+                      ETA: {trip.etaMinutes} min{trip.distanceRemainingM != null ? ` (${trip.distanceRemainingM}m)` : ''}
                     </span>
                   ) : (
-                    <span style={{fontSize: 11, fontWeight: 800, color: c.textMuted}}>Waiting for GPS…</span>
+                    <span style={{fontSize: 11, fontWeight: 700, color: c.textMuted}}>Acquiring GPS fix…</span>
                   )}
                 </div>
-                <div style={{height: 24, position: 'relative', display: 'flex', alignItems: 'center', marginBottom: 6}}>
-                  <div style={{position: 'absolute', left: 0, right: 0, height: 3, borderRadius: 2, backgroundColor: c.border}} />
-                  <div style={{position: 'absolute', left: 0, height: 3, borderRadius: 2, width: `${liveProgress * 100}%`, backgroundColor: c.primary, transition: 'width 0.4s ease'}} />
-                  <div style={{position: 'absolute', left: `${liveProgress * 88}%`, marginTop: -9, marginLeft: -9, transition: 'left 0.4s ease'}}>
-                    <Icon name="carSide" size={18} color={c.primary} />
+
+                <div style={{height: 20, position: 'relative', display: 'flex', alignItems: 'center'}}>
+                  <div style={{position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: c.border}} />
+                  <div style={{
+                    position: 'absolute',
+                    left: 0,
+                    height: 4,
+                    borderRadius: 2,
+                    width: `${Math.max(4, liveProgress * 100)}%`,
+                    backgroundColor: c.primary,
+                    transition: 'width 0.4s ease',
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    left: `${Math.min(92, liveProgress * 92)}%`,
+                    marginTop: -7,
+                    marginLeft: -7,
+                    transition: 'left 0.4s ease',
+                  }}>
+                    <Icon name="carSide" size={17} color={c.primary} />
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Recalled: the valet wants this car back, not parked. The
-                slot picker below is deliberately replaced entirely — an
-                attempt to park it would be rejected server-side anyway. */}
+            {/* Recalled Notice: Driver returns car to counter */}
             {activeTask.type === 'park' && !!activeTask.recalledAt
               && (activeTask.status === 'key_collected' || activeTask.status === 'in_transit') && (
               <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
-                <div style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: 12, padding: 12, backgroundColor: c.warningLight}}>
-                  <Icon name="bellAlert" size={16} color={c.warning} />
-                  <span style={{fontSize: 13, fontWeight: 700, color: c.warning}}>
-                    Do not park — return this car to the valet counter
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  borderRadius: 12,
+                  padding: 12,
+                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2',
+                  border: `1px solid ${c.error}`,
+                }}>
+                  <Icon name="bellAlert" size={16} color={c.error} />
+                  <span style={{fontSize: 12.5, fontWeight: 800, color: c.error}}>
+                    Recall Order: Return car immediately to Valet Counter
                   </span>
                 </div>
                 <PressableScale
-                  style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 16, padding: 16, backgroundColor: c.primary, opacity: actionBusy ? 0.6 : 1}}
-                  onClick={handleMarkReturned} disabled={actionBusy}
-                >
+                  onClick={handleMarkReturned}
+                  disabled={actionBusy}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    borderRadius: 14,
+                    height: 46,
+                    backgroundColor: c.primary,
+                    opacity: actionBusy ? 0.6 : 1,
+                    cursor: 'pointer',
+                  }}>
                   <Icon name="check" size={16} color={c.textOnPrimary} />
-                  <span style={{fontSize: 14, fontWeight: 800, color: c.textOnPrimary}}>{actionBusy ? 'Please wait…' : 'Returned to counter'}</span>
+                  <span style={{fontSize: 13.5, fontWeight: 900, color: c.textOnPrimary}}>
+                    {actionBusy ? 'Confirming Return…' : 'Confirm Returned to Counter'}
+                  </span>
                 </PressableScale>
               </div>
             )}
 
-            {/* No manual "mark parked" any more either — the lot-station
-                valet confirms this once the car is actually in a slot (see
-                ValetHomeScreen's confirmParkedByValet). The driver's only
-                job from here is to drive there; GPS (already reporting
-                since assignment) is what the valet and the tracking page
-                are actually watching. */}
+            {/* Park Instructions */}
             {activeTask.type === 'park' && !activeTask.recalledAt && (activeTask.status === 'key_collected' || activeTask.status === 'in_transit') && (
-              <div style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: 12, padding: 12, backgroundColor: c.cardAlt}}>
-                <Icon name="carKey" size={16} color={c.textSecondary} />
-                <span style={{fontSize: 13, fontWeight: 700, color: c.textSecondary}}>
-                  Drive to a free slot — a valet will confirm once it's parked
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                borderRadius: 12,
+                padding: '10px 12px',
+                backgroundColor: c.cardAlt,
+                border: `1px solid ${c.border}`,
+              }}>
+                <Icon name="carKey" size={15} color={c.textSecondary} />
+                <span style={{fontSize: 12, fontWeight: 700, color: c.textSecondary}}>
+                  Drive to designated bay — lot valet will confirm upon slot arrival
                 </span>
               </div>
             )}
 
-            {/* No manual "start" tap either — GPS reporting begins the
-                moment this screen mounts on an 'assigned' retrieve task
-                (see AppStateContext's activeDriverTask), and the backend
-                auto-flips this to in_transit on the first real position fix
-                (task.service.js's updateLocation). */}
+            {/* Retrieval Instructions */}
             {activeTask.type === 'retrieve' && activeTask.status === 'assigned' && !!activeTask.acceptedAt && (
-              <div style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: 12, padding: 12, backgroundColor: c.cardAlt}}>
-                <Icon name="carKey" size={16} color={c.textSecondary} />
-                <span style={{fontSize: 13, fontWeight: 700, color: c.textSecondary}}>
-                  Head to the parking slot — tracking starts automatically
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                borderRadius: 12,
+                padding: '10px 12px',
+                backgroundColor: c.cardAlt,
+                border: `1px solid ${c.border}`,
+              }}>
+                <Icon name="carKey" size={15} color={c.textSecondary} />
+                <span style={{fontSize: 12, fontWeight: 700, color: c.textSecondary}}>
+                  Proceed to parking slot — telemetry streams automatically
                 </span>
               </div>
             )}
-            {/* No manual "delivered" tap either — the gate-station valet
-                confirms once the car has actually arrived (see
-                ValetHomeScreen's confirmArrivedByValet). */}
+
             {activeTask.type === 'retrieve' && activeTask.status === 'in_transit' && (
-              <div style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: 12, padding: 12, backgroundColor: c.cardAlt}}>
-                <Icon name="carKey" size={16} color={c.textSecondary} />
-                <span style={{fontSize: 13, fontWeight: 700, color: c.textSecondary}}>
-                  Drive to the front gate — a valet will confirm once you arrive
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                borderRadius: 12,
+                padding: '10px 12px',
+                backgroundColor: c.cardAlt,
+                border: `1px solid ${c.border}`,
+              }}>
+                <Icon name="carKey" size={15} color={c.textSecondary} />
+                <span style={{fontSize: 12, fontWeight: 700, color: c.textSecondary}}>
+                  Drive to curbside gate — gate desk valet will confirm handover
                 </span>
               </div>
             )}
           </div>
         </div>
       ) : (
-        <div style={{borderRadius: 22, border: `1px solid ${c.border}`, padding: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 20, backgroundColor: c.surface}}>
-          <div style={{width: 56, height: 56, borderRadius: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, backgroundColor: c.cardAlt}}>
-            <Icon name="check" size={26} color={c.textSecondary} />
+        <div style={{
+          ...glassCardStyle,
+          padding: 36,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textAlign: 'center',
+          marginBottom: 18,
+        }}>
+          <div style={{
+            width: 48,
+            height: 48,
+            borderRadius: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 12,
+            backgroundColor: c.cardAlt,
+          }}>
+            <Icon name="check" size={24} color={c.textSecondary} />
           </div>
-          <div style={{fontSize: 18, fontWeight: 800, marginBottom: 8, color: c.primary}}>No active job</div>
-          <div style={{fontSize: 13, textAlign: 'center', lineHeight: '19px', color: c.textSecondary}}>Waiting for the valet to assign a job. You'll get a notification when assigned.</div>
+          <div style={{fontSize: 16, fontWeight: 800, color: c.textPrimary, marginBottom: 4}}>
+            Queue Is Clear
+          </div>
+          <div style={{fontSize: 12, color: c.textSecondary, maxWidth: 280, lineHeight: '18px'}}>
+            Standing by for valet assignment. New vehicle missions will trigger notifications instantly.
+          </div>
         </div>
       )}
 
-      {/* Visitor pickups — see the module comment at the top of this file:
-          this list is new relative to the mobile screen. Purely
-          informational (the actions live on the Active Job card above,
-          which is the exact same underlying ParkingTask), it exists to show
-          the one thing that card can't: the visitor's phone number. */}
+      {/* 3. Visitor Pickups Section */}
       {myVisitorJobs.length > 0 && (
-        <>
-          <div style={{fontSize: 15, fontWeight: 800, marginBottom: 12, color: c.primary}}>Visitor pickups</div>
-          {myVisitorJobs.map(v => (
-            <div key={v.id} style={{display: 'flex', alignItems: 'center', borderRadius: 16, border: `1px solid ${c.border}`, padding: 14, marginBottom: 8, gap: 12, backgroundColor: c.surface}}>
-              <div style={{width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: c.cardAlt}}>
-                <Icon name={v.vehicleType === 'bike' ? 'bike' : 'car'} size={17} color={c.primary} />
-              </div>
-              <div style={{flex: 1, minWidth: 0}}>
-                <div style={{fontSize: 13, fontWeight: 700, color: c.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
-                  {v.name || 'Visitor'}{v.carNumber ? ` · ${v.carNumber}` : ''}
+        <div style={{marginBottom: 18}}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            marginBottom: 10,
+          }}>
+            <Icon name="people" size={14} color={c.primary} />
+            <span style={{fontSize: 13.5, fontWeight: 800, color: c.textPrimary, letterSpacing: -0.1}}>
+              Assigned Visitor Pickups ({myVisitorJobs.length})
+            </span>
+          </div>
+
+          <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
+            {myVisitorJobs.map(v => (
+              <div
+                key={v.id}
+                style={{
+                  ...glassCardStyle,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: 12,
+                  gap: 12,
+                }}>
+                <div style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  backgroundColor: c.cardAlt,
+                }}>
+                  <Icon name={v.vehicleType === 'bike' ? 'bike' : 'car'} size={17} color={c.primary} />
                 </div>
-                <a href={`tel:${v.mobile}`} style={{fontSize: 11, marginTop: 2, color: c.textSecondary, textDecoration: 'none'}}>{v.mobile}</a>
+
+                <div style={{flex: 1, minWidth: 0}}>
+                  <div style={{fontSize: 13, fontWeight: 800, color: c.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+                    {v.name || 'Visitor'} {v.carNumber ? `· ${v.carNumber}` : ''}
+                  </div>
+                  <a
+                    href={`tel:${v.mobile}`}
+                    style={{fontSize: 11.5, fontWeight: 700, color: c.primary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2}}>
+                    <Icon name="phone" size={12} color={c.primary} />
+                    <span>{v.mobile}</span>
+                  </a>
+                </div>
+
+                <span style={{
+                  fontSize: 9.5,
+                  fontWeight: 800,
+                  letterSpacing: 0.4,
+                  borderRadius: 6,
+                  padding: '4px 8px',
+                  whiteSpace: 'nowrap',
+                  color: v.status === 'pending' ? '#D97706' : c.primary,
+                  backgroundColor: v.status === 'pending' ? (isDark ? 'rgba(245, 158, 11, 0.15)' : '#FFFBEB') : c.cardAlt,
+                }}>
+                  {v.status === 'pending' ? 'PICKUP PENDING' : 'RETRIEVAL READY'}
+                </span>
               </div>
-              <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 0.5, borderRadius: 8, padding: '5px 9px', whiteSpace: 'nowrap', color: v.status === 'pending' ? c.warning : c.primary, backgroundColor: v.status === 'pending' ? c.warningLight : c.cardAlt}}>
-                {v.status === 'pending' ? 'AWAITING PICKUP' : 'READY FOR RETRIEVAL'}
-              </span>
-            </div>
-          ))}
-        </>
+            ))}
+          </div>
+        </div>
       )}
 
-      {/* Completed today */}
+      {/* 4. Completed Today Section */}
       {completedToday.length > 0 && (
-        <>
-          <div style={{fontSize: 15, fontWeight: 800, marginBottom: 12, color: c.primary}}>Completed today</div>
-          {completedToday.map(t => (
-            <div key={t.id} style={{display: 'flex', alignItems: 'center', borderRadius: 16, border: `1px solid ${c.border}`, padding: 14, marginBottom: 8, gap: 12, backgroundColor: c.surface}}>
-              <div style={{width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: c.successLight}}>
-                <Icon name={t.type === 'park' ? 'arrowDown' : 'arrowUp'} size={14} color={c.success} />
+        <div>
+          <div style={{fontSize: 13.5, fontWeight: 800, marginBottom: 10, color: c.textPrimary, letterSpacing: -0.1}}>
+            Completed Runs Today ({completedToday.length})
+          </div>
+          <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
+            {completedToday.map(t => (
+              <div
+                key={t.id}
+                style={{
+                  ...glassCardStyle,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: 12,
+                  gap: 12,
+                }}>
+                <div style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 10,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  backgroundColor: t.type === 'park' ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5') : (isDark ? 'rgba(6, 182, 212, 0.15)' : '#ECFEFF'),
+                }}>
+                  <Icon
+                    name={t.type === 'park' ? 'arrowDown' : 'arrowUp'}
+                    size={14}
+                    color={t.type === 'park' ? c.success : '#06B6D4'}
+                  />
+                </div>
+
+                <div style={{flex: 1, minWidth: 0}}>
+                  <div style={{fontSize: 13, fontWeight: 800, color: c.textPrimary}}>
+                    {t.type === 'park' ? 'Parked' : 'Retrieved'} · {t.doctorName}
+                  </div>
+                  <div style={{fontSize: 11, fontWeight: 700, marginTop: 2, color: c.textSecondary, display: 'flex', alignItems: 'center', gap: 6}}>
+                    <span style={{fontFamily: 'monospace'}}>{t.carNumber}</span>
+                    {t.slotId && <span>· BAY {t.slotId}</span>}
+                  </div>
+                </div>
+
+                <Icon name="check" size={16} color={c.success} />
               </div>
-              <div style={{flex: 1, minWidth: 0}}>
-                <div style={{fontSize: 13, fontWeight: 700, color: c.primary}}>{t.type === 'park' ? 'Parked' : 'Retrieved'} — {t.doctorName}</div>
-                <div style={{fontSize: 11, marginTop: 2, color: c.textSecondary}}>{t.carNumber} {t.slotId ? `· ${t.slotId}` : ''}</div>
-              </div>
-              <Icon name="check" size={16} color={c.success} />
-            </div>
-          ))}
-        </>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
