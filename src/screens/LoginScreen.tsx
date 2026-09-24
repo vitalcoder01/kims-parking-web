@@ -1,22 +1,13 @@
 import React, {useState, useRef, useEffect, useCallback} from 'react';
-import {PressableScale} from '../components/PressableScale';
 import {useAuth} from '../context/AuthContext';
 import {useTheme} from '../context/ThemeContext';
-import {BRAND_GRADIENT, gradientCss} from '../theme/colors';
 import {Icon} from '../components/Icon';
 import {ReleaseNotesModal} from '../components/ReleaseNotesModal';
 import {InstallBanner} from '../components/InstallBanner';
 import {UpdateBanner} from '../components/UpdateBanner';
 import {APP_VERSION_NAME} from '../config/version';
 
-// Quick-login: remembers accounts you've actually signed into on THIS
-// browser so switching roles while testing doesn't mean retyping a
-// password every time — same convenience tradeoff as the mobile app.
 const SAVED_ACCOUNTS_KEY = '@saved_accounts';
-
-// How many saved accounts show before "Show all" — X's login shows two
-// rows then a divider; more than a few full-width rows pushes the actual
-// username/password fields off-screen, which is the opposite of helpful.
 const VISIBLE_ACCOUNTS = 3;
 
 interface SavedAccount {
@@ -51,8 +42,8 @@ export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
   const {colors, isDark} = useTheme();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError]       = useState('');
-  const [loading, setLoading]   = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
@@ -82,8 +73,10 @@ export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
     try {
       const loggedIn = await login(u.trim(), p);
       rememberAccount({
-        username: u.trim(), password: p,
-        role: loggedIn?.role ?? '', name: loggedIn?.name ?? u.trim(),
+        username: u.trim(),
+        password: p,
+        role: loggedIn?.role ?? '',
+        name: loggedIn?.name ?? u.trim(),
       });
     } catch (err: any) {
       setError(err.message || 'Invalid username or password');
@@ -106,232 +99,452 @@ export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
     setSavedAccounts(loadSavedAccounts());
   };
 
-  // Warm neutral, from the palette — the old hardcoded '#F8FAFF' was a cool
-  // blue-white, the one cool tone in an otherwise entirely warm-mono app.
-  const fieldFill = isDark ? colors.card : colors.cardAlt;
   const visibleAccounts = showAllAccounts ? savedAccounts : savedAccounts.slice(0, VISIBLE_ACCOUNTS);
 
-  // Fill-first, border only on focus/error — a resting field is a calm
-  // surface, and the border appears exactly when it means something.
-  const inputWrap = (isFocused: boolean): React.CSSProperties => ({
-    display: 'flex', alignItems: 'center', gap: 10,
-    border: `1.5px solid ${error ? colors.error : isFocused ? colors.primary : 'transparent'}`,
-    borderRadius: 16, padding: '0 16px', height: 56,
-    backgroundColor: fieldFill,
+  const inputWrapStyle = (isFocused: boolean): React.CSSProperties => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    border: `1px solid ${
+      error
+        ? colors.error
+        : isFocused
+        ? isDark ? '#93C5FD' : '#0F172A'
+        : isDark ? 'rgba(255, 255, 255, 0.12)' : '#CBD5E1'
+    }`,
+    borderRadius: 8,
+    padding: '0 13px',
+    height: 42,
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.75)',
+    boxShadow: isFocused ? (isDark ? '0 0 0 3px rgba(147, 197, 253, 0.15)' : '0 0 0 3px rgba(15, 23, 42, 0.06)') : 'none',
+    transition: 'border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease',
   });
 
   const inputStyle: React.CSSProperties = {
-    flex: 1, fontSize: 15.5, fontWeight: 600, border: 'none', background: 'transparent',
-    color: colors.textPrimary, minWidth: 0, outline: 'none',
+    flex: 1,
+    fontSize: 13.5,
+    fontWeight: 500,
+    border: 'none',
+    background: 'transparent',
+    color: colors.textPrimary,
+    minWidth: 0,
+    outline: 'none',
   };
 
-  const fieldLabel: React.CSSProperties = {fontSize: 13, fontWeight: 700, color: colors.textSecondary};
+  const fieldLabelStyle: React.CSSProperties = {
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: colors.textSecondary,
+    marginBottom: 6,
+  };
 
   return (
-    <div className="phone-frame" style={{backgroundColor: colors.background}}>
-      <UpdateBanner />
-      <InstallBanner />
-      <div className="screen-scroll" style={{paddingBottom: 32}}>
+    <div
+      className="auth-viewport"
+      style={{
+        background: isDark
+          ? 'radial-gradient(circle at 50% 15%, rgba(37, 99, 235, 0.08) 0%, #0F172A 70%)'
+          : 'radial-gradient(circle at 50% 15%, rgba(37, 99, 235, 0.05) 0%, #F8FAFC 70%)',
+        backgroundColor: isDark ? '#0F172A' : '#F8FAFC',
+      }}
+    >
+      <div style={{width: '100%', maxWidth: 420, marginBottom: 12}}>
+        <UpdateBanner />
+        <InstallBanner />
+      </div>
 
-        {/* Hero — the mark is a solid light tile rather than the old
-            translucent ring: a confident app-icon-like shape reads as a
-            real brand, a 20%-white box with a 30%-white border reads as a
-            placeholder. */}
-        <div style={{
-          background: gradientCss(BRAND_GRADIENT),
-          padding: '72px 24px 52px', display: 'flex', flexDirection: 'column', alignItems: 'center',
-        }}>
-          <div style={{
-            width: 76, height: 76, borderRadius: 22, backgroundColor: '#FFFFFF',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 22,
-          }}>
-            <Icon name="parking" size={38} color="#15161A" />
-          </div>
-          <div style={{color: '#fff', fontSize: 30, fontWeight: 900, letterSpacing: -0.8}}>KIMS Hospital</div>
-          <div style={{color: 'rgba(255,255,255,0.62)', fontSize: 13.5, marginTop: 7, fontWeight: 500}}>Smart Parking Management</div>
-        </div>
-
-        {/* Login card */}
-        <div
-          className={shaking ? 'shake' : undefined}
-          style={{
-            margin: 16, marginTop: -28, borderRadius: 28, border: `1px solid ${colors.border}`,
-            padding: 24, paddingTop: 28, backgroundColor: colors.surface,
-            boxShadow: '0 3px 8px rgba(0,0,0,0.05)',
-          }}>
-          <div style={{fontSize: 27, fontWeight: 900, letterSpacing: -0.6, color: colors.textPrimary}}>Welcome back</div>
-          <div style={{fontSize: 14, marginTop: 5, marginBottom: 26, color: colors.textMuted}}>Sign in to continue your shift</div>
-
-          {/* Saved accounts — full-width rows, not cramped horizontal chips
-              with an × overlapping the corner. Mobbin reference: X's
-              "Continue with your existing accounts" and Duolingo's
-              device-account picker both use exactly this shape (avatar,
-              name + secondary line, remove action on the right). */}
-          {savedAccounts.length > 0 && (
-            <div style={{marginBottom: 26}}>
-              <div style={{fontSize: 13, fontWeight: 700, marginBottom: 10, color: colors.textSecondary}}>Continue as</div>
-              <div style={{borderRadius: 18, border: `1px solid ${colors.border}`, overflow: 'hidden'}}>
-                {visibleAccounts.map((acc, i) => (
-                  <div
-                    key={acc.username}
-                    style={{
-                      display: 'flex', alignItems: 'center',
-                      borderBottom: i < visibleAccounts.length - 1 ? `1px solid ${colors.divider}` : 'none',
-                    }}>
-                    <div
-                      className="pressable"
-                      role="button"
-                      tabIndex={loading ? -1 : 0}
-                      aria-disabled={loading}
-                      onClick={() => { if (!loading) handleQuickLogin(acc); }}
-                      style={{
-                        flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '12px 0 12px 14px', cursor: loading ? 'default' : 'pointer',
-                        opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : 'auto',
-                      }}>
-                      <span style={{
-                        width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primary, flexShrink: 0,
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      }}>
-                        <span style={{fontSize: 15, fontWeight: 800, color: colors.textOnPrimary}}>{acc.name[0]?.toUpperCase()}</span>
-                      </span>
-                      <span style={{flex: 1, minWidth: 0, textAlign: 'left'}}>
-                        <span style={{
-                          display: 'block', fontSize: 14.5, fontWeight: 700, color: colors.textPrimary,
-                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }}>{acc.name}</span>
-                        <span style={{
-                          display: 'block', fontSize: 12, marginTop: 2, textTransform: 'capitalize', color: colors.textMuted,
-                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }}>{acc.role || acc.username}</span>
-                      </span>
-                    </div>
-                    <PressableScale
-                      onClick={() => handleForget(acc)}
-                      disabled={loading}
-                      style={{padding: '18px 16px', background: 'transparent', border: 'none', display: 'inline-flex'}}>
-                      <Icon name="close" size={16} color={colors.textMuted} />
-                    </PressableScale>
-                  </div>
-                ))}
-              </div>
-              {savedAccounts.length > VISIBLE_ACCOUNTS && (
-                <PressableScale
-                  onClick={() => setShowAllAccounts(v => !v)}
-                  style={{background: 'transparent', border: 'none', padding: '10px 0', display: 'flex'}}>
-                  <span style={{fontSize: 13, fontWeight: 700, color: colors.textSecondary}}>
-                    {showAllAccounts ? 'Show fewer' : `Show all ${savedAccounts.length} accounts`}
-                  </span>
-                </PressableScale>
-              )}
+      <div
+        className={`auth-glass-card ${shaking ? 'shake' : ''}`}
+        style={{
+          backgroundColor: isDark ? 'rgba(24, 27, 36, 0.78)' : 'rgba(255, 255, 255, 0.82)',
+          border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(226, 232, 240, 0.85)'}`,
+          boxShadow: isDark
+            ? '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05) inset'
+            : '0 20px 40px -15px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.6) inset',
+          padding: '30px 26px',
+        }}
+      >
+        {/* Brand Header */}
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 9,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#0F172A',
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.1)'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <Icon name="parking" size={20} color="#FFFFFF" />
             </div>
-          )}
-
-          {/* Fields — no leading icon inside the input. Every premium
-              reference (Gymshark, Peacock, Grill'd) uses a clean field; an
-              icon in a box on the left is 2015-era chrome that adds nothing
-              a label above the field doesn't already say. */}
-          <div style={{display: 'flex', flexDirection: 'column', gap: 18}}>
-            <div style={{display: 'flex', flexDirection: 'column', gap: 9}}>
-              <label style={fieldLabel}>Username</label>
-              <div style={inputWrap(focused === 'username')}>
-                <input
-                  style={inputStyle}
-                  placeholder="e.g. Dr. Aditya Sharma"
-                  value={username}
-                  onChange={e => { setUsername(e.target.value); setError(''); }}
-                  onFocus={() => setFocused('username')}
-                  onBlur={() => setFocused(null)}
-                  onKeyDown={e => { if (e.key === 'Enter') passwordRef.current?.focus(); }}
-                />
+            <div>
+              <div style={{fontSize: 16, fontWeight: 700, letterSpacing: -0.2, color: colors.textPrimary}}>
+                KIMS Hospital
               </div>
-            </div>
-
-            <div style={{display: 'flex', flexDirection: 'column', gap: 9}}>
-              <label style={fieldLabel}>Password</label>
-              <div style={inputWrap(focused === 'password')}>
-                <input
-                  ref={passwordRef}
-                  style={inputStyle}
-                  placeholder="Enter your password"
-                  type={showPass ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); setError(''); }}
-                  onFocus={() => setFocused('password')}
-                  onBlur={() => setFocused(null)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleLogin(); }}
-                />
-                <PressableScale onClick={() => setShowPass(p => !p)} style={{padding: 2, display: 'inline-flex', background: 'transparent', border: 'none'}}>
-                  <Icon name={showPass ? 'eyeOff' : 'eye'} size={19} color={colors.textMuted} />
-                </PressableScale>
+              <div style={{fontSize: 11.5, fontWeight: 500, color: colors.textMuted}}>
+                Smart Valet & Parking
               </div>
             </div>
           </div>
-
-          {!!error && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8, marginTop: 16,
-              borderRadius: 14, padding: 13, backgroundColor: colors.errorLight,
-            }}>
-              <Icon name="alert" size={15} color={colors.error} />
-              <span style={{flex: 1, fontSize: 13, fontWeight: 600, color: colors.error}}>{error}</span>
-            </div>
-          )}
-
-          <PressableScale
-            onClick={() => setKeepSignedIn(k => !k)}
-            style={{display: 'flex', alignItems: 'flex-start', gap: 12, marginTop: 22, width: '100%', background: 'transparent', border: 'none', padding: 0}}>
-            <span style={{
-              width: 22, height: 22, borderRadius: 7,
-              border: `1.5px solid ${keepSignedIn ? colors.primary : colors.border}`,
-              backgroundColor: keepSignedIn ? colors.primary : 'transparent',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginTop: 1, flexShrink: 0,
-            }}>
-              {keepSignedIn && <Icon name="checkBold" size={12} color={colors.textOnPrimary} />}
-            </span>
-            <span style={{flex: 1, textAlign: 'left'}}>
-              <span style={{display: 'block', fontSize: 13.5, fontWeight: 700, color: colors.textPrimary}}>Keep me signed in for 12 hours</span>
-              <span style={{display: 'block', fontSize: 12, marginTop: 2, color: colors.textMuted}}>Covers a full shift without signing in again</span>
-            </span>
-          </PressableScale>
-
-          {/* Solid, not a gradient — matches every other primary CTA in the
-              app and reads more decisive than a near-black-to-black ramp
-              nobody can actually see. */}
-          <PressableScale
-            onClick={handleLogin}
-            disabled={loading}
+          <span
             style={{
-              width: '100%', backgroundColor: colors.primary, border: 'none',
-              borderRadius: 999, height: 58, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              gap: 8, marginTop: 26, opacity: loading ? 0.65 : 1,
-            }}>
-            {loading
-              ? <span className="spinner" style={{borderColor: 'rgba(255,255,255,0.35)', borderTopColor: '#fff'}} />
-              : <>
-                  <span style={{color: colors.textOnPrimary, fontSize: 16, fontWeight: 800}}>Sign In</span>
-                  <Icon name="arrowRight" size={19} color={colors.textOnPrimary} />
-                </>
-            }
-          </PressableScale>
-
-          <PressableScale onClick={onSignUp} style={{display: 'flex', justifyContent: 'center', marginTop: 20, width: '100%', background: 'transparent', border: 'none'}}>
-            <span style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>
-              New here? <span style={{color: colors.primary, fontWeight: 800}}>Create an account</span>
-            </span>
-          </PressableScale>
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: 0.5,
+              textTransform: 'uppercase',
+              padding: '3px 8px',
+              borderRadius: 999,
+              backgroundColor: isDark ? 'rgba(74, 222, 154, 0.12)' : 'rgba(31, 138, 91, 0.1)',
+              color: colors.success,
+              border: `1px solid ${colors.success}33`,
+            }}
+          >
+            Portal
+          </span>
         </div>
 
-        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', paddingBottom: 8, gap: 6}}>
-          <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
-            <Icon name="shield" size={13} color={colors.textMuted} />
-            <span style={{fontSize: 11, fontWeight: 600, color: colors.textMuted}}>Secure enterprise login</span>
+        {/* Saved accounts ("Continue as") */}
+        {savedAccounts.length > 0 && (
+          <div style={{marginBottom: 20}}>
+            <div style={fieldLabelStyle}>Continue As</div>
+            <div
+              style={{
+                borderRadius: 8,
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(226,232,240,0.85)'}`,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(248,250,252,0.65)',
+                overflow: 'hidden',
+              }}
+            >
+              {visibleAccounts.map((acc, i) => (
+                <div
+                  key={acc.username}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    borderBottom:
+                      i < visibleAccounts.length - 1
+                        ? `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(226,232,240,0.6)'}`
+                        : 'none',
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="pressable"
+                    disabled={loading}
+                    onClick={() => handleQuickLogin(acc)}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '9px 12px',
+                      textAlign: 'left',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: loading ? 'default' : 'pointer',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 6,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#0F172A',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <span style={{fontSize: 12, fontWeight: 700, color: '#fff'}}>
+                        {acc.name[0]?.toUpperCase()}
+                      </span>
+                    </span>
+                    <span style={{flex: 1, minWidth: 0}}>
+                      <span
+                        style={{
+                          display: 'block',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: colors.textPrimary,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {acc.name}
+                      </span>
+                      <span
+                        style={{
+                          display: 'block',
+                          fontSize: 11,
+                          color: colors.textMuted,
+                          textTransform: 'capitalize',
+                        }}
+                      >
+                        {acc.role || acc.username}
+                      </span>
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: 0.5,
+                        textTransform: 'uppercase',
+                        padding: '2px 7px',
+                        borderRadius: 999,
+                        backgroundColor: isDark ? 'rgba(37,99,235,0.15)' : 'rgba(37,99,235,0.08)',
+                        color: isDark ? '#93C5FD' : '#2563EB',
+                      }}
+                    >
+                      {acc.role || 'Staff'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="pressable"
+                    onClick={() => handleForget(acc)}
+                    disabled={loading}
+                    aria-label={`Forget ${acc.username}`}
+                    style={{
+                      padding: '10px 12px',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      opacity: 0.55,
+                    }}
+                  >
+                    <Icon name="close" size={13} color={colors.textMuted} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            {savedAccounts.length > VISIBLE_ACCOUNTS && (
+              <button
+                type="button"
+                className="pressable"
+                onClick={() => setShowAllAccounts(v => !v)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '6px 0',
+                  display: 'flex',
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{fontSize: 11.5, fontWeight: 600, color: colors.textSecondary}}>
+                  {showAllAccounts ? 'Show fewer' : `Show all ${savedAccounts.length} accounts`}
+                </span>
+              </button>
+            )}
           </div>
-          <div style={{textAlign: 'center', fontSize: 10, color: colors.textMuted}}>KIMS Parking System v{APP_VERSION_NAME} — Web</div>
+        )}
+
+        {/* Input Fields */}
+        <div style={{display: 'flex', flexDirection: 'column', gap: 14}}>
+          <div>
+            <label style={fieldLabelStyle}>Username / Staff ID</label>
+            <div style={inputWrapStyle(focused === 'username')}>
+              <input
+                style={inputStyle}
+                placeholder="e.g. Dr. Aditya Sharma or valet_01"
+                value={username}
+                onChange={e => {
+                  setUsername(e.target.value);
+                  setError('');
+                }}
+                onFocus={() => setFocused('username')}
+                onBlur={() => setFocused(null)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') passwordRef.current?.focus();
+                }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+              <label style={fieldLabelStyle}>Password</label>
+            </div>
+            <div style={inputWrapStyle(focused === 'password')}>
+              <input
+                ref={passwordRef}
+                style={inputStyle}
+                placeholder="Enter password"
+                type={showPass ? 'text' : 'password'}
+                value={password}
+                onChange={e => {
+                  setPassword(e.target.value);
+                  setError('');
+                }}
+                onFocus={() => setFocused('password')}
+                onBlur={() => setFocused(null)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleLogin();
+                }}
+              />
+              <button
+                type="button"
+                className="pressable"
+                onClick={() => setShowPass(p => !p)}
+                aria-label={showPass ? 'Hide password' : 'Show password'}
+                style={{padding: 2, display: 'inline-flex', background: 'transparent', border: 'none', cursor: 'pointer'}}
+              >
+                <Icon name={showPass ? 'eyeOff' : 'eye'} size={16} color={colors.textMuted} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Inline Error Notice */}
+        {!!error && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginTop: 14,
+              borderRadius: 8,
+              padding: '9px 12px',
+              backgroundColor: 'rgba(225, 29, 72, 0.07)',
+              border: '1px solid rgba(225, 29, 72, 0.22)',
+            }}
+          >
+            <Icon name="alert" size={14} color="#E11D48" />
+            <span style={{flex: 1, fontSize: 12.5, fontWeight: 600, color: '#E11D48'}}>
+              {error}
+            </span>
+          </div>
+        )}
+
+        {/* Keep signed in */}
+        <button
+          type="button"
+          className="pressable"
+          onClick={() => setKeepSignedIn(k => !k)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 9,
+            marginTop: 16,
+            width: '100%',
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+          }}
+        >
+          <span
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 4,
+              border: `1.5px solid ${keepSignedIn ? (isDark ? '#93C5FD' : '#0F172A') : colors.border}`,
+              backgroundColor: keepSignedIn ? (isDark ? '#93C5FD' : '#0F172A') : 'transparent',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            {keepSignedIn && (
+              <Icon name="checkBold" size={10} color={isDark ? '#0F172A' : '#FFFFFF'} />
+            )}
+          </span>
+          <span style={{fontSize: 12.5, fontWeight: 500, color: colors.textSecondary}}>
+            Keep me signed in on this workstation (12h)
+          </span>
+        </button>
+
+        {/* Primary Action CTA */}
+        <button
+          type="button"
+          className="pressable"
+          onClick={handleLogin}
+          disabled={loading}
+          style={{
+            width: '100%',
+            height: 42,
+            borderRadius: 8,
+            backgroundColor: isDark ? '#F8FAFC' : '#0F172A',
+            color: isDark ? '#0F172A' : '#FFFFFF',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            marginTop: 20,
+            cursor: loading ? 'default' : 'pointer',
+            opacity: loading ? 0.7 : 1,
+            transition: 'background-color 0.15s ease, opacity 0.15s ease',
+          }}
+        >
+          {loading ? (
+            <span
+              className="spinner"
+              style={{
+                width: 15,
+                height: 15,
+                borderColor: isDark ? 'rgba(15,23,42,0.3)' : 'rgba(255,255,255,0.3)',
+                borderTopColor: isDark ? '#0F172A' : '#FFFFFF',
+              }}
+            />
+          ) : (
+            <>
+              <span style={{fontSize: 13.5, fontWeight: 600}}>Sign In</span>
+              <Icon name="arrowRight" size={15} color={isDark ? '#0F172A' : '#FFFFFF'} />
+            </>
+          )}
+        </button>
+
+        {/* Sign up prompt */}
+        <div style={{display: 'flex', justifyContent: 'center', marginTop: 18}}>
+          <button
+            type="button"
+            className="pressable"
+            onClick={onSignUp}
+            style={{background: 'transparent', border: 'none', cursor: 'pointer', padding: 0}}
+          >
+            <span style={{fontSize: 12.5, fontWeight: 500, color: colors.textMuted}}>
+              New staff member?{' '}
+              <span style={{color: isDark ? '#93C5FD' : '#2563EB', fontWeight: 600}}>
+                Create an account
+              </span>
+            </span>
+          </button>
         </div>
       </div>
 
-      {/* New release published? Feature notes pop up before login. */}
+      {/* Footer */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 4,
+          marginTop: 18,
+        }}
+      >
+        <div style={{display: 'flex', alignItems: 'center', gap: 5}}>
+          <Icon name="shield" size={12} color={colors.textMuted} />
+          <span style={{fontSize: 11, fontWeight: 500, color: colors.textMuted}}>
+            KIMS Hospital Enterprise Network
+          </span>
+        </div>
+        <div style={{fontSize: 10.5, color: colors.textMuted}}>
+          System v{APP_VERSION_NAME}
+        </div>
+      </div>
+
       <ReleaseNotesModal />
     </div>
   );

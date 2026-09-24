@@ -45,8 +45,8 @@ input:focus {
   transition: transform 0.12s ease, opacity 0.12s ease;
 }
 .pressable:active:not(:disabled) {
-  transform: scale(var(--press-scale, 0.96));
-  opacity: 0.85;
+  transform: scale(var(--press-scale, 0.99));
+  opacity: 0.90;
 }
 .pressable:disabled {
   cursor: default;
@@ -133,12 +133,36 @@ input:focus {
 
 @media (min-width: 481px) {
   body {
-    background: #E5E3DD;
+    background: #F8FAFC;
   }
   .phone-frame {
     border-left: 1px solid rgba(0, 0, 0, 0.08);
     border-right: 1px solid rgba(0, 0, 0, 0.08);
   }
+}
+
+/* ── Refined Glassmorphism Auth Container ── */
+.auth-viewport {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 16px;
+  position: relative;
+  overflow-y: auto;
+}
+
+.auth-glass-card {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 14px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  position: relative;
+  z-index: 1;
 }
 
 .screen-scroll {
