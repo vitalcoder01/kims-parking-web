@@ -7,28 +7,18 @@ import {useDialog} from '../../components/AppDialog';
 import {Icon} from '../../components/Icon';
 import {PressableScale} from '../../components/PressableScale';
 
-// Direct port of the mobile app's driver DriverDashboardScreen — status
-// greeting, rolling week strip, hero "current job" card, stat tiles and
-// today's completed-jobs feed. Same business logic, DOM/CSS in place of
-// RN's View/Text/StyleSheet.
-
 const DAY_LETTERS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
 function greeting() {
   const h = new Date().getHours();
-  if (h < 12) return {text: 'good morning.', icon: 'sun' as const};
-  if (h < 17) return {text: 'good afternoon.', icon: 'sun' as const};
-  if (h < 21) return {text: 'good evening.', icon: 'sunset' as const};
-  return {text: 'good night.', icon: 'moon' as const};
+  if (h < 12) return {text: 'Good morning', icon: 'sun' as const};
+  if (h < 17) return {text: 'Good afternoon', icon: 'sun' as const};
+  if (h < 21) return {text: 'Good evening', icon: 'sunset' as const};
+  return {text: 'Good night', icon: 'moon' as const};
 }
 
-// A rolling seven-day window CENTRED on today, not the Sunday-to-Saturday
-// calendar week. Anchoring to the calendar meant the highlight drifted across
-// the row as the week went on — parked at the far right by Friday and at the
-// far left on Sunday — so the one cell the driver looks at was never in the
-// same place twice. Now today holds the middle and the dates move around it.
 const WINDOW = 7;
-const TODAY_INDEX = Math.floor(WINDOW / 2);   // 3 of 0..6
+const TODAY_INDEX = Math.floor(WINDOW / 2); // 3 of 0..6
 
 function weekStrip() {
   const today = new Date();
@@ -36,11 +26,7 @@ function weekStrip() {
     const d = new Date(today);
     d.setDate(today.getDate() + (i - TODAY_INDEX));
     return {
-      // toDateString, not letter+num: a window spanning a month boundary can
-      // repeat a day number, and React needs these keys to be unique.
       key: d.toDateString(),
-      // Indexed by the real weekday. The old code used the loop index, which
-      // only lined up because the row happened to start on a Sunday.
       letter: DAY_LETTERS[d.getDay()],
       num: d.getDate(),
       isToday: i === TODAY_INDEX,
@@ -64,25 +50,15 @@ function SkeletonBlock({height, width = '100%', radius = 10, style}: {height: nu
 export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = {}) {
   const {user, updateProfile} = useAuth();
   const {tasks, visitors, setDriverStatus, fetchTaskHistory, hydrated} = useAppState();
-  const {colors: c} = useTheme();
+  const {colors: c, isDark} = useTheme();
   const dialog = useDialog();
   const g = greeting();
   const days = weekStrip();
 
   const myDriverId = useMyDriverId();
-  // NOT from AppStateContext's `drivers` array — that's only ever fetched
-  // for valet/admin sessions, so it's permanently empty for a driver.
-  // user.driverStatus is sent by the backend's serializeUser specifically so
-  // a driver's own app can know their status without fetching (and thereby
-  // exposing) the whole roster's phone numbers.
   const myStatus = user?.driverStatus;
   const [togglingShift, setTogglingShift] = useState(false);
 
-  // On/off is the only thing a toggle here should control — 'busy' is set
-  // automatically by taking a job, never chosen. The backend already
-  // refuses to take a driver off-duty while they're on a live job (see
-  // driver.service.js setStatus's ACTIVE_TASK_STATUSES guard), so a driver
-  // physically mid-job can't shift off mid-drive.
   const onShift = myStatus === 'available';
   const handleToggleShift = async () => {
     if (!myDriverId || togglingShift) return;
@@ -94,9 +70,6 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
     setTogglingShift(true);
     try {
       await setDriverStatus(myDriverId, next);
-      // AppStateContext's setDriverStatus only patches the (unpopulated,
-      // for a driver) `drivers` array — this is what actually keeps
-      // user.driverStatus, the thing this screen reads, current.
       updateProfile({driverStatus: next});
     } catch (err: any) {
       dialog.alert(err.message || 'Could not change your shift status');
@@ -106,28 +79,13 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
   };
 
   const myTasks = tasks.filter(t => isMyJob(t.driverId, myDriverId));
-  // 'delivered' is already off this driver's plate — awaiting valet
-  // confirmation only, not something to keep showing as their active job.
   const activeTask = myTasks.find(t => t.status !== 'completed' && t.status !== 'delivered' && t.status !== 'cancelled') ?? null;
-  // Visitor pickups genuinely still waiting on THIS driver. Requires an
-  // actual live retrieve-type task assigned to them (not the visitor row's
-  // own driverId, which is reused from the park leg and stays stale after
-  // it completes — see visitor.service.js's assignRetrievalDriver), and
-  // excludes whichever visitor `activeTask` already represents so the same
-  // job never shows/counts twice.
   const pendingVisitors = visitors.filter(v => v.status === 'parked' && v.retrievalRequested
     && v.id !== activeTask?.visitorId
     && tasks.some(t => t.visitorId === v.id && t.type === 'retrieve'
       && isMyJob(t.driverId, myDriverId) && t.status !== 'completed' && t.status !== 'cancelled'));
   const openCount = (activeTask ? 1 : 0) + pendingVisitors.length;
 
-  // "Completed"/"Total jobs" need real history, not the live `tasks` array —
-  // that's bounded to "at most one row per doctor", so a completed job
-  // vanishes from it the moment that doctor's next car comes in.
-  //
-  // Depends on `tasks` itself, not `tasks.length` — completing a job
-  // replaces a row in place, so the array's length never changes even
-  // though the effect needs to refire.
   const [history, setHistory] = useState<typeof tasks>([]);
   useEffect(() => {
     if (!myDriverId) return;
@@ -137,159 +95,369 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
   const completedToday = history.filter(t => t.status === 'completed' && isToday(t.completedAt));
 
   const stats = [
-    {label: 'Completed', value: completedToday.length, icon: 'flag' as const},
-    {label: 'Open now', value: openCount, icon: 'inbox' as const},
-    {label: 'Total jobs', value: history.length, icon: 'history' as const},
+    {label: 'Completed Today', value: completedToday.length, icon: 'flag' as const},
+    {label: 'Open Missions', value: openCount, icon: 'inbox' as const},
+    {label: 'Total Completed', value: history.length, icon: 'history' as const},
   ];
 
-  return (
-    <div className="screen-scroll" style={{backgroundColor: c.background, padding: 20, paddingTop: 12, paddingBottom: 40}}>
+  const glassCardStyle: React.CSSProperties = {
+    backgroundColor: c.surface,
+    border: `1px solid ${c.border}`,
+    borderRadius: 18,
+    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.25)' : '0 2px 10px rgba(0, 0, 0, 0.03)',
+  };
 
-      {/* Header */}
-      <div style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18}}>
-        <div style={{width: 34, height: 34, borderRadius: 17, border: `1px solid ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: c.surface, flexShrink: 0}}>
-          <Icon name={g.icon} size={15} color={c.textPrimary} />
+  return (
+    <div className="screen-scroll" style={{backgroundColor: c.background, padding: 16, paddingBottom: 40}}>
+      {/* 1. Header Greeting & Identity */}
+      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16}}>
+        <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
+          <div style={{
+            width: 36,
+            height: 36,
+            borderRadius: 12,
+            border: `1px solid ${c.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: c.surface,
+            flexShrink: 0,
+          }}>
+            <Icon name={g.icon} size={17} color={c.primary} />
+          </div>
+          <div>
+            <div style={{fontSize: 16, fontWeight: 900, color: c.textPrimary, letterSpacing: -0.3}}>
+              {g.text}, {user?.name?.split(' ')[0] ?? 'Runner'}
+            </div>
+            <div style={{fontSize: 11, fontWeight: 700, color: c.textSecondary, marginTop: 1, letterSpacing: 0.3}}>
+              VALET RUNNER DISPATCH
+            </div>
+          </div>
         </div>
-        <div style={{flex: 1, fontSize: 22, fontWeight: 800, color: c.textPrimary}}>{g.text}</div>
-        <div style={{width: 34, height: 34, borderRadius: 17, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: c.primary, flexShrink: 0}}>
-          <span style={{fontSize: 14, fontWeight: 800, color: c.textOnPrimary}}>{(user?.name ?? 'D').charAt(0).toUpperCase()}</span>
+
+        <div style={{
+          width: 36,
+          height: 36,
+          borderRadius: 12,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF',
+          border: `1.5px solid ${c.primary}`,
+          flexShrink: 0,
+        }}>
+          <span style={{fontSize: 14, fontWeight: 900, color: c.primary}}>
+            {(user?.name ?? 'D').charAt(0).toUpperCase()}
+          </span>
         </div>
       </div>
 
-      {/* Shift toggle — the driver's own on/off control, not something a
-          valet/admin has to set for them. Busy (on a live job) shows as a
-          locked, distinct state rather than a toggle that would just fail
-          on tap — the backend already refuses this move mid-job. */}
+      {/* 2. Tactical Shift Toggle Banner */}
       <PressableScale
         onClick={handleToggleShift}
         disabled={togglingShift || myStatus === 'busy'}
         style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
-          borderRadius: 18, padding: 14, marginBottom: 18,
-          border: `1px solid ${onShift ? c.success + '40' : c.border}`,
-          backgroundColor: onShift ? c.successLight : c.surface,
-          opacity: myStatus === 'busy' ? 0.75 : 1,
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          textAlign: 'left',
+          borderRadius: 18,
+          padding: '13px 16px',
+          marginBottom: 16,
+          border: `1px solid ${myStatus === 'busy' ? (isDark ? 'rgba(245, 158, 11, 0.3)' : '#FDE68A') : onShift ? (isDark ? 'rgba(16, 185, 129, 0.3)' : '#A7F3D0') : c.border}`,
+          backgroundColor: myStatus === 'busy' ? (isDark ? 'rgba(245, 158, 11, 0.08)' : '#FFFBEB') : onShift ? (isDark ? 'rgba(16, 185, 129, 0.08)' : '#ECFDF5') : c.surface,
+          opacity: myStatus === 'busy' ? 0.85 : 1,
+          cursor: myStatus === 'busy' ? 'default' : 'pointer',
         }}>
         <div style={{
-          width: 40, height: 40, borderRadius: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backgroundColor: myStatus === 'busy' ? c.warningLight : onShift ? c.success : c.cardAlt,
+          width: 40,
+          height: 40,
+          borderRadius: 12,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: myStatus === 'busy' ? '#F59E0B' : onShift ? '#10B981' : c.cardAlt,
         }}>
-          <Icon name={myStatus === 'busy' ? 'bolt' : 'key'} size={17} color={myStatus === 'busy' ? c.warning : onShift ? '#fff' : c.textMuted} />
+          <Icon name={myStatus === 'busy' ? 'bolt' : 'key'} size={18} color={myStatus === 'busy' || onShift ? '#fff' : c.textSecondary} />
         </div>
+
         <div style={{flex: 1, minWidth: 0}}>
-          <div style={{fontSize: 14, fontWeight: 800, color: c.textPrimary}}>
-            {myStatus === 'busy' ? 'On a job' : onShift ? 'On shift' : 'Off shift'}
+          <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+            <span style={{fontSize: 14, fontWeight: 900, color: c.textPrimary}}>
+              {myStatus === 'busy' ? 'On Mission' : onShift ? 'On Shift · Ready' : 'Off Shift · Standing By'}
+            </span>
+            <span style={{
+              width: 7,
+              height: 7,
+              borderRadius: 4,
+              backgroundColor: myStatus === 'busy' ? '#F59E0B' : onShift ? '#10B981' : c.textMuted,
+            }} />
           </div>
-          <div style={{fontSize: 11.5, marginTop: 2, color: c.textSecondary}}>
-            {myStatus === 'busy' ? 'Finish your current job to go off-duty' : onShift ? 'Visible to valets for new jobs' : "Tap to start — you won't be assigned jobs"}
+          <div style={{fontSize: 11.5, fontWeight: 600, marginTop: 2, color: c.textSecondary}}>
+            {myStatus === 'busy' ? 'Finish active task to go off-duty' : onShift ? 'Visible to station desks for runs' : "Tap to check in for new missions"}
           </div>
         </div>
-        {/* Pill switch — purely a visual reflection of onShift, the whole
-            card is the tap target. */}
+
+        {/* Tactile Toggle Switch */}
         <div style={{
-          width: 46, height: 27, borderRadius: 14, flexShrink: 0, padding: 3, boxSizing: 'border-box',
-          backgroundColor: onShift ? c.success : c.border, transition: 'background-color 0.15s ease',
+          width: 44,
+          height: 26,
+          borderRadius: 13,
+          flexShrink: 0,
+          padding: 3,
+          boxSizing: 'border-box',
+          backgroundColor: onShift ? '#10B981' : c.border,
+          transition: 'background-color 0.2s ease',
         }}>
           {togglingShift ? (
-            <div style={{width: 21, height: 21, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-              <span className="spinner" style={{width: 14, height: 14, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} />
+            <div style={{width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+              <span className="spinner" style={{width: 13, height: 13, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} />
             </div>
           ) : (
             <div style={{
-              width: 21, height: 21, borderRadius: 11, backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
-              transform: onShift ? 'translateX(19px)' : 'translateX(0)', transition: 'transform 0.15s ease',
+              width: 20,
+              height: 20,
+              borderRadius: 10,
+              backgroundColor: '#fff',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+              transform: onShift ? 'translateX(18px)' : 'translateX(0)',
+              transition: 'transform 0.2s ease',
             }} />
           )}
         </div>
       </PressableScale>
 
-      {/* Week strip */}
-      <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 20}}>
+      {/* 3. Rolling Centered Week Strip */}
+      <div style={{display: 'flex', justifyContent: 'space-between', gap: 6, marginBottom: 16}}>
         {days.map(d => (
           <div
             key={d.key}
             style={{
-              width: 38, height: 52, borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
-              border: `1px solid ${d.isToday ? c.border : 'transparent'}`,
-              backgroundColor: d.isToday ? c.surface : 'transparent',
-              // Days already gone recede, so the eye lands on today and the
-              // days still ahead of it.
+              flex: 1,
+              height: 52,
+              borderRadius: 12,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 3,
+              border: `1.5px solid ${d.isToday ? c.primary : c.border}`,
+              backgroundColor: d.isToday ? (isDark ? 'rgba(59, 130, 246, 0.12)' : '#EFF6FF') : c.surface,
               opacity: d.isPast && !d.isToday ? 0.45 : 1,
             }}>
-            <span style={{fontSize: 11, fontWeight: 600, color: c.textMuted}}>{d.letter}</span>
-            <span style={{fontSize: 15, fontWeight: d.isToday ? 900 : 700, color: d.isToday ? c.textPrimary : c.textSecondary}}>{d.num}</span>
+            <span style={{fontSize: 10, fontWeight: 800, color: d.isToday ? c.primary : c.textMuted, textTransform: 'uppercase'}}>
+              {d.letter}
+            </span>
+            <span style={{
+              fontSize: 14,
+              fontWeight: d.isToday ? 900 : 700,
+              color: d.isToday ? c.primary : c.textPrimary,
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              {d.num}
+            </span>
           </div>
         ))}
       </div>
 
-      {/* Hero card */}
+      {/* 4. Hero Mission Card */}
       <PressableScale
         onClick={() => onOpenJobs?.()}
-        style={{width: '100%', textAlign: 'left', borderRadius: 24, padding: 22, marginBottom: 16, minHeight: 150, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', backgroundColor: c.primary}}
-      >
-        <div style={{fontSize: 12, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: c.textOnPrimary + '99'}}>
-          {activeTask ? (activeTask.type === 'park' ? 'Parking task' : 'Retrieval task') : 'Standing by'}
+        style={{
+          width: '100%',
+          textAlign: 'left',
+          borderRadius: 20,
+          padding: 18,
+          marginBottom: 16,
+          backgroundColor: c.surface,
+          border: `1px solid ${activeTask ? (activeTask.type === 'park' ? '#10B981' : '#F59E0B') : c.border}`,
+          position: 'relative',
+          overflow: 'hidden',
+          boxShadow: isDark ? '0 8px 24px rgba(0, 0, 0, 0.3)' : '0 4px 14px rgba(0, 0, 0, 0.05)',
+          cursor: 'pointer',
+        }}>
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10}}>
+          <span style={{
+            fontSize: 10,
+            fontWeight: 900,
+            letterSpacing: 0.8,
+            textTransform: 'uppercase',
+            padding: '3px 8px',
+            borderRadius: 6,
+            backgroundColor: activeTask ? (activeTask.type === 'park' ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5') : (isDark ? 'rgba(245, 158, 11, 0.15)' : '#FFFBEB')) : c.cardAlt,
+            color: activeTask ? (activeTask.type === 'park' ? c.success : '#D97706') : c.textSecondary,
+          }}>
+            {activeTask ? (activeTask.type === 'park' ? 'PARK MISSION IN PROGRESS' : 'RETRIEVAL MISSION IN PROGRESS') : 'RUNNER STANDBY'}
+          </span>
+          {activeTask && (
+            <span style={{width: 8, height: 8, borderRadius: 4, backgroundColor: activeTask.type === 'park' ? '#10B981' : '#F59E0B'}} />
+          )}
         </div>
-        <div style={{fontSize: 20, fontWeight: 800, marginTop: 8, lineHeight: '26px', color: c.textOnPrimary}}>
-          {activeTask
-            ? `${activeTask.carNumber} · ${activeTask.doctorName}`
-            : 'No active job right now'}
-        </div>
-        <div style={{display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start', borderRadius: 999, padding: '10px 16px', marginTop: 16, backgroundColor: c.textOnPrimary}}>
-          <span style={{fontSize: 13, fontWeight: 800, color: c.primary}}>{activeTask ? 'Open job' : 'View jobs'}</span>
-          <Icon name="arrowRight" size={15} color={c.primary} />
+
+        {activeTask ? (
+          <div>
+            <div style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6}}>
+              <span style={{
+                fontFamily: 'monospace',
+                fontSize: 19,
+                fontWeight: 900,
+                color: c.textPrimary,
+                letterSpacing: 0.5,
+              }}>
+                {activeTask.carNumber}
+              </span>
+              {activeTask.slotId && (
+                <span style={{
+                  fontSize: 12,
+                  fontWeight: 900,
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  backgroundColor: c.primary,
+                  color: c.textOnPrimary,
+                }}>
+                  BAY {activeTask.slotId}
+                </span>
+              )}
+            </div>
+            <div style={{fontSize: 12.5, fontWeight: 700, color: c.textSecondary}}>
+              Guest: {activeTask.doctorName}
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div style={{fontSize: 17, fontWeight: 800, color: c.textPrimary, marginBottom: 4}}>
+              No active task assigned
+            </div>
+            <div style={{fontSize: 12, fontWeight: 600, color: c.textSecondary}}>
+              Station desks will dispatch incoming arrivals and departures directly to your queue.
+            </div>
+          </div>
+        )}
+
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          marginTop: 14,
+          paddingTop: 12,
+          borderTop: `1px solid ${c.border}`,
+        }}>
+          <span style={{fontSize: 12.5, fontWeight: 800, color: c.primary}}>
+            {activeTask ? 'Open active task details' : 'View full mission queue'}
+          </span>
+          <Icon name="arrowRight" size={14} color={c.primary} />
         </div>
       </PressableScale>
 
-      {/* Stats row */}
+      {/* 5. Tri-Metric Statistics Row */}
       <div style={{display: 'flex', gap: 10, marginBottom: 16}}>
-        {/* A zeroed tile during load reads as a real number — "you've done
-            nothing today" — rather than as "not known yet". */}
         {!hydrated ? [0, 1, 2].map(i => (
-          <div key={i} style={{flex: 1, borderRadius: 18, border: `1px solid ${c.border}`, padding: 14, display: 'flex', flexDirection: 'column', gap: 6, backgroundColor: c.surface}}>
-            <SkeletonBlock height={18} width={18} radius={5} />
-            <SkeletonBlock height={20} width="55%" radius={6} />
-            <SkeletonBlock height={10} width="70%" radius={5} />
+          <div key={i} style={{...glassCardStyle, flex: 1, padding: 12, display: 'flex', flexDirection: 'column', gap: 6}}>
+            <SkeletonBlock height={16} width={16} radius={4} />
+            <SkeletonBlock height={20} width="60%" radius={5} />
+            <SkeletonBlock height={10} width="80%" radius={4} />
           </div>
         )) : stats.map(s => (
-          <div key={s.label} style={{flex: 1, borderRadius: 18, border: `1px solid ${c.border}`, padding: 14, display: 'flex', flexDirection: 'column', gap: 6, backgroundColor: c.surface}}>
-            <Icon name={s.icon} size={18} color={c.textPrimary} />
-            <span style={{fontSize: 22, fontWeight: 900, color: c.textPrimary}}>{s.value}</span>
-            <span style={{fontSize: 11, fontWeight: 600, color: c.textSecondary}}>{s.label}</span>
+          <div key={s.label} style={{...glassCardStyle, flex: 1, padding: 12, display: 'flex', flexDirection: 'column', gap: 4}}>
+            <Icon name={s.icon} size={16} color={c.primary} />
+            <span style={{fontSize: 20, fontWeight: 900, color: c.textPrimary, fontVariantNumeric: 'tabular-nums'}}>
+              {s.value}
+            </span>
+            <span style={{fontSize: 10.5, fontWeight: 700, color: c.textSecondary}}>
+              {s.label}
+            </span>
           </div>
         ))}
       </div>
 
-      {/* Pending visitor pickups shortcut */}
+      {/* 6. Pending Visitor Pickups Alert Banner */}
       {pendingVisitors.length > 0 && (
         <PressableScale
           onClick={() => onOpenJobs?.()}
-          style={{width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10, borderRadius: 16, padding: 14, marginBottom: 16, border: `1px solid ${c.warning}40`, backgroundColor: c.warningLight}}
-        >
-          <Icon name="bellAlert" size={18} color={c.warning} />
-          <span style={{flex: 1, fontSize: 13, fontWeight: 700, color: c.textPrimary}}>
-            {pendingVisitors.length} visitor pickup{pendingVisitors.length > 1 ? 's' : ''} waiting
+          style={{
+            width: '100%',
+            textAlign: 'left',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            borderRadius: 16,
+            padding: 14,
+            marginBottom: 16,
+            border: `1px solid ${isDark ? 'rgba(245, 158, 11, 0.3)' : '#FDE68A'}`,
+            backgroundColor: isDark ? 'rgba(245, 158, 11, 0.1)' : '#FFFBEB',
+            cursor: 'pointer',
+          }}>
+          <div style={{
+            width: 32,
+            height: 32,
+            borderRadius: 10,
+            backgroundColor: '#F59E0B',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <Icon name="bellAlert" size={16} color="#fff" />
+          </div>
+          <span style={{flex: 1, fontSize: 13, fontWeight: 800, color: c.textPrimary}}>
+            {pendingVisitors.length} visitor pickup{pendingVisitors.length > 1 ? 's' : ''} waiting in queue
           </span>
           <Icon name="chevronRight" size={16} color={c.textSecondary} />
         </PressableScale>
       )}
 
-      {/* Recent activity */}
-      <div style={{fontSize: 15, fontWeight: 800, marginBottom: 10, color: c.textPrimary}}>Recent activity</div>
+      {/* 7. Recent Shift Missions Feed */}
+      <div style={{fontSize: 14, fontWeight: 900, marginBottom: 10, color: c.textPrimary}}>
+        Recent Completed Missions
+      </div>
       {completedToday.length === 0 ? (
-        <div style={{borderRadius: 18, border: `1px solid ${c.border}`, padding: 28, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, backgroundColor: c.surface}}>
-          <Icon name="flag" size={22} color={c.textMuted} />
-          <span style={{fontSize: 13, fontWeight: 600, color: c.textSecondary}}>Nothing completed yet today</span>
+        <div style={{...glassCardStyle, padding: 28, textAlign: 'center'}}>
+          <Icon name="flag" size={24} color={c.textMuted} style={{marginBottom: 8}} />
+          <div style={{fontSize: 13, fontWeight: 700, color: c.textSecondary}}>
+            No completed runs yet today
+          </div>
+          <div style={{fontSize: 11.5, fontWeight: 600, color: c.textMuted, marginTop: 2}}>
+            Finished tasks will populate here as you complete them
+          </div>
         </div>
       ) : (
         completedToday.slice(0, 5).map(t => (
-          <div key={t.id} style={{display: 'flex', alignItems: 'center', gap: 12, borderRadius: 16, border: `1px solid ${c.border}`, padding: 12, marginBottom: 8, backgroundColor: c.surface}}>
-            <div style={{width: 32, height: 32, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: c.successLight, flexShrink: 0}}>
-              <Icon name={t.type === 'park' ? 'arrowDown' : 'arrowUp'} size={15} color={c.success} />
+          <div
+            key={t.id}
+            style={{
+              ...glassCardStyle,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: 12,
+              marginBottom: 8,
+            }}>
+            <div style={{
+              width: 32,
+              height: 32,
+              borderRadius: 10,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: t.type === 'park' ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5') : (isDark ? 'rgba(6, 182, 212, 0.15)' : '#ECFEFF'),
+              flexShrink: 0,
+            }}>
+              <Icon
+                name={t.type === 'park' ? 'arrowDown' : 'arrowUp'}
+                size={14}
+                color={t.type === 'park' ? c.success : '#06B6D4'}
+              />
             </div>
             <div style={{flex: 1, minWidth: 0}}>
-              <div style={{fontSize: 13, fontWeight: 700, color: c.textPrimary}}>{t.type === 'park' ? 'Parked' : 'Retrieved'} · {t.doctorName}</div>
-              <div style={{fontSize: 11, fontWeight: 600, marginTop: 2, color: c.textSecondary}}>{t.carNumber}{t.slotId ? ` · ${t.slotId}` : ''}</div>
+              <div style={{fontSize: 13, fontWeight: 800, color: c.textPrimary}}>
+                {t.type === 'park' ? 'Parked' : 'Retrieved'} · {t.doctorName}
+              </div>
+              <div style={{fontSize: 11, fontWeight: 700, marginTop: 2, color: c.textSecondary, display: 'flex', alignItems: 'center', gap: 6}}>
+                <span style={{fontFamily: 'monospace'}}>{t.carNumber}</span>
+                {t.slotId && <span>· BAY {t.slotId}</span>}
+              </div>
             </div>
             <Icon name="check" size={16} color={c.success} />
           </div>
