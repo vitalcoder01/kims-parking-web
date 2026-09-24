@@ -55,11 +55,15 @@ function genPassword() {
 
 const roleLabel = (r: Role) => ({doctor: 'Doctor', staff: 'Staff', valet: 'Valet', driver: 'Driver', admin: 'Admin'}[r]);
 
-export function AdminStaffScreen({initialFilter = 'all'}: {initialFilter?: Filter} = {}) {
+export function AdminStaffScreen({initialFilter = 'all', initialQuery = ''}: {initialFilter?: Filter; initialQuery?: string} = {}) {
   const dark = useAdminOpsTheme();
   const dialog = useDialog();
   const [filter, setFilter] = useState<Filter>(initialFilter);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
+
+  useEffect(() => {
+    if (initialQuery !== undefined) setQuery(initialQuery);
+  }, [initialQuery]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);

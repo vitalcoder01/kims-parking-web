@@ -38,6 +38,10 @@ function conditionalGetKey(config: {method?: string; url?: string; params?: unkn
 let authToken: string | null = null;
 let onUnauthorized: (() => void) | null = null;
 
+export function clearEtagCache(): void {
+  etagCache.clear();
+}
+
 export function setAuthToken(token: string | null) {
   authToken = token;
 }
@@ -362,6 +366,13 @@ export const adminApi = {
       month: string;
       users: {userId: number; name: string; role: string; employeeId: string; days: {date: string; checkIn: string | null; checkOut: string | null; vehiclesHandled: number}[]}[];
     }),
+};
+
+// ── User Attendance ──────────────────────────────────────────────────────
+export const attendanceApi = {
+  me: () => client.get('/attendance/me').then(r => r.data),
+  checkIn: () => client.post('/attendance/check-in').then(r => r.data),
+  checkOut: () => client.post('/attendance/check-out').then(r => r.data),
 };
 
 // ── Analytics (valet + admin) ───────────────────────────────────────────

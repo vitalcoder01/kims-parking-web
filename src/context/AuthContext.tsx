@@ -1,5 +1,5 @@
 import React, {createContext, useCallback, useContext, useState, useEffect, useRef} from 'react';
-import {authApi, setAuthToken, setUnauthorizedHandler} from '../services/api';
+import {authApi, setAuthToken, setUnauthorizedHandler, clearEtagCache} from '../services/api';
 import {unregisterCurrentWebPush} from '../services/webPush';
 import {stopAlarm} from '../services/alarm';
 
@@ -94,6 +94,7 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
     setUser(null);
     tokenRef.current = null;
     setAuthToken(null);
+    clearEtagCache();
     localStorage.removeItem(SESSION_KEY);
   }, []);
 

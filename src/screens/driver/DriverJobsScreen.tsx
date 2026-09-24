@@ -46,11 +46,14 @@ export function DriverJobsScreen() {
   const today = new Date().toDateString();
   const completedToday = history.filter(t => t.status === 'completed' && t.completedAt && new Date(t.completedAt).toDateString() === today);
 
-  const myVisitorJobs = visitors.filter(v =>
-    (isMyJob(v.driverId, myDriverId) && v.status === 'pending')
-    || (v.status === 'parked' && v.retrievalRequested
-      && tasks.some(t => t.visitorId === v.id && t.type === 'retrieve'
-        && isMyJob(t.driverId, myDriverId) && t.status !== 'completed' && t.status !== 'cancelled')));
+  const myVisitorJobs = tasks.filter(t =>
+    Boolean(t.isVisitor || t.visitorId != null)
+    && isMyJob(t.driverId, myDriverId)
+    && t.id !== activeTask?.id
+    && t.status !== 'completed'
+    && t.status !== 'cancelled'
+    && t.status !== 'delivered'
+  );
 
   const trip = computeTrip({
     startLat: activeTask?.driverStartLat, startLng: activeTask?.driverStartLng,
@@ -470,19 +473,16 @@ export function DriverJobsScreen() {
                   flexShrink: 0,
                   backgroundColor: c.cardAlt,
                 }}>
-                  <Icon name={v.vehicleType === 'bike' ? 'bike' : 'car'} size={17} color={c.primary} />
+                  <Icon name="car" size={17} color={c.primary} />
                 </div>
 
                 <div style={{flex: 1, minWidth: 0}}>
                   <div style={{fontSize: 13, fontWeight: 800, color: c.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
-                    {v.name || 'Visitor'} {v.carNumber ? `· ${v.carNumber}` : ''}
+                    {v.doctorName || 'Visitor'} {v.carNumber ? `· ${v.carNumber}` : ''}
                   </div>
-                  <a
-                    href={`tel:${v.mobile}`}
-                    style={{fontSize: 11.5, fontWeight: 700, color: c.primary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2}}>
-                    <Icon name="phone" size={12} color={c.primary} />
-                    <span>{v.mobile}</span>
-                  </a>
+                  <div style={{fontSize: 11, fontWeight: 600, color: c.textSecondary, marginTop: 2}}>
+                    {v.slotId ? `Assigned Bay: ${v.slotId}` : 'Terminal staging area'}
+                  </div>
                 </div>
 
                 <span style={{
@@ -492,10 +492,10 @@ export function DriverJobsScreen() {
                   borderRadius: 6,
                   padding: '4px 8px',
                   whiteSpace: 'nowrap',
-                  color: v.status === 'pending' ? '#D97706' : c.primary,
-                  backgroundColor: v.status === 'pending' ? (isDark ? 'rgba(245, 158, 11, 0.15)' : '#FFFBEB') : c.cardAlt,
+                  color: v.type === 'park' ? '#D97706' : c.primary,
+                  backgroundColor: v.type === 'park' ? (isDark ? 'rgba(245, 158, 11, 0.15)' : '#FFFBEB') : c.cardAlt,
                 }}>
-                  {v.status === 'pending' ? 'PICKUP PENDING' : 'RETRIEVAL READY'}
+                  {v.type === 'park' ? 'PICKUP PENDING' : 'RETRIEVAL READY'}
                 </span>
               </div>
             ))}

@@ -61,10 +61,11 @@ export function AdminCommandCenter({userName}: {userName: string}) {
                 refreshKey={refreshKey}
                 onNavigate={setSection}
                 onLoadingChange={setDashboardLoading}
+                query={query}
               />
             )}
-            {section === 'slots' && <ScreenPane><AdminMapScreen /></ScreenPane>}
-            {section === 'drivers' && <ScreenPane><AdminStaffScreen initialFilter="driver" /></ScreenPane>}
+            {section === 'slots' && <ScreenPane><AdminMapScreen searchQuery={query} /></ScreenPane>}
+            {section === 'drivers' && <ScreenPane><AdminStaffScreen initialFilter="driver" initialQuery={query} /></ScreenPane>}
             {section === 'staff' && <ScreenPane><AdminAttendanceScreen /></ScreenPane>}
             {section === 'explorer' && <ScreenPane><AnalyticsScreen /></ScreenPane>}
             {section === 'settings' && <ScreenPane><SettingsScreen /></ScreenPane>}
@@ -97,11 +98,13 @@ function DashboardSection({
   refreshKey,
   onNavigate,
   onLoadingChange,
+  query = '',
 }: {
   period: AnalyticsPeriod;
   refreshKey: number;
   onNavigate: (s: CcSection) => void;
   onLoadingChange: (loading: boolean) => void;
+  query?: string;
 }) {
   const cc = useCc();
   const {slots: liveSlots, tasks: liveTasks, visitors: liveVisitors, notifications: liveNotifications} = useAppState();
@@ -145,6 +148,13 @@ function DashboardSection({
     if (data) for (const s of data.slots.slots) m.set(s.id, s.classification);
     return m;
   }, [data]);
+
+  const filteredDrivers = useMemo(() => {
+    if (!data) return [];
+    if (!query.trim()) return data.overview.drivers;
+    const q = query.trim().toLowerCase();
+    return data.overview.drivers.filter(d => d.name.toLowerCase().includes(q));
+  }, [data, query]);
 
   if (loading && !data) {
     return (
@@ -248,7 +258,7 @@ function DashboardSection({
           <TaskFunnelPanel funnelVolume={taskFunnelVolume} />
         </div>
         <div style={{gridColumn: '3', gridRow: '2'}}>
-          <TopDriversPanel drivers={overview.drivers} onViewAll={() => onNavigate('drivers')} />
+          <TopDriversPanel drivers={filteredDrivers} onViewAll={() => onNavigate('drivers')} />
         </div>
 
         <div style={{gridColumn: '1 / 4', gridRow: '3'}}>

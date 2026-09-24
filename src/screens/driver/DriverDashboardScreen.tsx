@@ -80,10 +80,13 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
 
   const myTasks = tasks.filter(t => isMyJob(t.driverId, myDriverId));
   const activeTask = myTasks.find(t => t.status !== 'completed' && t.status !== 'delivered' && t.status !== 'cancelled') ?? null;
-  const pendingVisitors = visitors.filter(v => v.status === 'parked' && v.retrievalRequested
-    && v.id !== activeTask?.visitorId
-    && tasks.some(t => t.visitorId === v.id && t.type === 'retrieve'
-      && isMyJob(t.driverId, myDriverId) && t.status !== 'completed' && t.status !== 'cancelled'));
+  const pendingVisitors = myTasks.filter(t =>
+    Boolean(t.isVisitor || t.visitorId != null)
+    && t.id !== activeTask?.id
+    && t.status !== 'completed'
+    && t.status !== 'cancelled'
+    && t.status !== 'delivered'
+  );
   const openCount = (activeTask ? 1 : 0) + pendingVisitors.length;
 
   const [history, setHistory] = useState<typeof tasks>([]);

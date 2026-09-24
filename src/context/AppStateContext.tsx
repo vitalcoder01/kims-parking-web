@@ -329,10 +329,10 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     setActiveAlert(null);
   }, []);
 
-  // Only valet/admin need the full drivers roster.
+  // Only valet/admin need the full drivers roster and slot occupancy map.
   const needsOpsData = user?.role === 'valet' || user?.role === 'admin';
-  // Drivers need `visitors` too — DriverJobsScreen filters it to their own assignments.
-  const needsVisitors = needsOpsData || user?.role === 'driver';
+  // Visitors registry is valet/admin only (protects walk-in PII). Driver visitor jobs arrive via unified tasks.
+  const needsVisitors = needsOpsData;
 
   /*
    * Guards against two refreshes overwriting each other out of order.
@@ -380,7 +380,7 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
     const mutationsAtStart = mutationSeqRef.current;
     const [t, s, n, d, v, a] = await Promise.all([
       tasksApi.list(),
-      slotsApi.list(),
+      needsOpsData ? slotsApi.list() : Promise.resolve([]),
       notificationsApi.list(),
       needsOpsData ? driversApi.list() : Promise.resolve(null),
       needsVisitors ? visitorsApi.list() : Promise.resolve(null),
@@ -585,12 +585,12 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
         n.targetRole === `valet:${me?.id}` ||
         // Two-station handoff model: 'valetStation:<gate|lot>' addresses
         // every valet currently on that physical station (backend's
-        // notifyRetrievalOwner / requestOtherStationDriver) — without this
-        // branch the alarm silently never fired for a station-routed
-        // request even though the socket event correctly reached this
-        // client's room; only the generic role/user/all branches above were
-        // ever checked, and none of them match a station-scoped tag.
-        (me?.role === 'valet' && !!me?.valetStation && n.targetRole === `valetStation:${me.valetStation}`) ||
+        // notifyRetrievalOwner / requestOtherStationDriver). Floating supervisors
+        // (valetStation == null) oversee both stations and receive both tags.
+        (me?.role === 'valet' && (
+          (!me?.valetStation && (n.targetRole === 'valetStation:gate' || n.targetRole === 'valetStation:lot')) ||
+          (!!me?.valetStation && n.targetRole === `valetStation:${me.valetStation}`)
+        )) ||
         n.targetRole === 'all';
       if (!isForMe) return;
       // A reassign event fires both as task:needs-reassign (dialog) and
@@ -775,6 +775,12 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
       setTasks(p => p.map(t => (t.id === id ? updated : t)));
       return;
     }
+    // Specific operational actions (markParked, markRetrieved, etc.) should be used.
+    // Provide diagnostic logging and consistent local fallback:
+    if (patch.status) {
+      console.warn(`[AppStateContext] updateTask called with status "${patch.status}". Dedicated task action method should be used.`);
+    }
+    setTasks(p => p.map(t => (t.id === id ? {...t, ...patch} : t)));
   }, []);
 
   // Six task actions are a plain status transition: stop any ringing alarm,

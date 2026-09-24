@@ -19,7 +19,7 @@ function agoLabel(ms?: number): string | null {
  * Realtime read-only oversight of parking blocks, slots, occupancy ratios,
  * and bay-level vehicle telemetries.
  */
-export function AdminMapScreen({focusBlock}: {focusBlock?: string} = {}) {
+export function AdminMapScreen({focusBlock, searchQuery = ''}: {focusBlock?: string; searchQuery?: string} = {}) {
   const dark = useAdminOpsTheme();
   const {slots, tasks} = useAppState();
   const [picked, setPicked] = useState<string | undefined>(undefined);
@@ -28,6 +28,20 @@ export function AdminMapScreen({focusBlock}: {focusBlock?: string} = {}) {
   useEffect(() => {
     if (focusBlock) setActiveBlock(focusBlock);
   }, [focusBlock]);
+
+  useEffect(() => {
+    if (!searchQuery?.trim()) return;
+    const q = searchQuery.trim().toLowerCase();
+    const match = slots.find(s =>
+      s.id.toLowerCase().includes(q) ||
+      s.block.toLowerCase() === q ||
+      (s.carNumber && s.carNumber.toLowerCase().includes(q))
+    );
+    if (match) {
+      setActiveBlock(match.block);
+      setPicked(match.id);
+    }
+  }, [searchQuery, slots]);
 
   const pickedSlot = picked ? slots.find(sl => sl.id === picked) : undefined;
   const pickedOwnerTask = pickedSlot?.taskId ? tasks.find(t => t.id === pickedSlot.taskId) : undefined;
