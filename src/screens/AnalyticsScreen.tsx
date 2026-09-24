@@ -1,6 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {useTheme} from '../context/ThemeContext';
-import {BRAND_GRADIENT, BRAND_GRADIENT_DARK, gradientCss} from '../theme/colors';
 import {Icon} from '../components/Icon';
 import {PressableScale} from '../components/PressableScale';
 import {useDialog} from '../components/AppDialog';
@@ -14,13 +13,7 @@ const PERIODS: {key: AnalyticsPeriod; label: string}[] = [
   {key: 'all', label: 'All-time'},
 ];
 
-// Shared by both the valet and admin tabs — the data isn't role-scoped (see
-// backend analytics.service.js: it's the whole operation's all-time
-// picture), so a valet reads it as "how is my shift going" and admin reads
-// the identical screen as "how is the operation going". One screen, two
-// doors in — mirrors mobile's screens/AnalyticsScreen.tsx exactly.
-
-const MEDALS = ['#F5C168', '#C7CDD6', '#D3946B']; // gold / silver / bronze
+const MEDALS = ['#F59E0B', '#94A3B8', '#D97706']; // Champagne Gold / Frosted Silver / Warm Bronze
 
 function hourLabel(h: number | null): string {
   if (h == null) return '—';
@@ -44,14 +37,18 @@ function relativeTime(iso: string | undefined): string {
 }
 
 const PERIOD_TITLES: Record<AnalyticsPeriod, string> = {
-  daily: 'Today', weekly: 'This Week', monthly: 'This Month', yearly: 'This Year', all: 'All-Time',
+  daily: 'Today',
+  weekly: 'This Week',
+  monthly: 'This Month',
+  yearly: 'This Year',
+  all: 'All-Time',
 };
 
 function buildShareText(data: AnalyticsOverview): string {
   const visitorTotal = data.visitorJobs + data.staffJobs;
   const visitorPct = visitorTotal > 0 ? Math.round((data.visitorJobs / visitorTotal) * 100) : 0;
   const lines = [
-    `📊 KIMS Parking — ${PERIOD_TITLES[data.period]} Analytics`,
+    `📊 KIMS Parking — ${PERIOD_TITLES[data.period]} Operational Analytics`,
     ``,
     `🚗 ${data.totalCarsParked} parked · ${data.totalCarsRetrieved} retrieved · ${data.totalJobsCompleted} total jobs`,
     `⏱ Avg park ${minutesLabel(data.avgParkMinutes)} · Avg retrieve ${minutesLabel(data.avgRetrieveMinutes)}`,
@@ -63,6 +60,27 @@ function buildShareText(data: AnalyticsOverview): string {
       `${i + 1}. ${d.name} — ${d.totalCompleted} jobs (${d.parksCompleted} parked, ${d.retrievesCompleted} retrieved)`),
   ];
   return lines.join('\n');
+}
+
+// Generate smooth cubic Bézier spline through points for professional chart aesthetics
+function buildSmoothSpline(points: {x: number; y: number}[]): string {
+  if (!points.length) return '';
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+    d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
 }
 
 export function AnalyticsScreen() {
@@ -77,21 +95,25 @@ export function AnalyticsScreen() {
   const [expandedDriverId, setExpandedDriverId] = useState<number | null>(null);
   const [idleExpanded, setIdleExpanded] = useState(false);
   const [period, setPeriod] = useState<AnalyticsPeriod>('all');
+  const [sharing, setSharing] = useState(false);
 
   const load = useCallback((p: AnalyticsPeriod, silent?: boolean) => {
     if (!silent) setLoading(true);
     analyticsApi.overview(p)
       .then(d => { setData(d); setErr(null); })
-      .catch(() => setErr('Could not load analytics'))
+      .catch(() => setErr('Could not load operational analytics'))
       .finally(() => { setLoading(false); setRefreshing(false); });
   }, []);
 
-  // Switching periods re-fetches fresh (not silent — the old period's
-  // numbers would otherwise sit on screen, wrong, while the new ones load).
-  useEffect(() => { load(period); setTrendIndex(null); }, [period, load]);
+  useEffect(() => {
+    load(period);
+    setTrendIndex(null);
+    setSelectedHour(null);
+  }, [period, load]);
 
   const visitorTotal = (data?.visitorJobs ?? 0) + (data?.staffJobs ?? 0);
   const visitorPct = visitorTotal > 0 ? Math.round(((data?.visitorJobs ?? 0) / visitorTotal) * 100) : 0;
+  const staffPct = 100 - visitorPct;
   const activeDrivers = (data?.drivers ?? []).filter(d => d.totalCompleted > 0);
   const idleDrivers = (data?.drivers ?? []).filter(d => d.totalCompleted === 0);
 
@@ -100,18 +122,18 @@ export function AnalyticsScreen() {
     if (!withAvg.length) return null;
     return withAvg.reduce((best, d) => d.avgParkMinutes! < best.avgParkMinutes! ? d : best).id;
   }, [activeDrivers]);
+
   const fastestRetrieveId = useMemo(() => {
     const withAvg = activeDrivers.filter(d => d.avgRetrieveMinutes != null);
     if (!withAvg.length) return null;
     return withAvg.reduce((best, d) => d.avgRetrieveMinutes! < best.avgRetrieveMinutes! ? d : best).id;
   }, [activeDrivers]);
 
-  const hourly = data?.hourlyDistribution ?? new Array(24).fill(0);
-  const maxHourly = Math.max(1, ...hourly);
+  const hourly = useMemo(() => data?.hourlyDistribution ?? new Array(24).fill(0), [data]);
+  const maxHourly = useMemo(() => Math.max(1, ...hourly), [hourly]);
   const activeHour = selectedHour ?? data?.busiestHour ?? null;
   const activeHourCount = activeHour != null ? hourly[activeHour] : 0;
 
-  const [sharing, setSharing] = useState(false);
   const onShare = async () => {
     if (!data || sharing) return;
     setSharing(true);
@@ -133,365 +155,835 @@ export function AnalyticsScreen() {
     }
   };
 
-  const cardStyle: React.CSSProperties = {backgroundColor: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 16};
-  const emptyBoxStyle: React.CSSProperties = {
-    borderRadius: 16, border: `1px dashed ${colors.border}`, display: 'flex', flexDirection: 'column',
-    alignItems: 'center', justifyContent: 'center', padding: '32px 20px', textAlign: 'center',
+  // Glass card styles
+  const glassCardStyle: React.CSSProperties = {
+    backgroundColor: colors.surface,
+    border: `1px solid ${colors.border}`,
+    borderRadius: 18,
+    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.25)' : '0 2px 10px rgba(0, 0, 0, 0.03)',
   };
 
   return (
-    <div className="screen-scroll" style={{backgroundColor: colors.background}}>
-      <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), padding: '16px 20px 18px', borderBottomLeftRadius: 28, borderBottomRightRadius: 28}}>
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20}}>
-          <div>
-            <div style={{marginBottom: 4}}>
-              <span style={{color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: 800, letterSpacing: 1.2}}>{PERIODS.find(p => p.key === period)?.label.toUpperCase()} · LIVE</span>
-            </div>
-            <div style={{color: '#fff', fontSize: 24, fontWeight: 900}}>Analytics</div>
+    <div style={{flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: colors.background, minHeight: 0}}>
+      {/* 1. Restrained Glassy Workstation Header */}
+      <div style={{
+        padding: '14px 18px',
+        backgroundColor: colors.surface,
+        borderBottom: `1px solid ${colors.border}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexShrink: 0,
+        gap: 12,
+      }}>
+        <div style={{minWidth: 0}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+            <span style={{fontSize: 16, fontWeight: 900, color: colors.textPrimary, letterSpacing: -0.2}}>
+              Operational Analytics
+            </span>
+            <span style={{
+              fontSize: 10,
+              fontWeight: 800,
+              padding: '2px 7px',
+              borderRadius: 6,
+              backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF',
+              color: colors.primary,
+              letterSpacing: 0.4,
+            }}>
+              KIMS TELEMETRY
+            </span>
           </div>
-          <div style={{display: 'flex', gap: 8}}>
-            <PressableScale
-              disabled={sharing}
-              style={{width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: sharing ? 0.6 : 1}}
-              onClick={onShare}>
-              {sharing ? <span className="spinner" style={{width: 16, height: 16, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} /> : <Icon name="share" size={17} color="#fff" />}
-            </PressableScale>
-            <PressableScale
-              disabled={refreshing}
-              style={{width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: refreshing ? 0.6 : 1}}
-              onClick={() => { setRefreshing(true); load(period, true); }}>
-              <Icon name="refresh" size={18} color="#fff" />
-            </PressableScale>
+          <div style={{fontSize: 11.5, fontWeight: 600, color: colors.textSecondary, marginTop: 2}}>
+            {PERIODS.find(p => p.key === period)?.label} Overview {data?.generatedAt ? `· ${relativeTime(data.generatedAt)}` : ''}
           </div>
         </div>
 
-        <div style={{display: 'flex', alignItems: 'center', position: 'relative'}}>
-          {[
-            ['key', data?.totalCarsParked ?? (loading ? '–' : 0), 'Parked'],
-            ['route', data?.totalCarsRetrieved ?? (loading ? '–' : 0), 'Retrieved'],
-            ['flag', data?.totalJobsCompleted ?? (loading ? '–' : 0), 'Total Jobs'],
-          ].map(([icon, num, lbl], i) => (
-            <React.Fragment key={lbl as string}>
-              {i > 0 && <div style={{width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.2)'}} />}
-              <div style={{flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4}}>
-                <Icon name={icon as any} size={13} color="rgba(255,255,255,0.55)" />
-                <span style={{color: '#fff', fontSize: 28, fontWeight: 900, fontVariantNumeric: 'tabular-nums'}}>{num}</span>
-                <span style={{color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: 700}}>{lbl}</span>
-              </div>
-            </React.Fragment>
-          ))}
-        </div>
+        <div style={{display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0}}>
+          {/* Share Report */}
+          <PressableScale
+            disabled={sharing || !data}
+            onClick={onShare}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              backgroundColor: colors.cardAlt,
+              border: `1px solid ${colors.border}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: sharing || !data ? 0.5 : 1,
+            }}>
+            {sharing ? (
+              <span className="spinner" style={{width: 14, height: 14, borderColor: colors.border, borderTopColor: colors.primary}} />
+            ) : (
+              <Icon name="share" size={16} color={colors.textPrimary} />
+            )}
+          </PressableScale>
 
-        {data && <div style={{color: 'rgba(255,255,255,0.5)', fontSize: 10.5, fontWeight: 600, textAlign: 'center', marginTop: 14, position: 'relative'}}>{relativeTime(data.generatedAt)}</div>}
-      </div>
-
-      {/* Period selector — switches the whole overview (stats, hourly
-          histogram, leaderboard) to a real, database-scoped answer for that
-          window, not an all-time number relabeled. */}
-      <div className="hscroll" style={{gap: 8, padding: '14px 20px 4px'}}>
-        {PERIODS.map(p => {
-          const on = p.key === period;
-          return (
-            <PressableScale key={p.key} disabled={loading} onClick={() => setPeriod(p.key)}
-              style={{flexShrink: 0, padding: '8px 14px', borderRadius: 999, backgroundColor: on ? colors.primary : colors.surface, border: `1px solid ${on ? colors.primary : colors.border}`, opacity: loading ? 0.6 : 1}}>
-              <span style={{fontSize: 12.5, fontWeight: 800, color: on ? colors.textOnPrimary : colors.textSecondary}}>{p.label}</span>
-            </PressableScale>
-          );
-        })}
-      </div>
-
-      {loading && !data ? (
-        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 30px'}}>
-          <div className="spinner" style={{width: 28, height: 28, borderColor: colors.primary}} />
-        </div>
-      ) : err && !data ? (
-        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 30px'}}>
-          <Icon name="alert" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
-          <span style={{color: colors.textMuted, marginBottom: 12}}>{err}</span>
-          <PressableScale disabled={loading} onClick={() => load(period)} style={{padding: '10px 20px', borderRadius: 12, backgroundColor: colors.primary, opacity: loading ? 0.6 : 1}}>
-            {loading
-              ? <span className="spinner" style={{width: 14, height: 14, borderColor: 'rgba(0,0,0,0.2)', borderTopColor: colors.background}} />
-              : <span style={{color: colors.background, fontWeight: 800}}>Retry</span>}
+          {/* Refresh Action */}
+          <PressableScale
+            disabled={refreshing}
+            onClick={() => { setRefreshing(true); load(period, true); }}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              backgroundColor: colors.cardAlt,
+              border: `1px solid ${colors.border}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: refreshing ? 0.5 : 1,
+            }}>
+            <Icon
+              name="refresh"
+              size={16}
+              color={colors.textPrimary}
+              style={{transform: refreshing ? 'rotate(180deg)' : 'none', transition: 'transform 0.4s ease'}}
+            />
           </PressableScale>
         </div>
-      ) : (
-        <div style={{padding: '18px 20px 32px'}}>
-          <div style={{display: 'flex', gap: 12, marginBottom: 14}}>
-            {([
-              [minutesLabel(data?.avgParkMinutes ?? null), 'Avg. park time'],
-              [minutesLabel(data?.avgRetrieveMinutes ?? null), 'Avg. retrieve time'],
-            ] as const).map(([val, lbl], i) => (
-              <div key={i} style={{...cardStyle, flex: 1, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-start'}}>
-                <span style={{fontSize: 22, fontWeight: 900, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums'}}>{val}</span>
-                <span style={{fontSize: 11.5, fontWeight: 700, marginTop: 4, color: colors.textMuted}}>{lbl}</span>
-              </div>
-            ))}
-          </div>
+      </div>
 
-          {/* Activity by hour — real 24h histogram, click any bar to inspect it */}
-          <div style={{...cardStyle, padding: 14, marginBottom: 14}}>
-            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12}}>
-              <span style={{fontSize: 13.5, fontWeight: 800, color: colors.textPrimary}}>Activity by Hour</span>
-              {activeHour != null && (
-                <span style={{fontSize: 11, fontWeight: 700, color: colors.textMuted}}>
-                  {activeHourCount} job{activeHourCount === 1 ? '' : 's'} · {hourLabel(activeHour)}
+      <div className="screen-scroll" style={{padding: 16, paddingBottom: 40}}>
+        {/* 2. Horizontal Period Selector Pills */}
+        <div className="hscroll" style={{gap: 8, paddingBottom: 16}}>
+          {PERIODS.map(p => {
+            const on = p.key === period;
+            return (
+              <PressableScale
+                key={p.key}
+                disabled={loading}
+                onClick={() => setPeriod(p.key)}
+                style={{
+                  flexShrink: 0,
+                  padding: '7px 14px',
+                  borderRadius: 20,
+                  backgroundColor: on ? colors.primary : colors.surface,
+                  border: `1px solid ${on ? colors.primary : colors.border}`,
+                  transition: 'all 0.15s ease',
+                  opacity: loading ? 0.6 : 1,
+                }}>
+                <span style={{
+                  fontSize: 12,
+                  fontWeight: 800,
+                  color: on ? colors.textOnPrimary : colors.textSecondary,
+                  letterSpacing: 0.2,
+                }}>
+                  {p.label}
                 </span>
-              )}
-            </div>
-            <div style={{display: 'flex', alignItems: 'flex-end', height: 58, marginBottom: 6, gap: 2}}>
-              {hourly.map((count, h) => {
-                const isPeak = h === data?.busiestHour;
-                const isSelected = h === activeHour;
-                const heightPx = 6 + (count / maxHourly) * 46;
-                const barColor = isSelected ? '#F5C168' : count > 0 ? colors.primary : colors.border;
-                return (
-                  <button
-                    key={h}
-                    type="button"
-                    className="pressable"
-                    onClick={() => setSelectedHour(h === selectedHour ? null : h)}
-                    style={{flex: 1, height: 58, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer'}}>
-                    <div style={{width: '55%', minHeight: 4, borderRadius: 2, height: heightPx, backgroundColor: barColor, opacity: isPeak && !isSelected ? 1 : (isSelected ? 1 : 0.55)}} />
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{display: 'flex', justifyContent: 'space-between'}}>
-              {['12AM', '6AM', '12PM', '6PM', '11PM'].map(t => (
-                <span key={t} style={{fontSize: 9.5, fontWeight: 700, color: colors.textMuted}}>{t}</span>
-              ))}
-            </div>
+              </PressableScale>
+            );
+          })}
+        </div>
+
+        {loading && !data ? (
+          <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 20px'}}>
+            <div className="spinner" style={{width: 32, height: 32, borderColor: colors.border, borderTopColor: colors.primary}} />
           </div>
-
-          {/* Park vs Retrieve — the SAME jobs Activity by Hour counts above,
-              split by type instead of combined, at whatever bucket
-              resolution suits the selected period (hourly/daily/monthly,
-              see backend trendBuckets). Absent for All-time, where a
-              calendar trend can't usefully answer "when" over a multi-year
-              span. Tap any bar to inspect it, same interaction Activity by
-              Hour already uses — that's the "self-exploratory" part: no
-              reading required, tap and the numbers are right there. */}
-          {data?.trend && (
-            <div style={{...cardStyle, padding: 14, marginBottom: 14}}>
-              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2}}>
-                <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
-                  <Icon name="carKey" size={15} color={colors.primary} />
-                  <span style={{fontSize: 13.5, fontWeight: 800, color: colors.textPrimary}}>Park vs Retrieve</span>
-                </div>
-                <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
-                  <span style={{display: 'flex', alignItems: 'center', gap: 4}}>
-                    <span style={{width: 7, height: 7, borderRadius: 2, backgroundColor: colors.primary}} />
-                    <span style={{fontSize: 10.5, fontWeight: 700, color: colors.textMuted}}>Park</span>
-                  </span>
-                  <span style={{display: 'flex', alignItems: 'center', gap: 4}}>
-                    <span style={{width: 7, height: 7, borderRadius: 2, backgroundColor: colors.info}} />
-                    <span style={{fontSize: 10.5, fontWeight: 700, color: colors.textMuted}}>Retrieve</span>
-                  </span>
-                </div>
-              </div>
-              <div style={{fontSize: 11, color: colors.textMuted, marginBottom: 10}}>
-                Same activity as above, broken down by job type — tap a bar for that {period === 'daily' ? 'hour' : period === 'yearly' ? 'month' : 'day'}.
-              </div>
-              {(() => {
-                const {labels, park, retrieve} = data.trend;
-                const maxVal = Math.max(1, ...park, ...retrieve);
-                const n = labels.length;
-                // Hourly (24 buckets) reuses the exact tick set Activity by
-                // Hour uses above, so the two charts visibly read as the
-                // same time axis. Everything else (7 weekdays, 12 months,
-                // a month's days) is few enough / already meaningful enough
-                // to label directly; only a long month's 28-31 raw day
-                // numbers gets thinned to first/mid/last.
-                const isHourly = n === 24;
-                const tickAt = isHourly ? [0, 6, 12, 18, 23] : n > 14 ? [0, Math.floor(n / 2), n - 1] : labels.map((_, i) => i);
-                const selected = trendIndex != null && trendIndex < n ? trendIndex : null;
-                const dispIndex = selected ?? (maxVal > 0 ? [...park.keys()].reduce((best, i) => (park[i] + retrieve[i]) > (park[best] + retrieve[best]) ? i : best) : null);
-                return (
-                  <>
-                    {dispIndex != null && (park[dispIndex] + retrieve[dispIndex]) > 0 && (
-                      <div style={{fontSize: 11, fontWeight: 700, color: colors.textPrimary, marginBottom: 8}}>
-                        {isHourly ? hourLabel(dispIndex) : labels[dispIndex]}: {park[dispIndex]} parked, {retrieve[dispIndex]} retrieved
-                      </div>
-                    )}
-                    <div style={{display: 'flex', alignItems: 'flex-end', height: 58, marginBottom: 6, gap: n > 20 ? 1 : 2}}>
-                      {labels.map((_, i) => (
-                        <button key={i} type="button" className="pressable"
-                          onClick={() => setTrendIndex(i === trendIndex ? null : i)}
-                          style={{flex: 1, height: 58, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 1, background: 'none', border: 'none', padding: 0, cursor: 'pointer'}}>
-                          <div style={{width: '45%', borderRadius: 1, height: park[i] ? 4 + (park[i] / maxVal) * 50 : 2, backgroundColor: colors.primary, opacity: selected == null || selected === i ? 1 : 0.35}} />
-                          <div style={{width: '45%', borderRadius: 1, height: retrieve[i] ? 4 + (retrieve[i] / maxVal) * 50 : 2, backgroundColor: colors.info, opacity: selected == null || selected === i ? 1 : 0.35}} />
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{display: 'flex'}}>
-                      {labels.map((l, i) => (
-                        <span key={i} style={{flex: 1, textAlign: 'center', fontSize: 9.5, fontWeight: 700, color: colors.textMuted}}>
-                          {tickAt.includes(i) ? (isHourly ? ['12AM', '6AM', '12PM', '6PM', '11PM'][tickAt.indexOf(i)] : l) : ''}
-                        </span>
-                      ))}
-                    </div>
-                  </>
-                );
-              })()}
+        ) : err && !data ? (
+          <div style={{
+            ...glassCardStyle,
+            padding: '40px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
+          }}>
+            <Icon name="alert" size={32} color={colors.error} style={{marginBottom: 10}} />
+            <div style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary, marginBottom: 4}}>{err}</div>
+            <div style={{fontSize: 12, fontWeight: 600, color: colors.textSecondary, marginBottom: 16}}>
+              Failed to fetch operational metrics from backend.
             </div>
-          )}
-
-          {/* Block utilization — which block actually got used this period,
-              computed from completed park jobs (real slot ids), never
-              invented. */}
-          {!!data?.blockUtilization.length && (
-            <div style={{...cardStyle, padding: 14, marginBottom: 14}}>
-              <div style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12}}>
-                <Icon name="parking" size={15} color={colors.primary} />
-                <span style={{fontSize: 13.5, fontWeight: 800, color: colors.textPrimary}}>Block Utilization</span>
+            <PressableScale
+              disabled={loading}
+              onClick={() => load(period)}
+              style={{
+                padding: '9px 20px',
+                borderRadius: 10,
+                backgroundColor: colors.primary,
+                color: colors.textOnPrimary,
+                fontWeight: 800,
+                fontSize: 12.5,
+              }}>
+              Retry Connection
+            </PressableScale>
+          </div>
+        ) : (
+          <div style={{display: 'flex', flexDirection: 'column', gap: 16}}>
+            {/* 3. Executive KPI Metric Grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: 12,
+            }}>
+              {/* Parked Card */}
+              <div style={{...glassCardStyle, padding: 14, position: 'relative', overflow: 'hidden'}}>
+                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8}}>
+                  <span style={{fontSize: 11.5, fontWeight: 700, color: colors.textSecondary}}>Cars Parked</span>
+                  <div style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 8,
+                    backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <Icon name="key" size={13} color={colors.primary} />
+                  </div>
+                </div>
+                <div style={{fontSize: 26, fontWeight: 900, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums', letterSpacing: -0.5}}>
+                  {data?.totalCarsParked ?? 0}
+                </div>
+                <div style={{fontSize: 11, fontWeight: 600, color: colors.textMuted, marginTop: 4}}>
+                  Avg. {minutesLabel(data?.avgParkMinutes ?? null)}
+                </div>
               </div>
-              <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
-                {(() => {
-                  const maxCount = Math.max(...data.blockUtilization.map(b => b.count));
-                  return data.blockUtilization.map(b => (
-                    <div key={b.block} style={{display: 'flex', alignItems: 'center', gap: 10}}>
-                      <span style={{width: 56, fontSize: 12, fontWeight: 700, color: colors.textSecondary}}>Block {b.block}</span>
-                      <div style={{flex: 1, height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: colors.border}}>
-                        <div style={{height: 8, borderRadius: 4, width: `${(b.count / maxCount) * 100}%`, backgroundColor: colors.primary}} />
-                      </div>
-                      <span style={{width: 28, fontSize: 12, fontWeight: 800, textAlign: 'right', color: colors.textPrimary, fontVariantNumeric: 'tabular-nums'}}>{b.count}</span>
+
+              {/* Retrieved Card */}
+              <div style={{...glassCardStyle, padding: 14, position: 'relative', overflow: 'hidden'}}>
+                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8}}>
+                  <span style={{fontSize: 11.5, fontWeight: 700, color: colors.textSecondary}}>Cars Retrieved</span>
+                  <div style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 8,
+                    backgroundColor: isDark ? 'rgba(6, 182, 212, 0.15)' : '#ECFEFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <Icon name="route" size={13} color="#06B6D4" />
+                  </div>
+                </div>
+                <div style={{fontSize: 26, fontWeight: 900, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums', letterSpacing: -0.5}}>
+                  {data?.totalCarsRetrieved ?? 0}
+                </div>
+                <div style={{fontSize: 11, fontWeight: 600, color: colors.textMuted, marginTop: 4}}>
+                  Avg. {minutesLabel(data?.avgRetrieveMinutes ?? null)}
+                </div>
+              </div>
+
+              {/* Total Operations Throughput */}
+              <div style={{...glassCardStyle, padding: 14, gridColumn: 'span 2'}}>
+                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                  <div>
+                    <div style={{fontSize: 11.5, fontWeight: 700, color: colors.textSecondary}}>
+                      Total Completed Missions
                     </div>
-                  ));
+                    <div style={{fontSize: 24, fontWeight: 900, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums', marginTop: 2}}>
+                      {data?.totalJobsCompleted ?? 0} <span style={{fontSize: 13, fontWeight: 700, color: colors.textMuted}}>operations</span>
+                    </div>
+                  </div>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '6px 12px',
+                    borderRadius: 12,
+                    backgroundColor: colors.cardAlt,
+                    border: `1px solid ${colors.border}`,
+                  }}>
+                    <Icon name="flag" size={14} color={colors.success} />
+                    <span style={{fontSize: 11.5, fontWeight: 800, color: colors.textPrimary}}>
+                      Busiest: {hourLabel(data?.busiestHour ?? null)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. VISUALIZATION: 24-Hour Surge Intensity Histogram */}
+            <div style={{...glassCardStyle, padding: 16}}>
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12}}>
+                <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                  <Icon name="analytics" size={15} color={colors.primary} />
+                  <span style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>
+                    24-Hour Activity Surge
+                  </span>
+                </div>
+                {activeHour != null && (
+                  <span style={{
+                    fontSize: 11.5,
+                    fontWeight: 800,
+                    padding: '3px 8px',
+                    borderRadius: 6,
+                    backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF',
+                    color: colors.primary,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {activeHourCount} {activeHourCount === 1 ? 'vehicle' : 'vehicles'} at {hourLabel(activeHour)}
+                  </span>
+                )}
+              </div>
+
+              {/* Interactive SVG Histogram */}
+              <div style={{position: 'relative', width: '100%', height: 110, touchAction: 'none'}}>
+                <svg
+                  width="100%"
+                  height="90"
+                  viewBox="0 0 600 90"
+                  preserveAspectRatio="none"
+                  style={{display: 'block', overflow: 'visible', cursor: 'pointer'}}>
+                  <defs>
+                    <linearGradient id="barGradDefault" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={colors.primary} stopOpacity="0.9" />
+                      <stop offset="100%" stopColor={colors.primary} stopOpacity="0.4" />
+                    </linearGradient>
+                    <linearGradient id="barGradPeak" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#F59E0B" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#D97706" stopOpacity="0.6" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Hairline baseline */}
+                  <line x1="0" y1="84" x2="600" y2="84" stroke={colors.border} strokeWidth="1" />
+
+                  {/* 24 Hourly Bars */}
+                  {hourly.map((count, h) => {
+                    const isPeak = h === data?.busiestHour && count > 0;
+                    const isSelected = h === activeHour;
+                    const barWidth = 16;
+                    const x = (h / 23) * (600 - barWidth);
+                    const barHeight = count > 0 ? 8 + (count / maxHourly) * 70 : 3;
+                    const y = 84 - barHeight;
+
+                    return (
+                      <g key={h} onClick={() => setSelectedHour(h === selectedHour ? null : h)}>
+                        <rect
+                          x={x}
+                          y={y}
+                          width={barWidth}
+                          height={barHeight}
+                          rx={3}
+                          ry={3}
+                          fill={isPeak ? 'url(#barGradPeak)' : (isSelected ? colors.primary : 'url(#barGradDefault)')}
+                          opacity={isSelected || isPeak ? 1 : 0.65}
+                          style={{transition: 'all 0.2s ease'}}
+                        />
+                        {isPeak && (
+                          <circle cx={x + barWidth / 2} cy={y - 5} r={3} fill="#F59E0B" />
+                        )}
+                      </g>
+                    );
+                  })}
+                </svg>
+
+                {/* X-Axis Ticks */}
+                <div style={{display: 'flex', justifyContent: 'space-between', marginTop: 4}}>
+                  {['12 AM', '4 AM', '8 AM', '12 PM', '4 PM', '8 PM', '11 PM'].map(t => (
+                    <span key={t} style={{fontSize: 9.5, fontWeight: 700, color: colors.textMuted}}>
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 5. VISUALIZATION: Dual-Stream Park vs. Retrieve Spline Area Chart */}
+            {data?.trend && (
+              <div style={{...glassCardStyle, padding: 16}}>
+                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8}}>
+                  <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                    <Icon name="carKey" size={15} color={colors.primary} />
+                    <span style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>
+                      Park vs. Retrieve Streams
+                    </span>
+                  </div>
+
+                  <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+                    <div style={{display: 'flex', alignItems: 'center', gap: 5}}>
+                      <span style={{width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary}} />
+                      <span style={{fontSize: 11, fontWeight: 700, color: colors.textSecondary}}>Park</span>
+                    </div>
+                    <div style={{display: 'flex', alignItems: 'center', gap: 5}}>
+                      <span style={{width: 8, height: 8, borderRadius: 4, backgroundColor: '#06B6D4'}} />
+                      <span style={{fontSize: 11, fontWeight: 700, color: colors.textSecondary}}>Retrieve</span>
+                    </div>
+                  </div>
+                </div>
+
+                {(() => {
+                  const {labels, park, retrieve} = data.trend;
+                  const n = labels.length;
+                  const maxVal = Math.max(1, ...park, ...retrieve);
+                  const isHourly = n === 24;
+                  const selected = trendIndex != null && trendIndex < n ? trendIndex : null;
+
+                  // Project points onto SVG coordinate space
+                  const padX = 14;
+                  const padY = 16;
+                  const svgW = 580;
+                  const svgH = 120;
+                  const graphW = svgW - padX * 2;
+                  const graphH = svgH - padY * 2;
+
+                  const parkPoints = park.map((val, i) => ({
+                    x: padX + (i / Math.max(1, n - 1)) * graphW,
+                    y: padY + graphH - (val / maxVal) * graphH,
+                  }));
+
+                  const retrievePoints = retrieve.map((val, i) => ({
+                    x: padX + (i / Math.max(1, n - 1)) * graphW,
+                    y: padY + graphH - (val / maxVal) * graphH,
+                  }));
+
+                  const parkSpline = buildSmoothSpline(parkPoints);
+                  const retrieveSpline = buildSmoothSpline(retrievePoints);
+
+                  const parkArea = `${parkSpline} L ${parkPoints[parkPoints.length - 1].x} ${padY + graphH} L ${parkPoints[0].x} ${padY + graphH} Z`;
+                  const retrieveArea = `${retrieveSpline} L ${retrievePoints[retrievePoints.length - 1].x} ${padY + graphH} L ${retrievePoints[0].x} ${padY + graphH} Z`;
+
+                  const activeIdx = selected ?? (maxVal > 0 ? [...park.keys()].reduce((best, i) => (park[i] + retrieve[i]) > (park[best] + retrieve[best]) ? i : best) : 0);
+                  const activePark = park[activeIdx] ?? 0;
+                  const activeRetrieve = retrieve[activeIdx] ?? 0;
+                  const activeLabel = isHourly ? hourLabel(activeIdx) : labels[activeIdx];
+
+                  return (
+                    <div>
+                      {/* Active Telemetry Tooltip Pill */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '6px 12px',
+                        borderRadius: 10,
+                        backgroundColor: colors.cardAlt,
+                        border: `1px solid ${colors.border}`,
+                        marginBottom: 10,
+                      }}>
+                        <span style={{fontSize: 12, fontWeight: 800, color: colors.textPrimary}}>
+                          {activeLabel}
+                        </span>
+                        <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
+                          <span style={{fontSize: 11.5, fontWeight: 800, color: colors.primary, fontVariantNumeric: 'tabular-nums'}}>
+                            {activePark} Parked
+                          </span>
+                          <span style={{fontSize: 11.5, fontWeight: 800, color: '#06B6D4', fontVariantNumeric: 'tabular-nums'}}>
+                            {activeRetrieve} Retrieved
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* SVG Canvas */}
+                      <div style={{position: 'relative', width: '100%', height: 120, touchAction: 'none'}}>
+                        <svg
+                          width="100%"
+                          height="120"
+                          viewBox={`0 0 ${svgW} ${svgH}`}
+                          preserveAspectRatio="none"
+                          style={{display: 'block', overflow: 'visible', cursor: 'crosshair'}}
+                          onClick={e => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const relX = (e.clientX - rect.left) / rect.width;
+                            const idx = Math.max(0, Math.min(n - 1, Math.round(relX * (n - 1))));
+                            setTrendIndex(idx === trendIndex ? null : idx);
+                          }}>
+                          <defs>
+                            <linearGradient id="parkFillGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={colors.primary} stopOpacity="0.32" />
+                              <stop offset="100%" stopColor={colors.primary} stopOpacity="0.0" />
+                            </linearGradient>
+                            <linearGradient id="retrieveFillGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#06B6D4" stopOpacity="0.25" />
+                              <stop offset="100%" stopColor="#06B6D4" stopOpacity="0.0" />
+                            </linearGradient>
+                          </defs>
+
+                          {/* Grid lines */}
+                          <line x1={padX} y1={padY + graphH} x2={padX + graphW} y2={padY + graphH} stroke={colors.border} strokeWidth="1" />
+                          <line x1={padX} y1={padY + graphH / 2} x2={padX + graphW} y2={padY + graphH / 2} stroke={colors.border} strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+
+                          {/* Area fills */}
+                          <path d={parkArea} fill="url(#parkFillGrad)" />
+                          <path d={retrieveArea} fill="url(#retrieveFillGrad)" />
+
+                          {/* Spline strokes */}
+                          <path d={parkSpline} fill="none" stroke={colors.primary} strokeWidth="2.5" strokeLinecap="round" />
+                          <path d={retrieveSpline} fill="none" stroke="#06B6D4" strokeWidth="2.5" strokeLinecap="round" />
+
+                          {/* Interactive Scrubber Line */}
+                          {parkPoints[activeIdx] && (
+                            <g>
+                              <line
+                                x1={parkPoints[activeIdx].x}
+                                y1={padY}
+                                x2={parkPoints[activeIdx].x}
+                                y2={padY + graphH}
+                                stroke={colors.textSecondary}
+                                strokeWidth="1.5"
+                                strokeDasharray="2 2"
+                              />
+                              <circle cx={parkPoints[activeIdx].x} cy={parkPoints[activeIdx].y} r="4.5" fill={colors.surface} stroke={colors.primary} strokeWidth="2.5" />
+                              <circle cx={retrievePoints[activeIdx].x} cy={retrievePoints[activeIdx].y} r="4.5" fill={colors.surface} stroke="#06B6D4" strokeWidth="2.5" />
+                            </g>
+                          )}
+                        </svg>
+
+                        {/* X-axis labels */}
+                        <div style={{display: 'flex', justifyContent: 'space-between', marginTop: 4}}>
+                          {labels.filter((_, i) => i === 0 || i === Math.floor(n / 2) || i === n - 1).map((lbl, idx) => (
+                            <span key={idx} style={{fontSize: 9.5, fontWeight: 700, color: colors.textMuted}}>
+                              {isHourly ? (idx === 0 ? '12 AM' : idx === 1 ? '12 PM' : '11 PM') : lbl}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
                 })()}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Visitor vs staff */}
-          <div style={{...cardStyle, padding: 14, marginBottom: 22}}>
-            <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
-              <div style={{width: 32, height: 32, borderRadius: 9, backgroundColor: colors.primary + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-                <Icon name="people" size={16} color={colors.primary} />
-              </div>
-              <div style={{flex: 1}}>
-                <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 6}}>
-                  <span style={{fontSize: 12, fontWeight: 700, color: colors.textMuted}}>Visitor vs staff jobs</span>
-                  <span style={{fontSize: 12, fontWeight: 800, color: colors.textMuted}}>{visitorPct}% visitor</span>
-                </div>
-                <div style={{height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: colors.border}}>
-                  <div style={{height: 6, borderRadius: 3, width: `${visitorPct}%`, backgroundColor: colors.primary}} />
-                </div>
-                <div style={{display: 'flex', justifyContent: 'space-between', marginTop: 4}}>
-                  <span style={{fontSize: 10.5, fontWeight: 700, color: colors.textMuted}}>{data?.visitorJobs ?? 0} visitor</span>
-                  <span style={{fontSize: 10.5, fontWeight: 700, color: colors.textMuted}}>{data?.staffJobs ?? 0} staff</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Leaderboard — click a row to expand */}
-          <div style={{marginBottom: 12}}>
-            <span style={{fontSize: 15, fontWeight: 900, color: colors.textPrimary}}>Top Performers</span>
-          </div>
-
-          {activeDrivers.length === 0 && idleDrivers.length === 0 ? (
-            <div style={emptyBoxStyle}>
-              <Icon name="trophy" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
-              <span style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>No drivers yet</span>
-            </div>
-          ) : activeDrivers.length === 0 ? (
-            <div style={emptyBoxStyle}>
-              <Icon name="trophy" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
-              <span style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>No completed jobs yet — the leaderboard fills in as drivers finish their first job.</span>
-            </div>
-          ) : (
-            <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
-              {activeDrivers.map((d, i) => {
-                const medal = MEDALS[i] ?? null;
-                const expanded = expandedDriverId === d.id;
-                const parkShare = d.totalCompleted > 0 ? Math.round((d.parksCompleted / d.totalCompleted) * 100) : 0;
-                const badges: string[] = [];
-                if (d.id === fastestParkId) badges.push('Fastest park');
-                if (d.id === fastestRetrieveId) badges.push('Fastest retrieve');
-                return (
-                  <PressableScale
-                    key={d.id}
-                    onClick={() => setExpandedDriverId(expanded ? null : d.id)}
-                    style={{
-                      ...cardStyle, borderColor: medal ?? colors.border, borderWidth: medal ? 1.5 : 1,
-                      padding: 14, textAlign: 'left', display: 'block',
-                    }}>
-                    <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
-                      <div style={{width: 30, height: 30, borderRadius: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: medal ?? colors.border}}>
-                        <span style={{fontSize: 13, fontWeight: 900, color: medal ? '#15161A' : colors.textMuted}}>{i + 1}</span>
-                      </div>
-                      <div style={{flex: 1, minWidth: 0}}>
-                        <div style={{fontSize: 14.5, fontWeight: 800, color: colors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{d.name}</div>
-                        <div style={{fontSize: 11.5, fontWeight: 600, marginTop: 2, color: colors.textMuted}}>
-                          {d.parksCompleted} parked · {d.retrievesCompleted} retrieved
-                        </div>
-                      </div>
-                      <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0}}>
-                        <span style={{fontSize: 20, fontWeight: 900, color: colors.textPrimary}}>{d.totalCompleted}</span>
-                        <span style={{fontSize: 10, fontWeight: 700, color: colors.textMuted}}>jobs</span>
-                      </div>
-                      <Icon name="chevronDown" size={16} color={colors.textMuted} style={{transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0}} />
-                    </div>
-
-                    {badges.length > 0 && (
-                      <div style={{display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, marginLeft: 42}}>
-                        {badges.map(b => (
-                          <span key={b} style={{display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, backgroundColor: '#F5C16818'}}>
-                            <Icon name="crown" size={11} color="#F5C168" />
-                            <span style={{fontSize: 10, fontWeight: 800, color: '#B8860B'}}>{b}</span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {expanded && (
-                      <div style={{marginTop: 12, paddingTop: 12, borderTop: `1px solid ${colors.divider}`}}>
-                        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 6}}>
-                          <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Avg park time</span>
-                          <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textPrimary}}>{minutesLabel(d.avgParkMinutes)}</span>
-                        </div>
-                        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 6}}>
-                          <span style={{fontSize: 12, fontWeight: 600, color: colors.textMuted}}>Avg retrieve time</span>
-                          <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textPrimary}}>{minutesLabel(d.avgRetrieveMinutes)}</span>
-                        </div>
-                        <div style={{height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: colors.border, marginTop: 8}}>
-                          <div style={{height: 6, borderRadius: 3, width: `${parkShare}%`, backgroundColor: colors.success}} />
-                        </div>
-                        <div style={{display: 'flex', justifyContent: 'space-between', marginTop: 4}}>
-                          <span style={{fontSize: 10.5, fontWeight: 700, color: colors.textMuted}}>{parkShare}% park jobs</span>
-                          <span style={{fontSize: 10.5, fontWeight: 700, color: colors.textMuted}}>{100 - parkShare}% retrieve jobs</span>
-                        </div>
-                      </div>
-                    )}
-                  </PressableScale>
-                );
-              })}
-
-              {idleDrivers.length > 0 && (
-                <PressableScale
-                  onClick={() => setIdleExpanded(v => !v)}
-                  style={{...cardStyle, padding: 12, textAlign: 'left', display: 'block'}}>
-                  <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
-                    <span style={{fontSize: 12, fontWeight: 700, color: colors.textMuted, flex: 1}}>
-                      {idleDrivers.length} driver{idleDrivers.length > 1 ? 's' : ''} with no completed jobs yet
+            {/* 6. VISUALIZATION: Spatial Block Capacity & Utilization Matrix */}
+            {!!data?.blockUtilization.length && (
+              <div style={{...glassCardStyle, padding: 16}}>
+                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12}}>
+                  <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                    <Icon name="parking" size={15} color={colors.primary} />
+                    <span style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>
+                      Parking Block Utilization
                     </span>
-                    <Icon name="chevronDown" size={15} color={colors.textMuted} style={{transform: idleExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s'}} />
                   </div>
-                  {idleExpanded && (
-                    <div style={{display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10}}>
-                      {idleDrivers.map(d => (
-                        <span key={d.id} style={{borderRadius: 999, border: `1px solid ${colors.border}`, padding: '5px 10px', backgroundColor: colors.background}}>
-                          <span style={{fontSize: 11, fontWeight: 700, color: colors.textMuted}}>{d.name}</span>
-                        </span>
-                      ))}
+                  <span style={{fontSize: 11, fontWeight: 600, color: colors.textMuted}}>
+                    Physical Lot Occupancy
+                  </span>
+                </div>
+
+                {(() => {
+                  const maxCount = Math.max(1, ...data.blockUtilization.map(b => b.count));
+                  const totalVolume = data.blockUtilization.reduce((sum, b) => sum + b.count, 0);
+
+                  return (
+                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10}}>
+                      {data.blockUtilization.map(b => {
+                        const pct = Math.round((b.count / Math.max(1, totalVolume)) * 100);
+                        const loadRatio = b.count / maxCount;
+                        const blockColor = loadRatio > 0.8 ? '#F59E0B' : (loadRatio > 0.4 ? colors.primary : colors.success);
+
+                        return (
+                          <div
+                            key={b.block}
+                            style={{
+                              padding: 12,
+                              borderRadius: 14,
+                              backgroundColor: colors.cardAlt,
+                              border: `1px solid ${colors.border}`,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 6,
+                            }}>
+                            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                              <span style={{fontSize: 12, fontWeight: 900, color: colors.textPrimary}}>
+                                BLOCK {b.block}
+                              </span>
+                              <span style={{fontSize: 11, fontWeight: 800, color: blockColor, fontVariantNumeric: 'tabular-nums'}}>
+                                {b.count} cars
+                              </span>
+                            </div>
+
+                            {/* Precision horizontal progress meter */}
+                            <div style={{height: 7, borderRadius: 4, backgroundColor: colors.border, overflow: 'hidden'}}>
+                              <div style={{
+                                height: '100%',
+                                width: `${(b.count / maxCount) * 100}%`,
+                                backgroundColor: blockColor,
+                                borderRadius: 4,
+                                transition: 'width 0.4s ease',
+                              }} />
+                            </div>
+
+                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                              <span style={{fontSize: 10, fontWeight: 700, color: colors.textMuted}}>
+                                Campus Share
+                              </span>
+                              <span style={{fontSize: 10, fontWeight: 800, color: colors.textSecondary}}>
+                                {pct}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* 7. VISUALIZATION: Visitor vs. Staff Circular Arc / Donut Meter */}
+            <div style={{...glassCardStyle, padding: 16}}>
+              <div style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12}}>
+                <Icon name="people" size={15} color={colors.primary} />
+                <span style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>
+                  Visitor vs. Staff Ratio
+                </span>
+              </div>
+
+              <div style={{display: 'flex', alignItems: 'center', gap: 20}}>
+                {/* SVG Donut Ring */}
+                <div style={{position: 'relative', width: 90, height: 90, flexShrink: 0}}>
+                  <svg width="90" height="90" viewBox="0 0 90 90" style={{transform: 'rotate(-90deg)'}}>
+                    <circle
+                      cx="45"
+                      cy="45"
+                      r="36"
+                      fill="none"
+                      stroke={colors.border}
+                      strokeWidth="9"
+                    />
+                    {/* Visitor Arc */}
+                    <circle
+                      cx="45"
+                      cy="45"
+                      r="36"
+                      fill="none"
+                      stroke={colors.primary}
+                      strokeWidth="9"
+                      strokeDasharray={`${(visitorPct / 100) * 226.2} 226.2`}
+                      strokeLinecap="round"
+                      style={{transition: 'stroke-dasharray 0.5s ease'}}
+                    />
+                  </svg>
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: 90,
+                    height: 90,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <span style={{fontSize: 16, fontWeight: 900, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums'}}>
+                      {visitorPct}%
+                    </span>
+                    <span style={{fontSize: 8.5, fontWeight: 700, color: colors.textMuted, letterSpacing: 0.2}}>
+                      VISITORS
+                    </span>
+                  </div>
+                </div>
+
+                {/* Legend & Count Breakdown */}
+                <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: 10}}>
+                  <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                    <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                      <span style={{width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary}} />
+                      <span style={{fontSize: 12, fontWeight: 700, color: colors.textPrimary}}>Visitor Vehicles</span>
+                    </div>
+                    <span style={{fontSize: 13, fontWeight: 900, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums'}}>
+                      {data?.visitorJobs ?? 0}
+                    </span>
+                  </div>
+
+                  <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                    <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                      <span style={{width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border}} />
+                      <span style={{fontSize: 12, fontWeight: 700, color: colors.textSecondary}}>Hospital Staff</span>
+                    </div>
+                    <span style={{fontSize: 13, fontWeight: 900, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums'}}>
+                      {data?.staffJobs ?? 0}
+                    </span>
+                  </div>
+
+                  <div style={{fontSize: 11, fontWeight: 600, color: colors.textMuted, marginTop: 2}}>
+                    {visitorPct >= 50 ? 'Curbside visitor turnover dominates demand.' : 'Staff parking allocation dominates demand.'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 8. Fleet Performance Leaderboard & Speed Matrix */}
+            <div>
+              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10}}>
+                <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                  <Icon name="trophy" size={15} color="#F59E0B" />
+                  <span style={{fontSize: 14, fontWeight: 900, color: colors.textPrimary}}>
+                    Fleet Runner Leaderboard
+                  </span>
+                </div>
+                <span style={{fontSize: 11, fontWeight: 600, color: colors.textMuted}}>
+                  Tap runner to inspect
+                </span>
+              </div>
+
+              {activeDrivers.length === 0 && idleDrivers.length === 0 ? (
+                <div style={{...glassCardStyle, padding: '36px 20px', textAlign: 'center'}}>
+                  <Icon name="trophy" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
+                  <div style={{fontSize: 13, fontWeight: 700, color: colors.textMuted}}>No drivers registered in roster</div>
+                </div>
+              ) : activeDrivers.length === 0 ? (
+                <div style={{...glassCardStyle, padding: '36px 20px', textAlign: 'center'}}>
+                  <Icon name="trophy" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
+                  <div style={{fontSize: 13, fontWeight: 700, color: colors.textMuted}}>
+                    No completed jobs yet for {PERIOD_TITLES[period]}. Roster updates as runners complete tasks.
+                  </div>
+                </div>
+              ) : (
+                <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
+                  {activeDrivers.map((d, i) => {
+                    const medal = MEDALS[i] ?? null;
+                    const expanded = expandedDriverId === d.id;
+                    const parkShare = d.totalCompleted > 0 ? Math.round((d.parksCompleted / d.totalCompleted) * 100) : 0;
+                    const badges: string[] = [];
+                    if (d.id === fastestParkId) badges.push('Fastest Park');
+                    if (d.id === fastestRetrieveId) badges.push('Fastest Retrieve');
+
+                    return (
+                      <PressableScale
+                        key={d.id}
+                        onClick={() => setExpandedDriverId(expanded ? null : d.id)}
+                        style={{
+                          ...glassCardStyle,
+                          borderColor: medal ?? colors.border,
+                          borderWidth: medal ? 1.5 : 1,
+                          padding: 12,
+                          textAlign: 'left',
+                          display: 'block',
+                          cursor: 'pointer',
+                        }}>
+                        <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+                          {/* Rank Badge */}
+                          <div style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 15,
+                            backgroundColor: medal ?? colors.cardAlt,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}>
+                            <span style={{fontSize: 13, fontWeight: 900, color: medal ? '#1E293B' : colors.textSecondary}}>
+                              {i + 1}
+                            </span>
+                          </div>
+
+                          {/* Runner Info */}
+                          <div style={{flex: 1, minWidth: 0}}>
+                            <div style={{fontSize: 14, fontWeight: 800, color: colors.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
+                              {d.name}
+                            </div>
+                            <div style={{fontSize: 11.5, fontWeight: 600, color: colors.textSecondary, marginTop: 2}}>
+                              {d.parksCompleted} parked · {d.retrievesCompleted} retrieved
+                            </div>
+                          </div>
+
+                          {/* Total Completed Metric */}
+                          <div style={{textAlign: 'right', flexShrink: 0}}>
+                            <span style={{fontSize: 18, fontWeight: 900, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums'}}>
+                              {d.totalCompleted}
+                            </span>
+                            <div style={{fontSize: 10, fontWeight: 700, color: colors.textMuted}}>
+                              JOBS
+                            </div>
+                          </div>
+
+                          <Icon
+                            name="chevronDown"
+                            size={16}
+                            color={colors.textMuted}
+                            style={{transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0}}
+                          />
+                        </div>
+
+                        {/* Speed Badges */}
+                        {badges.length > 0 && (
+                          <div style={{display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8, marginLeft: 42}}>
+                            {badges.map(b => (
+                              <span
+                                key={b}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  padding: '2px 7px',
+                                  borderRadius: 6,
+                                  backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FEF3C7',
+                                }}>
+                                <Icon name="crown" size={11} color="#F59E0B" />
+                                <span style={{fontSize: 10, fontWeight: 800, color: isDark ? '#F59E0B' : '#B45309'}}>{b}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Expandable Telemetry Drawer */}
+                        {expanded && (
+                          <div style={{marginTop: 12, paddingTop: 12, borderTop: `1px solid ${colors.border}`}}>
+                            <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 6}}>
+                              <span style={{fontSize: 12, fontWeight: 600, color: colors.textSecondary}}>Avg Park Duration</span>
+                              <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textPrimary}}>
+                                {minutesLabel(d.avgParkMinutes)}
+                              </span>
+                            </div>
+                            <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 8}}>
+                              <span style={{fontSize: 12, fontWeight: 600, color: colors.textSecondary}}>Avg Retrieve Duration</span>
+                              <span style={{fontSize: 12.5, fontWeight: 800, color: colors.textPrimary}}>
+                                {minutesLabel(d.avgRetrieveMinutes)}
+                              </span>
+                            </div>
+
+                            {/* Park vs Retrieve split bar */}
+                            <div style={{height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: colors.border}}>
+                              <div style={{height: '100%', width: `${parkShare}%`, backgroundColor: colors.primary}} />
+                            </div>
+                            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: 4}}>
+                              <span style={{fontSize: 10, fontWeight: 700, color: colors.textMuted}}>{parkShare}% park</span>
+                              <span style={{fontSize: 10, fontWeight: 700, color: colors.textMuted}}>{100 - parkShare}% retrieve</span>
+                            </div>
+                          </div>
+                        )}
+                      </PressableScale>
+                    );
+                  })}
+
+                  {/* Idle Runners Strip */}
+                  {idleDrivers.length > 0 && (
+                    <PressableScale
+                      onClick={() => setIdleExpanded(v => !v)}
+                      style={{...glassCardStyle, padding: 12, textAlign: 'left', display: 'block', cursor: 'pointer'}}>
+                      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                        <span style={{fontSize: 12, fontWeight: 700, color: colors.textSecondary}}>
+                          {idleDrivers.length} driver{idleDrivers.length > 1 ? 's' : ''} on shift with no jobs completed yet
+                        </span>
+                        <Icon
+                          name="chevronDown"
+                          size={15}
+                          color={colors.textMuted}
+                          style={{transform: idleExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s'}}
+                        />
+                      </div>
+                      {idleExpanded && (
+                        <div style={{display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10}}>
+                          {idleDrivers.map(d => (
+                            <span
+                              key={d.id}
+                              style={{
+                                borderRadius: 8,
+                                border: `1px solid ${colors.border}`,
+                                padding: '4px 9px',
+                                backgroundColor: colors.cardAlt,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: colors.textSecondary,
+                              }}>
+                              {d.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </PressableScale>
                   )}
-                </PressableScale>
+                </div>
               )}
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
