@@ -10,7 +10,6 @@ import {AlarmBanner} from './components/AlarmBanner';
 import {InstallBanner} from './components/InstallBanner';
 import {UpdateBanner} from './components/UpdateBanner';
 import {ErrorBoundary} from './components/ErrorBoundary';
-import {CopilotOverlay} from './components/copilot/CopilotOverlay';
 import {installCrashReporting, setCurrentScreen} from './services/crashReporting';
 // LoginScreen stays eager: it is what a signed-out visitor sees first, and
 // making the very first paint wait on a second round-trip would be a
@@ -125,23 +124,6 @@ interface TabDef {
   headerTitle: string | null; // null = headerShown: false
 }
 
-/*
- * Where the creature may wander, by role.
- *
- * Opt-in and deliberately short. Several tabs host their own internal
- * sub-views in local state — ValetHomeScreen switches between scan, assign,
- * visitor and retrievals without the tab ever changing — so roaming on the
- * strength of a tab name would put a drifting character over exactly the
- * work it must never cover. Valet therefore keeps the creature everywhere,
- * corner-anchored and still reporting, and wanders only on Analytics.
- */
-const ROAMS_ON: Record<string, readonly TabKey[]> = {
-  valet: ['Queue', 'Analytics'],
-  driver: ['DriverDashboard'],
-  admin: ['Dashboard', 'Analytics'],
-  doctor: ['Home'],
-  staff: ['Home'],
-};
 
 // Which chunk backs each tab. Only used for prefetching — the render path
 // below still picks the component directly.
@@ -344,40 +326,6 @@ function RoleRouter() {
           <Suspense fallback={<ScreenFallback />}>{screen}</Suspense>
         </ErrorBoundary>
       </div>
-
-      {/* Rendered inside RoleRouter, so it only ever exists once signed in —
-          there is nothing to observe on the login screen and no session to
-          report a crash against. */}
-      <CopilotOverlay
-        idleScreen={(ROAMS_ON[user?.role ?? ''] ?? []).includes(tab)}
-        onNavigate={insight => {
-          const target = insight.action?.target;
-          if (!target) return;
-          /*
-           * An insight names a PLACE ('dashboard'), not a tab key, because
-           * the same rule serves every role and the key differs per role —
-           * a valet's dashboard is 'Queue', a driver's is 'DriverDashboard',
-           * an admin's is 'Dashboard'. Resolving that here rather than in
-           * the engine keeps the rules free of routing.
-           *
-           * The result is then checked against the tabs this role actually
-           * has. Without that check a driver tapping "Open" on their own
-           * unaccepted job landed on 'Dashboard' — the ADMIN dashboard —
-           * because a driver has no tab by that name. Falling back to the
-           * role's first tab means a wrong mapping is a harmless
-           * no-op instead of showing someone another role's screen.
-           */
-          const wanted =
-              target === 'records'   ? (user?.role === 'valet' ? 'Records' : 'Home')
-            : target === 'dashboard' ? (user?.role === 'valet' ? 'Queue'
-                                      : user?.role === 'driver' ? 'DriverDashboard'
-                                      : 'Dashboard')
-            : target === 'map'       ? (user?.role === 'valet' ? 'ValetMap' : 'Map')
-            : 'Home';
-          const reachable = tabs.some(t => t.key === wanted);
-          setTab(reachable ? (wanted as TabKey) : tabs[0].key);
-        }}
-      />
 
       {/* Bottom tab bar */}
       <div style={{
