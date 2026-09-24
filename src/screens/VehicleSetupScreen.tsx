@@ -6,9 +6,7 @@ import {Icon} from '../components/Icon';
 import {PressableScale} from '../components/PressableScale';
 import {useDialog} from '../components/AppDialog';
 
-// Same three.js mini-car scene the mobile app renders in a WebView — the
-// scene HTML is identical; here it lives in an iframe (srcDoc) and receives
-// colour/plate updates via postMessage.
+// Three.js mini-car scene rendered in an iframe via srcDoc with postMessage updates.
 function buildCarSceneHTML(initialColor: string, initialPlate: string, bg: string) {
   return `<!DOCTYPE html>
 <html>
@@ -236,29 +234,28 @@ function buildCarSceneHTML(initialColor: string, initialPlate: string, bg: strin
 </html>`;
 }
 
-// Exactly 7 defaults + the "More" tile fills two full rows of 4.
 const COLORS = [
-  {name: 'White',  hex: '#FFFFFF'},
-  {name: 'Black',  hex: '#1C1C1E'},
-  {name: 'Red',    hex: '#DC2626'},
-  {name: 'Blue',   hex: '#2563EB'},
+  {name: 'White', hex: '#FFFFFF'},
+  {name: 'Black', hex: '#1C1C1E'},
+  {name: 'Red', hex: '#DC2626'},
+  {name: 'Blue', hex: '#2563EB'},
   {name: 'Silver', hex: '#9CA3AF'},
-  {name: 'Grey',   hex: '#4B5563'},
-  {name: 'Green',  hex: '#16A34A'},
+  {name: 'Grey', hex: '#4B5563'},
+  {name: 'Green', hex: '#16A34A'},
 ];
 
 const MORE_COLORS = [
-  {name: 'Yellow',  hex: '#F5B300'},
-  {name: 'Orange',  hex: '#EA580C'},
-  {name: 'Maroon',  hex: '#7C2D12'},
-  {name: 'Navy',    hex: '#1E3A8A'},
-  {name: 'Purple',  hex: '#7C3AED'},
-  {name: 'Teal',    hex: '#0D9488'},
-  {name: 'Pink',    hex: '#DB2777'},
-  {name: 'Lime',    hex: '#65A30D'},
-  {name: 'Beige',   hex: '#D6C7A1'},
-  {name: 'Bronze',  hex: '#92553A'},
-  {name: 'Sky',     hex: '#0EA5E9'},
+  {name: 'Yellow', hex: '#F5B300'},
+  {name: 'Orange', hex: '#EA580C'},
+  {name: 'Maroon', hex: '#7C2D12'},
+  {name: 'Navy', hex: '#1E3A8A'},
+  {name: 'Purple', hex: '#7C3AED'},
+  {name: 'Teal', hex: '#0D9488'},
+  {name: 'Pink', hex: '#DB2777'},
+  {name: 'Lime', hex: '#65A30D'},
+  {name: 'Beige', hex: '#D6C7A1'},
+  {name: 'Bronze', hex: '#92553A'},
+  {name: 'Sky', hex: '#0EA5E9'},
 ];
 
 function isLightColor(hex: string) {
@@ -269,12 +266,13 @@ function isLightColor(hex: string) {
 }
 
 export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
-  const {colors} = useTheme();
+  const {colors, isDark} = useTheme();
   const {user, updateProfile} = useAuth();
   const dialog = useDialog();
   const frameRef = useRef<HTMLIFrameElement>(null);
   const phoneInputRef = useRef<HTMLInputElement>(null);
   const modelInputRef = useRef<HTMLInputElement>(null);
+
   const [vehicleNumber, setVehicleNumber] = useState(user?.carNumber ?? '');
   const [phone, setPhone] = useState(user?.phone ?? '');
   const [vehicleModel, setVehicleModel] = useState(user?.carModel ?? '');
@@ -282,7 +280,6 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
   const [selectedColor, setSelectedColor] = useState(user?.carColor || COLORS[1].hex);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  // Already saved a vehicle number before -> land on the summary view.
   const [mode, setMode] = useState<'view' | 'edit'>(user?.carNumber ? 'view' : 'edit');
 
   const post = (msg: object) => frameRef.current?.contentWindow?.postMessage(JSON.stringify(msg), '*');
@@ -292,7 +289,7 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
 
   const handleSave = async () => {
     if (!vehicleNumber.trim()) {
-      dialog.alert('Please enter your vehicle number before saving.');
+      dialog.alert('Please enter your vehicle registration number before saving.');
       return;
     }
     setSaving(true);
@@ -305,47 +302,69 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
         vehicleType,
       });
       updateProfile({
-        carNumber: updated.carNumber, phone: updated.phone,
-        carModel: updated.carModel, carColor: updated.carColor, vehicleType: updated.vehicleType,
+        carNumber: updated.carNumber,
+        phone: updated.phone,
+        carModel: updated.carModel,
+        carColor: updated.carColor,
+        vehicleType: updated.vehicleType,
       });
       setMode('view');
     } catch (err: any) {
-      dialog.alert(err.message || 'Could not save vehicle details');
+      dialog.alert(err.message || 'Could not save vehicle configuration');
     } finally {
       setSaving(false);
     }
   };
 
   const handleHelp = () => {
-    dialog.alert('Add your vehicle number, phone number, and pick a body colour — the preview above updates live. This is saved to your account and used by the valet team.', {tone: 'info', title: 'Vehicle Setup'});
+    dialog.alert(
+      'Configure your vehicle registration, body colour, and contact number. The 3D preview updates interactively. These credentials allow the hospital valet team to identify and park your car with zero friction.',
+      {tone: 'info', title: 'Vehicle Configuration'},
+    );
   };
 
-  // srcDoc is only computed once — colour/plate updates go via postMessage,
-  // so the scene never reloads while editing.
   const [sceneHTML] = useState(() => buildCarSceneHTML(selectedColor, vehicleNumber, colors.surface));
   const isCustomColor = ![...COLORS, ...MORE_COLORS].some(c => c.hex === selectedColor);
   const colorName = [...COLORS, ...MORE_COLORS].find(c => c.hex === selectedColor)?.name ?? 'Custom';
 
-  const fieldLabel: React.CSSProperties = {
-    fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 8, marginTop: 4,
-    color: colors.textMuted, display: 'block',
-  };
-  const inputRow: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', border: `1.5px solid ${colors.border}`,
-    borderRadius: 14, padding: '0 10px', height: 58, marginBottom: 16,
-    backgroundColor: colors.surface, boxShadow: '0 3px 8px rgba(0,0,0,0.06)',
-  };
-  const iconWrap: React.CSSProperties = {
-    width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center',
-    justifyContent: 'center', marginRight: 10, backgroundColor: colors.cardAlt, flexShrink: 0,
-  };
-  const inputStyle: React.CSSProperties = {
-    flex: 1, fontSize: 15, fontWeight: 600, border: 'none', background: 'transparent',
-    color: colors.textPrimary, minWidth: 0,
+  const glassCardStyle: React.CSSProperties = {
+    backgroundColor: colors.surface,
+    border: `1px solid ${colors.border}`,
+    borderRadius: 20,
+    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.25)' : '0 2px 10px rgba(0, 0, 0, 0.03)',
   };
 
-  const swatchGrid: React.CSSProperties = {
-    display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', columnGap: 14, rowGap: 18, marginBottom: 24,
+  const inputRowStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    border: `1.5px solid ${colors.border}`,
+    borderRadius: 14,
+    padding: '0 12px',
+    height: 52,
+    marginBottom: 14,
+    backgroundColor: colors.surface,
+    transition: 'border-color 0.15s ease',
+  };
+
+  const fieldLabelStyle: React.CSSProperties = {
+    fontSize: 10.5,
+    fontWeight: 800,
+    letterSpacing: 0.8,
+    marginBottom: 6,
+    color: colors.textSecondary,
+    display: 'block',
+    textTransform: 'uppercase',
+  };
+
+  const inputStyle: React.CSSProperties = {
+    flex: 1,
+    fontSize: 14.5,
+    fontWeight: 700,
+    border: 'none',
+    background: 'transparent',
+    color: colors.textPrimary,
+    minWidth: 0,
+    outline: 'none',
   };
 
   const renderSwatch = (c: {name: string; hex: string}, onPick: () => void) => {
@@ -353,78 +372,169 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
     return (
       <PressableScale key={c.hex} onClick={onPick} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6}}>
         <span style={{
-          width: 48, height: 48, borderRadius: 24, backgroundColor: c.hex,
-          border: `${active ? 3 : 1}px solid ${active ? colors.textPrimary : colors.border}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          backgroundColor: c.hex,
+          border: `${active ? 3 : 1.5}px solid ${active ? colors.primary : colors.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: active ? `0 0 10px ${colors.primary}60` : 'none',
+          cursor: 'pointer',
         }}>
-          {active && <Icon name="checkBold" size={16} color={isLightColor(c.hex) ? '#111' : '#fff'} />}
+          {active && <Icon name="checkBold" size={15} color={isLightColor(c.hex) ? '#111' : '#fff'} />}
         </span>
-        <span style={{fontSize: 10, fontWeight: 600, color: colors.textSecondary}}>{c.name}</span>
+        <span style={{fontSize: 10, fontWeight: 700, color: colors.textSecondary}}>{c.name}</span>
       </PressableScale>
     );
   };
 
   return (
-    <div className="screen-scroll" style={{backgroundColor: colors.background}}>
-      <div style={{padding: '20px 20px 40px'}}>
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20}}>
-          <PressableScale
-            onClick={onBack}
-            style={{
-              width: 44, height: 44, borderRadius: 22, backgroundColor: colors.cardAlt,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-            <Icon name="back" size={20} color={colors.textPrimary} />
-          </PressableScale>
-          <PressableScale
-            onClick={handleHelp}
-            style={{
-              width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-            <Icon name="help" size={18} color={colors.textOnPrimary} />
-          </PressableScale>
+    <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 40}}>
+      {/* 1. Workstation Top Navigation Bar */}
+      <div style={{
+        padding: '14px 18px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottom: `1px solid ${colors.border}`,
+        backgroundColor: colors.surface,
+      }}>
+        <PressableScale
+          onClick={onBack}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 12,
+            border: `1px solid ${colors.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.cardAlt,
+            cursor: 'pointer',
+          }}>
+          <Icon name="back" size={18} color={colors.textPrimary} />
+        </PressableScale>
+
+        <div style={{textAlign: 'center'}}>
+          <div style={{fontSize: 14, fontWeight: 900, color: colors.textPrimary, letterSpacing: -0.2}}>
+            Vehicle Configuration
+          </div>
+          <div style={{fontSize: 10.5, fontWeight: 700, color: colors.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase'}}>
+            Digital Garage
+          </div>
         </div>
 
-        <div style={{fontSize: 28, fontWeight: 900, color: colors.textPrimary}}>Vehicle Setup</div>
-        <div style={{fontSize: 13, marginTop: 4, marginBottom: 18, color: colors.textSecondary}}>
-          {mode === 'edit' ? 'Add your vehicle details and pick a colour' : 'Your saved vehicle details'}
-        </div>
+        <PressableScale
+          onClick={handleHelp}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 12,
+            border: `1px solid ${colors.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.cardAlt,
+            cursor: 'pointer',
+          }}>
+          <Icon name="help" size={17} color={colors.textPrimary} />
+        </PressableScale>
+      </div>
 
+      <div style={{padding: 16}}>
+        {/* 2. Interactive Three.js 3D Vehicle Preview Canvas */}
         <div style={{
-          borderRadius: 20, border: `1px solid ${colors.border}`, overflow: 'hidden',
-          marginBottom: 24, height: 220, backgroundColor: colors.surface,
+          ...glassCardStyle,
+          overflow: 'hidden',
+          marginBottom: 18,
+          height: 230,
+          position: 'relative',
         }}>
           <iframe
             ref={frameRef}
             title="3D vehicle preview"
             srcDoc={sceneHTML}
-            onLoad={() => { post({type: 'setColor', color: selectedColor}); post({type: 'setPlate', plate: vehicleNumber}); }}
+            onLoad={() => {
+              post({type: 'setColor', color: selectedColor});
+              post({type: 'setPlate', plate: vehicleNumber});
+            }}
             style={{width: '100%', height: '100%', border: 'none', display: 'block'}}
           />
+
+          {/* Color & Plate Badge Overlay */}
+          <div style={{
+            position: 'absolute',
+            bottom: 12,
+            left: 12,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '4px 10px',
+            borderRadius: 8,
+            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.92)',
+            border: `1px solid ${colors.border}`,
+            backdropFilter: 'blur(8px)',
+          }}>
+            <span style={{width: 8, height: 8, borderRadius: 4, backgroundColor: selectedColor, border: `1px solid ${colors.border}`}} />
+            <span style={{fontSize: 11, fontWeight: 800, color: colors.textPrimary}}>{colorName}</span>
+            {vehicleNumber && (
+              <>
+                <span style={{fontSize: 11, color: colors.textMuted}}>·</span>
+                <span style={{fontFamily: 'monospace', fontSize: 11, fontWeight: 900, color: colors.textPrimary}}>{vehicleNumber}</span>
+              </>
+            )}
+          </div>
         </div>
 
+        {/* 3. View vs. Edit Configuration Modes */}
         {mode === 'view' ? (
           <>
-            <div style={{borderRadius: 18, border: `1px solid ${colors.border}`, overflow: 'hidden', marginBottom: 20, backgroundColor: colors.surface}}>
+            <div style={{...glassCardStyle, overflow: 'hidden', marginBottom: 18}}>
               {[
-                {icon: 'car' as const, label: 'Vehicle Number', value: vehicleNumber || '—'},
-                {icon: 'car' as const, label: 'Vehicle Model', value: vehicleModel || '—'},
-                {icon: vehicleType === 'bike' ? 'bike' as const : 'car' as const, label: 'Vehicle Type', value: vehicleType === 'bike' ? 'Bike' : 'Car'},
-                {icon: 'phone' as const, label: 'Phone Number', value: phone || '—'},
-                {icon: 'car' as const, label: 'Body Colour', value: colorName},
+                {icon: 'car' as const, label: 'Vehicle Registration', value: vehicleNumber || '—', mono: true},
+                {icon: 'car' as const, label: 'Make & Model', value: vehicleModel || '—'},
+                {icon: vehicleType === 'bike' ? 'bike' as const : 'car' as const, label: 'Classification', value: vehicleType === 'bike' ? 'Two-Wheeler (Bike)' : 'Four-Wheeler (Car)'},
+                {icon: 'phone' as const, label: 'Contact Phone', value: phone || '—'},
+                {icon: 'palette' as const, label: 'Exterior Paint', value: colorName},
               ].map((row, i, arr) => (
-                <div key={row.label} style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: 14,
-                  borderBottom: i === arr.length - 1 ? 'none' : `1px solid ${colors.divider}`,
-                }}>
-                  <span style={iconWrap}>
-                    <Icon name={row.icon} size={16} color={colors.textSecondary} />
-                  </span>
-                  <span style={{flex: 1}}>
-                    <span style={{display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 3, color: colors.textMuted}}>{row.label.toUpperCase()}</span>
-                    <span style={{display: 'block', fontSize: 15, fontWeight: 800, color: colors.textPrimary}}>{row.value}</span>
-                  </span>
+                <div
+                  key={row.label}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '13px 16px',
+                    borderBottom: i === arr.length - 1 ? 'none' : `1px solid ${colors.border}`,
+                  }}>
+                  <div style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    backgroundColor: colors.cardAlt,
+                    border: `1px solid ${colors.border}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <Icon name={row.icon} size={15} color={colors.textPrimary} />
+                  </div>
+                  <div style={{flex: 1, minWidth: 0}}>
+                    <div style={{fontSize: 10, fontWeight: 800, letterSpacing: 0.8, color: colors.textMuted, textTransform: 'uppercase'}}>
+                      {row.label}
+                    </div>
+                    <div style={{
+                      fontSize: 14,
+                      fontWeight: 800,
+                      color: colors.textPrimary,
+                      fontFamily: row.mono ? 'monospace' : 'inherit',
+                      marginTop: 2,
+                    }}>
+                      {row.value}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -432,42 +542,55 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
             <PressableScale
               onClick={() => setMode('edit')}
               style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                borderRadius: 14, height: 54, width: '100%', backgroundColor: colors.primary,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                borderRadius: 14,
+                height: 48,
+                width: '100%',
+                backgroundColor: colors.primary,
+                cursor: 'pointer',
+                boxShadow: isDark ? '0 4px 14px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.1)',
               }}>
-              <Icon name="edit" size={17} color={colors.textOnPrimary} />
-              <span style={{fontSize: 15, fontWeight: 800, color: colors.textOnPrimary}}>Edit Vehicle Details</span>
+              <Icon name="edit" size={16} color={colors.textOnPrimary} />
+              <span style={{fontSize: 13.5, fontWeight: 900, color: colors.textOnPrimary, letterSpacing: 0.2}}>
+                Update Vehicle Details
+              </span>
             </PressableScale>
           </>
         ) : (
           <>
-            <label style={fieldLabel}>VEHICLE NUMBER</label>
-            <div style={inputRow}>
-              <span style={iconWrap}><Icon name="car" size={16} color={colors.textPrimary} /></span>
+            {/* Input: Registration Plate */}
+            <label style={fieldLabelStyle}>Vehicle Registration Number</label>
+            <div style={inputRowStyle}>
+              <Icon name="car" size={16} color={colors.textSecondary} style={{marginRight: 10}} />
               <input
-                style={inputStyle}
+                style={{...inputStyle, fontFamily: 'monospace', letterSpacing: 1}}
                 value={vehicleNumber}
                 onChange={e => setVehicleNumber(e.target.value.toUpperCase())}
-                placeholder="e.g. TN09 AB 1234"
+                placeholder="e.g. AP 09 CL 1234"
                 onKeyDown={e => { if (e.key === 'Enter') modelInputRef.current?.focus(); }}
               />
             </div>
 
-            <label style={fieldLabel}>VEHICLE MODEL (OPTIONAL)</label>
-            <div style={inputRow}>
-              <span style={iconWrap}><Icon name="car" size={16} color={colors.textPrimary} /></span>
+            {/* Input: Model */}
+            <label style={fieldLabelStyle}>Vehicle Model (Optional)</label>
+            <div style={inputRowStyle}>
+              <Icon name="car" size={16} color={colors.textSecondary} style={{marginRight: 10}} />
               <input
                 ref={modelInputRef}
                 style={inputStyle}
                 value={vehicleModel}
                 onChange={e => setVehicleModel(e.target.value)}
-                placeholder="e.g. Maruti Swift"
+                placeholder="e.g. Toyota Fortuner / Honda City"
                 onKeyDown={e => { if (e.key === 'Enter') phoneInputRef.current?.focus(); }}
               />
             </div>
 
-            <label style={fieldLabel}>VEHICLE TYPE</label>
-            <div style={{display: 'flex', gap: 10, marginBottom: 16}}>
+            {/* Selector: Vehicle Type */}
+            <label style={fieldLabelStyle}>Vehicle Classification</label>
+            <div style={{display: 'flex', gap: 10, marginBottom: 14}}>
               {(['car', 'bike'] as const).map(t => {
                 const on = vehicleType === t;
                 return (
@@ -475,65 +598,102 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
                     key={t}
                     onClick={() => setVehicleType(t)}
                     style={{
-                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      border: `1.5px solid ${on ? colors.primary : colors.border}`, borderRadius: 14, height: 50,
-                      backgroundColor: on ? colors.primary : colors.surface,
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      border: `1.5px solid ${on ? colors.primary : colors.border}`,
+                      borderRadius: 12,
+                      height: 46,
+                      backgroundColor: on ? (isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF') : colors.surface,
+                      cursor: 'pointer',
                     }}>
-                    <Icon name={t === 'car' ? 'car' : 'bike'} size={16} color={on ? colors.textOnPrimary : colors.textSecondary} />
-                    <span style={{fontSize: 14, fontWeight: 700, color: on ? colors.textOnPrimary : colors.textSecondary}}>{t === 'car' ? 'Car' : 'Bike'}</span>
+                    <Icon name={t === 'car' ? 'car' : 'bike'} size={16} color={on ? colors.primary : colors.textSecondary} />
+                    <span style={{fontSize: 13, fontWeight: 800, color: on ? colors.primary : colors.textSecondary}}>
+                      {t === 'car' ? 'Car (4-Wheeler)' : 'Bike (2-Wheeler)'}
+                    </span>
                   </PressableScale>
                 );
               })}
             </div>
 
-            <label style={fieldLabel}>PHONE NUMBER</label>
-            <div style={inputRow}>
-              <span style={iconWrap}><Icon name="phone" size={16} color={colors.textPrimary} /></span>
+            {/* Input: Phone Number */}
+            <label style={fieldLabelStyle}>Direct Phone Number</label>
+            <div style={inputRowStyle}>
+              <Icon name="phone" size={16} color={colors.textSecondary} style={{marginRight: 10}} />
               <input
                 ref={phoneInputRef}
-                style={inputStyle}
+                style={{...inputStyle, fontVariantNumeric: 'tabular-nums'}}
                 value={phone}
                 onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder="10-digit number"
+                placeholder="10-digit mobile number"
                 inputMode="numeric"
               />
             </div>
 
-            <label style={fieldLabel}>BODY COLOUR</label>
-            <div style={swatchGrid}>
+            {/* Color Palette Swatches */}
+            <label style={fieldLabelStyle}>Body Exterior Colour</label>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 12,
+              marginBottom: 20,
+              padding: 12,
+              borderRadius: 16,
+              backgroundColor: colors.surface,
+              border: `1px solid ${colors.border}`,
+            }}>
               {COLORS.map(c => renderSwatch(c, () => setSelectedColor(c.hex)))}
               <PressableScale onClick={() => setPickerOpen(true)} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6}}>
                 <span style={{
-                  width: 48, height: 48, borderRadius: 24,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   border: isCustomColor
-                    ? `3px solid ${colors.textPrimary}`
+                    ? `3px solid ${colors.primary}`
                     : `1.5px dashed ${colors.border}`,
                   backgroundColor: isCustomColor ? selectedColor : colors.cardAlt,
+                  cursor: 'pointer',
                 }}>
                   <Icon
                     name={isCustomColor ? 'checkBold' : 'plus'}
-                    size={isCustomColor ? 16 : 18}
+                    size={isCustomColor ? 15 : 17}
                     color={isCustomColor ? (isLightColor(selectedColor) ? '#111' : '#fff') : colors.textSecondary}
                   />
                 </span>
-                <span style={{fontSize: 10, fontWeight: 600, color: colors.textSecondary}}>More</span>
+                <span style={{fontSize: 10, fontWeight: 700, color: colors.textSecondary}}>More</span>
               </PressableScale>
             </div>
 
+            {/* Save Button */}
             <PressableScale
               onClick={handleSave}
               disabled={saving}
               style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                borderRadius: 14, height: 54, width: '100%',
-                backgroundColor: colors.primary, opacity: saving ? 0.6 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                borderRadius: 14,
+                height: 48,
+                width: '100%',
+                backgroundColor: colors.primary,
+                opacity: saving ? 0.6 : 1,
+                cursor: 'pointer',
+                boxShadow: isDark ? '0 4px 14px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.1)',
               }}>
-              {saving ? <span className="spinner" /> : (
+              {saving ? (
+                <span className="spinner" style={{borderColor: 'rgba(255,255,255,0.4)', borderTopColor: colors.textOnPrimary}} />
+              ) : (
                 <>
-                  <Icon name="save" size={17} color={colors.textOnPrimary} />
-                  <span style={{fontSize: 15, fontWeight: 800, color: colors.textOnPrimary}}>Save Vehicle</span>
-                  <Icon name="arrowRight" size={17} color={colors.textOnPrimary} />
+                  <Icon name="save" size={16} color={colors.textOnPrimary} />
+                  <span style={{fontSize: 13.5, fontWeight: 900, color: colors.textOnPrimary, letterSpacing: 0.2}}>
+                    Save Vehicle Configuration
+                  </span>
                 </>
               )}
             </PressableScale>
@@ -541,29 +701,57 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
         )}
       </div>
 
-      {/* Colour picker popup */}
+      {/* Colour Picker Modal */}
       {pickerOpen && (
         <div
           onClick={() => setPickerOpen(false)}
           style={{
-            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 100,
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.55)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+            zIndex: 100,
           }}>
           <div
             onClick={e => e.stopPropagation()}
-            style={{width: '100%', maxWidth: 420, borderRadius: 22, padding: 20, backgroundColor: colors.surface}}>
-            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18}}>
-              <span style={{fontSize: 18, fontWeight: 900, color: colors.textPrimary}}>Choose a colour</span>
+            style={{
+              width: '100%',
+              maxWidth: 380,
+              borderRadius: 22,
+              padding: 20,
+              backgroundColor: colors.surface,
+              border: `1px solid ${colors.border}`,
+              boxShadow: isDark ? '0 12px 32px rgba(0,0,0,0.6)' : '0 8px 24px rgba(0,0,0,0.15)',
+            }}>
+            <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16}}>
+              <span style={{fontSize: 16, fontWeight: 900, color: colors.textPrimary}}>
+                Select Paint Finish
+              </span>
               <PressableScale
                 onClick={() => setPickerOpen(false)}
                 style={{
-                  width: 32, height: 32, borderRadius: 16, backgroundColor: colors.cardAlt,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 32,
+                  height: 32,
+                  borderRadius: 10,
+                  backgroundColor: colors.cardAlt,
+                  border: `1px solid ${colors.border}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
                 }}>
-                <Icon name="close" size={16} color={colors.textPrimary} />
+                <Icon name="close" size={15} color={colors.textPrimary} />
               </PressableScale>
             </div>
-            <div style={{...swatchGrid, marginBottom: 0}}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 12,
+            }}>
               {MORE_COLORS.map(c => renderSwatch(c, () => { setSelectedColor(c.hex); setPickerOpen(false); }))}
             </div>
           </div>
