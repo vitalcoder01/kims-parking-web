@@ -128,8 +128,9 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
   const [sendingArrival, setSendingArrival] = useState(false);
   const [arrivalSent, setArrivalSent] = useState<number | null>(null);
 
-  const displayTask = tasks.find(t => t.doctorId === user?.id);
-  const activeTask = displayTask && displayTask.status !== 'completed' && displayTask.status !== 'cancelled' ? displayTask : undefined;
+  const doctorTasks = tasks.filter(t => t.doctorId === user?.id);
+  const activeTask = doctorTasks.find(t => t.status !== 'completed' && t.status !== 'cancelled');
+  const displayTask = activeTask ?? doctorTasks.slice().sort((a, b) => (b.completedAt ?? b.requestedAt ?? 0) - (a.completedAt ?? a.requestedAt ?? 0))[0];
   const carIsParked = displayTask?.type === 'park' && displayTask.status === 'completed';
   const carJustRetrieved = displayTask?.type === 'retrieve' && displayTask.status === 'delivered';
   const showEmptyState = !displayTask || displayTask.status === 'cancelled'

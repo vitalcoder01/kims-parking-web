@@ -37,6 +37,7 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
     confirmParkedByValet,
     requestOtherStationDriver,
     closeParkedSession,
+    closeParkedVisitor,
     recallTask,
   } = useValetActions();
 
@@ -231,6 +232,18 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
     try {
       if (slot.taskId != null) {
         await closeParkedSession(slot.taskId);
+      } else {
+        const taskInSlot = tasks.find(t => t.slotId === slot.id && t.status !== 'completed' && t.status !== 'cancelled');
+        if (taskInSlot) {
+          await closeParkedSession(taskInSlot.id);
+        } else {
+          const visitorInSlot = visitors.find(v => v.slotId === slot.id && v.status === 'parked');
+          if (visitorInSlot) {
+            await closeParkedVisitor(visitorInSlot.id);
+          } else {
+            dialog.alert('No linked active parking ticket was found for this bay to close.', {title: 'Cannot Free Bay'});
+          }
+        }
       }
     } catch (err: any) {
       dialog.alert(err.message || 'Could not free parking slot', {title: 'Action Failed'});

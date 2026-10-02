@@ -165,7 +165,7 @@ export function ValetMapScreen() {
     return Object.values(driverLocations)
       .filter(loc => onlineDriverIds.includes(loc.driverId))
       .map(loc => {
-        const activeTask = tasks.find(t => t.driverId === loc.driverId && t.status !== 'completed' && t.status !== 'requested');
+        const activeTask = tasks.find(t => t.driverId === loc.driverId && t.status !== 'completed' && t.status !== 'cancelled' && t.status !== 'requested');
         const driverObj = drivers.find(d => d.id === loc.driverId);
         return {
           id: loc.driverId,

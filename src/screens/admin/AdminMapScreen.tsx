@@ -21,7 +21,7 @@ function agoLabel(ms?: number): string | null {
  */
 export function AdminMapScreen({focusBlock, searchQuery = ''}: {focusBlock?: string; searchQuery?: string} = {}) {
   const dark = useAdminOpsTheme();
-  const {slots, tasks} = useAppState();
+  const {slots, tasks, visitors} = useAppState();
   const [picked, setPicked] = useState<string | undefined>(undefined);
   const [activeBlock, setActiveBlock] = useState<string | undefined>(focusBlock);
 
@@ -44,7 +44,12 @@ export function AdminMapScreen({focusBlock, searchQuery = ''}: {focusBlock?: str
   }, [searchQuery, slots]);
 
   const pickedSlot = picked ? slots.find(sl => sl.id === picked) : undefined;
-  const pickedOwnerTask = pickedSlot?.taskId ? tasks.find(t => t.id === pickedSlot.taskId) : undefined;
+  const pickedOwnerTask = pickedSlot?.taskId
+    ? tasks.find(t => t.id === pickedSlot.taskId)
+    : tasks.find(t => t.slotId === pickedSlot?.id && t.status !== 'completed' && t.status !== 'cancelled');
+  const pickedVisitor = !pickedOwnerTask && pickedSlot
+    ? visitors.find(v => v.slotId === pickedSlot.id && v.status === 'parked')
+    : undefined;
 
   const blocks = useMemo(() => {
     const byBlock = new Map<string, typeof slots>();
@@ -453,7 +458,7 @@ export function AdminMapScreen({focusBlock, searchQuery = ''}: {focusBlock?: str
                   fontFamily: 'monospace',
                 }}>
                   {pickedSlot.status === 'occupied'
-                    ? (pickedOwnerTask?.doctorName ?? pickedSlot.carNumber ?? 'OCCUPIED')
+                    ? (pickedOwnerTask?.doctorName ?? pickedVisitor?.name ?? pickedSlot.carNumber ?? 'OCCUPIED')
                     : 'AVAILABLE BAY'}
                 </div>
               </div>
@@ -484,10 +489,12 @@ export function AdminMapScreen({focusBlock, searchQuery = ''}: {focusBlock?: str
             {pickedSlot.status === 'occupied' ? (
               <div style={{display: 'flex', flexDirection: 'column', gap: 8}}>
                 {([
-                  ['Vehicle Plate', pickedSlot.carNumber || pickedOwnerTask?.carNumber || '—'],
-                  ...(pickedOwnerTask?.isVisitor ? [['Pass Classification', 'Visitor Valet Pass']] as [string, string][] : []),
+                  ['Vehicle Plate', pickedSlot.carNumber || pickedOwnerTask?.carNumber || pickedVisitor?.carNumber || '—'],
+                  ...((pickedOwnerTask?.isVisitor || pickedVisitor) ? [['Pass Classification', 'Visitor Valet Pass']] as [string, string][] : []),
+                  ...(pickedVisitor?.mobile ? [['Visitor Mobile', pickedVisitor.mobile]] as [string, string][] : []),
+                  ...(pickedVisitor?.vehicleType ? [['Vehicle Type', pickedVisitor.vehicleType.toUpperCase()]] as [string, string][] : []),
                   ...(pickedOwnerTask?.doctorDepartment ? [['Hospital Department', pickedOwnerTask.doctorDepartment]] as [string, string][] : []),
-                  ...(pickedOwnerTask?.driverName ? [['Assigned Runner', pickedOwnerTask.driverName]] as [string, string][] : []),
+                  ...((pickedOwnerTask?.driverName || pickedVisitor?.driverName) ? [['Assigned Runner', pickedOwnerTask?.driverName || pickedVisitor?.driverName || '']] as [string, string][] : []),
                   ...(agoLabel(pickedOwnerTask?.completedAt) ? [['Parked Timestamp', agoLabel(pickedOwnerTask?.completedAt)!]] as [string, string][] : []),
                 ]).map(([k, v]) => (
                   <div

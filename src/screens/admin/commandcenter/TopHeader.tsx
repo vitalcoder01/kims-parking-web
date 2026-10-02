@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useRef, useEffect} from 'react';
 import {Icon} from '../../../components/Icon';
 import {PressableScale} from '../../../components/PressableScale';
 import {useCc, CcThemeMode} from './ccTheme';
@@ -35,6 +35,19 @@ export function TopHeader({
 }) {
   const cc = useCc();
   const isDark = themeMode === 'dark';
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <div style={{
@@ -65,6 +78,7 @@ export function TopHeader({
       }}>
         <Icon name="search" size={14} color={cc.textMuted} />
         <input
+          ref={inputRef}
           value={query}
           onChange={e => onQueryChange(e.target.value)}
           placeholder="Search plate, bay number, driver, task ID..."
