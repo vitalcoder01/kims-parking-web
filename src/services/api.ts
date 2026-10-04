@@ -203,6 +203,11 @@ export const tasksApi = {
   // collected for a brand-new park job.
   gateHandoff: (data: {doctorId: number; carNumber: string; slotId?: string; driverId: number}) =>
     client.post('/tasks/gate-handoff', data).then(r => r.data.task),
+  // Universal operational force-resolution & stale task recovery
+  forceResolve: (id: number, data: {action: 'complete_parked' | 'complete_delivered' | 'void_cancel'; slotId?: string; reason?: string}) =>
+    client.patch(`/tasks/${id}/force-resolve`, data).then(r => r.data.task),
+  cleanupStale: (thresholdHours = 12) =>
+    client.post('/tasks/cleanup-stale', {thresholdHours}).then(r => r.data),
   // Lot valet: confirms a park job is actually in its slot. No driverId
   // needed — the driver already did their part just by moving.
   confirmParked: (id: number, slotId: string) =>

@@ -11,6 +11,8 @@ import {useAppState} from '../../context/AppStateContext';
 import {useDialog} from '../../components/AppDialog';
 import {EnRouteTimer} from '../../components/EnRouteTimer';
 import {deriveJobAction} from '../../core/valet/state/JobAction';
+import {TaskResolutionModal} from '../../components/TaskResolutionModal';
+import {getTaskStaleInfo} from '../../utils/staleTask';
 
 type GateSubView = 'dashboard' | 'scan' | 'visitor' | 'assign';
 
@@ -74,6 +76,9 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
   // Driver Assignment State
   const [driverSearch, setDriverSearch] = useState('');
   const [assigningDriverId, setAssigningDriverId] = useState<number | null>(null);
+
+  // Stale Resolution & Fail-Safe State
+  const [resolvingTask, setResolvingTask] = useState<ParkingTask | null>(null);
 
   // Form focus helpers
   const [focused, setFocused] = useState<string | null>(null);
@@ -1132,6 +1137,7 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
                 const driverName = t.driverName || 'Runner Driver';
                 const visitorInfo = t.visitorId ? visitors.find(v => v.id === t.visitorId) : null;
                 const guestLabel = visitorInfo ? `${visitorInfo.name} (Token #${visitorInfo.token})` : (t.doctorName || 'Guest');
+                const staleInfo = getTaskStaleInfo(t, now);
 
                 return (
                   <div
@@ -1139,7 +1145,9 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
                     className="valet-glass-card"
                     style={{
                       padding: 16,
-                      border: isDelivered ? '1.5px solid #059669' : `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0'}`,
+                      border: staleInfo.isStale
+                        ? (staleInfo.isCritical ? '1.5px solid #EF4444' : '1.5px solid #F59E0B')
+                        : isDelivered ? '1.5px solid #059669' : `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0'}`,
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 12,
@@ -1164,21 +1172,45 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
                         </div>
                       </div>
 
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 800,
-                          letterSpacing: 0.5,
-                          textTransform: 'uppercase',
-                          padding: '3px 8px',
-                          borderRadius: 6,
-                          backgroundColor: isDelivered ? 'rgba(5, 150, 105, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                          color: isDelivered ? '#059669' : '#D97706',
-                          border: `1px solid ${isDelivered ? 'rgba(5, 150, 105, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`,
-                        }}
-                      >
-                        {isDelivered ? 'Waiting at Curb' : 'En Route to Gate'}
-                      </span>
+                      <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                        {staleInfo.isStale && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 800,
+                              letterSpacing: 0.5,
+                              textTransform: 'uppercase',
+                              padding: '3px 7px',
+                              borderRadius: 6,
+                              backgroundColor: staleInfo.isCritical ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
+                              color: staleInfo.isCritical ? '#EF4444' : '#F59E0B',
+                              border: `1px solid ${staleInfo.isCritical ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Icon name="bellAlert" size={11} color={staleInfo.isCritical ? '#EF4444' : '#F59E0B'} />
+                            Stuck ({staleInfo.elapsedLabel})
+                          </span>
+                        )}
+
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 800,
+                            letterSpacing: 0.5,
+                            textTransform: 'uppercase',
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            backgroundColor: isDelivered ? 'rgba(5, 150, 105, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                            color: isDelivered ? '#059669' : '#D97706',
+                            border: `1px solid ${isDelivered ? 'rgba(5, 150, 105, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`,
+                          }}
+                        >
+                          {isDelivered ? 'Waiting at Curb' : 'En Route to Gate'}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Metadata: Bay + Runner */}
@@ -1198,69 +1230,97 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
                     </div>
 
                     {/* Decisive Curbside Actions */}
-                    {!isDelivered ? (
+                    <div style={{display: 'flex', gap: 8}}>
+                      {!isDelivered ? (
+                        <button
+                          type="button"
+                          className="pressable"
+                          onClick={() => handleConfirmArrived(t.id)}
+                          disabled={confirmingArrivedId === t.id}
+                          style={{
+                            flex: 1,
+                            height: 40,
+                            borderRadius: 8,
+                            backgroundColor: '#059669',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {confirmingArrivedId === t.id ? (
+                            <span className="spinner" style={{width: 14, height: 14}} />
+                          ) : (
+                            <>
+                              <Icon name="check" size={14} color="#FFFFFF" />
+                              <span>Car Arrived at Curb</span>
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="pressable"
+                          onClick={() => handleConfirmHandover(t.id)}
+                          disabled={confirmingHandoverId === t.id}
+                          style={{
+                            flex: 1,
+                            height: 42,
+                            borderRadius: 8,
+                            backgroundColor: isDark ? '#F8FAFC' : '#0F172A',
+                            color: isDark ? '#0F172A' : '#FFFFFF',
+                            border: 'none',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {confirmingHandoverId === t.id ? (
+                            <span className="spinner" style={{width: 14, height: 14}} />
+                          ) : (
+                            <>
+                              <Icon name="checkBold" size={14} color={isDark ? '#0F172A' : '#FFFFFF'} />
+                              <span>Confirm Handover to Guest</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         className="pressable"
-                        onClick={() => handleConfirmArrived(t.id)}
-                        disabled={confirmingArrivedId === t.id}
+                        onClick={() => setResolvingTask(t)}
+                        title="Operational override / resolve stuck curbside task"
                         style={{
-                          width: '100%',
-                          height: 40,
+                          height: isDelivered ? 42 : 40,
+                          padding: '0 10px',
                           borderRadius: 8,
-                          backgroundColor: '#059669',
-                          color: '#FFFFFF',
-                          border: 'none',
-                          fontSize: 13,
+                          backgroundColor: staleInfo.isStale
+                            ? (staleInfo.isCritical ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)')
+                            : 'transparent',
+                          border: `1px solid ${staleInfo.isStale ? (staleInfo.isCritical ? '#EF4444' : '#F59E0B') : isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1'}`,
+                          color: staleInfo.isStale ? (staleInfo.isCritical ? '#EF4444' : '#F59E0B') : colors.textSecondary,
+                          fontSize: 12,
                           fontWeight: 700,
+                          cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 6,
-                          cursor: 'pointer',
+                          gap: 4,
                         }}
                       >
-                        {confirmingArrivedId === t.id ? (
-                          <span className="spinner" style={{width: 14, height: 14}} />
-                        ) : (
-                          <>
-                            <Icon name="check" size={14} color="#FFFFFF" />
-                            <span>Car Arrived at Curb</span>
-                          </>
-                        )}
+                        <Icon name="settings" size={13} color="currentColor" />
+                        <span>{staleInfo.isStale ? 'Resolve' : 'Fix'}</span>
                       </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="pressable"
-                        onClick={() => handleConfirmHandover(t.id)}
-                        disabled={confirmingHandoverId === t.id}
-                        style={{
-                          width: '100%',
-                          height: 42,
-                          borderRadius: 8,
-                          backgroundColor: isDark ? '#F8FAFC' : '#0F172A',
-                          color: isDark ? '#0F172A' : '#FFFFFF',
-                          border: 'none',
-                          fontSize: 13,
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 6,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {confirmingHandoverId === t.id ? (
-                          <span className="spinner" style={{width: 14, height: 14}} />
-                        ) : (
-                          <>
-                            <Icon name="checkBold" size={14} color={isDark ? '#0F172A' : '#FFFFFF'} />
-                            <span>Confirm Handover to Guest</span>
-                          </>
-                        )}
-                      </button>
-                    )}
+                    </div>
                   </div>
                 );
               })}
@@ -1281,64 +1341,113 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
             </div>
 
             <div className="valet-queue-grid">
-              {inboundDispatches.map(t => (
-                <div
-                  key={t.id}
-                  className="valet-glass-card"
-                  style={{
-                    padding: '12px 14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div>
-                    <span style={{fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: colors.textPrimary}}>
-                      {t.carNumber}
-                    </span>
-                    <div style={{fontSize: 11.5, color: colors.textSecondary, marginTop: 1}}>
-                      Runner: {t.driverName ?? 'Assigned'}
+              {inboundDispatches.map(t => {
+                const staleInfo = getTaskStaleInfo(t, now);
+                return (
+                  <div
+                    key={t.id}
+                    className="valet-glass-card"
+                    style={{
+                      padding: '12px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      border: staleInfo.isStale
+                        ? (staleInfo.isCritical ? '1px solid #EF4444' : '1px solid #F59E0B')
+                        : undefined,
+                    }}
+                  >
+                    <div>
+                      <span style={{fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: colors.textPrimary}}>
+                        {t.carNumber}
+                      </span>
+                      <div style={{fontSize: 11.5, color: colors.textSecondary, marginTop: 1}}>
+                        Runner: {t.driverName ?? 'Assigned'}
+                      </div>
+                    </div>
+
+                    <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                      {staleInfo.isStale ? (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 800,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            backgroundColor: staleInfo.isCritical ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                            color: staleInfo.isCritical ? '#EF4444' : '#F59E0B',
+                          }}
+                        >
+                          Stuck ({staleInfo.elapsedLabel})
+                        </span>
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            backgroundColor: 'rgba(37,99,235,0.08)',
+                            color: '#2563EB',
+                          }}
+                        >
+                          En Route
+                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        className="pressable"
+                        onClick={() => handleRecallTask(t.id, t.carNumber)}
+                        title="Recall vehicle back to gate"
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: 6,
+                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0'}`,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: colors.textMuted,
+                          background: 'transparent',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Recall
+                      </button>
+
+                      <button
+                        type="button"
+                        className="pressable"
+                        onClick={() => setResolvingTask(t)}
+                        title="Force resolve or cancel stuck dispatch"
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: 6,
+                          border: `1px solid ${staleInfo.isStale ? '#EF4444' : isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1'}`,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: staleInfo.isStale ? '#EF4444' : colors.textPrimary,
+                          backgroundColor: staleInfo.isStale ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {staleInfo.isStale ? 'Resolve Stuck' : 'Resolve'}
+                      </button>
                     </div>
                   </div>
-
-                  <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: '2px 6px',
-                        borderRadius: 4,
-                        backgroundColor: 'rgba(37,99,235,0.08)',
-                        color: '#2563EB',
-                      }}
-                    >
-                      En Route
-                    </span>
-                    <button
-                      type="button"
-                      className="pressable"
-                      onClick={() => handleRecallTask(t.id, t.carNumber)}
-                      title="Recall vehicle back to gate"
-                      style={{
-                        padding: '4px 8px',
-                        borderRadius: 6,
-                        border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#E2E8F0'}`,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: colors.textMuted,
-                        background: 'transparent',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Recall
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
       </div>
+
+      {/* Task Resolution & Fail-Safe Modal */}
+      {resolvingTask && (
+        <TaskResolutionModal
+          task={resolvingTask}
+          onClose={() => setResolvingTask(null)}
+        />
+      )}
     </div>
   );
 }

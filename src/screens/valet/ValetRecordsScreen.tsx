@@ -18,6 +18,8 @@ import {
 } from '../../core/valet/selectors/JobHistorySelector';
 import {AdminMapScreen} from '../admin/AdminMapScreen';
 import {DriverPickerList} from '../../components/DriverPickerList';
+import {TaskResolutionModal} from '../../components/TaskResolutionModal';
+import {getTaskStaleInfo} from '../../utils/staleTask';
 
 function fmtTime(ms?: number) {
   if (!ms) return null;
@@ -137,6 +139,9 @@ export function ValetRecordsScreen() {
   // Detail Sheet State
   const [detailVisitor, setDetailVisitor] = useState<Visitor | null>(null);
   const [detailTask, setDetailTask] = useState<ParkingTask | null>(null);
+
+  // Stale Resolution & Fail-Safe State
+  const [resolvingTask, setResolvingTask] = useState<ParkingTask | null>(null);
 
   const closeDetail = () => {
     setDetailVisitor(null);
@@ -780,6 +785,38 @@ export function ValetRecordsScreen() {
             {recallingVisitorId === v.id ? 'Recalling…' : 'Recall Vehicle to Gate'}
           </button>
         )}
+
+        {(() => {
+          const linkedTask = tasks.find(t => t.visitorId === v.id && t.status !== 'completed' && t.status !== 'cancelled');
+          if (!linkedTask) return null;
+          const staleInfo = getTaskStaleInfo(linkedTask);
+          return (
+            <button
+              type="button"
+              className="pressable"
+              onClick={() => setResolvingTask(linkedTask)}
+              title="Operational override / resolve stuck visitor task"
+              style={{
+                width: '100%',
+                height: 34,
+                borderRadius: 6,
+                backgroundColor: staleInfo.isStale ? (staleInfo.isCritical ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)') : 'transparent',
+                border: `1px solid ${staleInfo.isStale ? (staleInfo.isCritical ? '#EF4444' : '#F59E0B') : isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1'}`,
+                color: staleInfo.isStale ? (staleInfo.isCritical ? '#EF4444' : '#F59E0B') : colors.textSecondary,
+                fontSize: 12,
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
+                cursor: 'pointer',
+              }}
+            >
+              <Icon name="settings" size={13} color="currentColor" />
+              <span>{staleInfo.isStale ? `Resolve Stuck Task (${staleInfo.elapsedLabel})` : `Force Resolve Task #${linkedTask.id}`}</span>
+            </button>
+          );
+        })()}
       </div>
     );
   };
@@ -790,7 +827,9 @@ export function ValetRecordsScreen() {
   const renderStaffCard = (t: ParkingTask) => {
     const delivered = t.status === 'delivered';
     const cancelled = t.status === 'cancelled';
+    const isTerminal = t.status === 'completed' || cancelled;
     const canRetrieve = canRequestStaffRetrieval(t);
+    const staleInfo = getTaskStaleInfo(t);
 
     const statusText = t.status === 'completed'
       ? t.type === 'park'
@@ -821,7 +860,9 @@ export function ValetRecordsScreen() {
           display: 'flex',
           flexDirection: 'column',
           gap: 12,
-          border: delivered ? '1.5px solid #059669' : undefined,
+          border: staleInfo.isStale
+            ? (staleInfo.isCritical ? '1.5px solid #EF4444' : '1.5px solid #F59E0B')
+            : delivered ? '1.5px solid #059669' : undefined,
         }}
       >
         {/* Header Row */}
@@ -860,6 +901,25 @@ export function ValetRecordsScreen() {
           </div>
 
           <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+            {staleInfo.isStale && (
+              <span
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 800,
+                  padding: '3px 7px',
+                  borderRadius: 6,
+                  backgroundColor: staleInfo.isCritical ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
+                  color: staleInfo.isCritical ? '#EF4444' : '#F59E0B',
+                  border: `1px solid ${staleInfo.isCritical ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <Icon name="bellAlert" size={11} color={staleInfo.isCritical ? '#EF4444' : '#F59E0B'} />
+                Stuck ({staleInfo.elapsedLabel})
+              </span>
+            )}
             <span
               style={{
                 fontSize: 11,
@@ -893,6 +953,28 @@ export function ValetRecordsScreen() {
             >
               <Icon name="info" size={14} color={colors.textSecondary} />
             </button>
+            {!isTerminal && (
+              <button
+                type="button"
+                className="pressable"
+                onClick={() => setResolvingTask(t)}
+                title="Operational Force Resolve"
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  border: `1px solid ${staleInfo.isStale ? '#EF4444' : isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1'}`,
+                  backgroundColor: staleInfo.isStale ? 'rgba(239,68,68,0.1)' : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: staleInfo.isStale ? '#EF4444' : colors.textSecondary,
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon name="settings" size={13} color="currentColor" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -970,6 +1052,32 @@ export function ValetRecordsScreen() {
                 <span>Confirm Handed to Owner</span>
               </>
             )}
+          </button>
+        )}
+
+        {!isTerminal && !canRetrieve && !delivered && (
+          <button
+            type="button"
+            className="pressable"
+            onClick={() => setResolvingTask(t)}
+            style={{
+              width: '100%',
+              height: 38,
+              borderRadius: 6,
+              backgroundColor: staleInfo.isStale ? (staleInfo.isCritical ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)') : (isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9'),
+              border: `1px solid ${staleInfo.isStale ? (staleInfo.isCritical ? '#EF4444' : '#F59E0B') : isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1'}`,
+              color: staleInfo.isStale ? (staleInfo.isCritical ? '#EF4444' : '#F59E0B') : colors.textPrimary,
+              fontSize: 12.5,
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              cursor: 'pointer',
+            }}
+          >
+            <Icon name="settings" size={14} color="currentColor" />
+            <span>{staleInfo.isStale ? `Resolve Stuck Task (${staleInfo.elapsedLabel})` : 'Force Resolve / Override Task'}</span>
           </button>
         )}
       </div>
@@ -1461,6 +1569,14 @@ export function ValetRecordsScreen() {
           </div>
         )}
       </div>
+
+      {/* Task Resolution & Operational Fail-Safe Modal */}
+      {resolvingTask && (
+        <TaskResolutionModal
+          task={resolvingTask}
+          onClose={() => setResolvingTask(null)}
+        />
+      )}
     </div>
   );
 }

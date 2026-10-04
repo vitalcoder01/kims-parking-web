@@ -10,6 +10,7 @@ import {useDialog} from '../components/AppDialog';
 import {
   PLANNED_DEPARTURE_OPTIONS, ARRIVAL_ETA_OPTIONS, clockToMinutes, fmtClock12, to12, to24,
 } from '../utils/retrievalClocks';
+import {getTaskStaleInfo} from '../utils/staleTask';
 
 const DEPARTURE_OPTIONS = PLANNED_DEPARTURE_OPTIONS;
 const HOURS_12 = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
@@ -88,8 +89,9 @@ function SkeletonBlock({height, width = '100%', radius = 10, style}: {height: nu
 
 export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () => void; onOpenHistory: () => void}) {
   const {user} = useAuth();
-  const {tasks, sendArrivalNotice, cancelMyRetrieval, hydrated, myArrivalNotice, cancelMyArrival} = useAppState();
+  const {tasks, sendArrivalNotice, cancelMyRetrieval, hydrated, myArrivalNotice, cancelMyArrival, forceResolveTask} = useAppState();
   const [cancellingArrival, setCancellingArrival] = useState(false);
+  const [selfResolving, setSelfResolving] = useState(false);
 
   const handleCancelArrival = async () => {
     if (!myArrivalNotice || cancellingArrival) return;
@@ -108,6 +110,51 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
       dialog.alert(err.message || 'Could not cancel arrival');
     } finally {
       setCancellingArrival(false);
+    }
+  };
+
+  const handleDoctorConfirmParked = async (taskId: number) => {
+    const ok = await dialog.confirm({
+      title: 'Vehicle Already Parked?',
+      message: 'Confirm that your vehicle is already safely parked? This will complete your parking session.',
+      confirmText: 'Yes, Vehicle is Parked',
+      tone: 'info',
+    });
+    if (!ok) return;
+    setSelfResolving(true);
+    try {
+      await forceResolveTask(taskId, {
+        action: 'complete_parked',
+        reason: 'doctor_self_confirmed_parked',
+      });
+      dialog.alert('Your parking session has been updated to Parked.', {title: 'Session Resolved'});
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not resolve session', {title: 'Action Failed'});
+    } finally {
+      setSelfResolving(false);
+    }
+  };
+
+  const handleDoctorVoidStale = async (taskId: number) => {
+    const ok = await dialog.confirm({
+      title: 'Cancel Stuck Parking Session?',
+      message: 'This will void and clear this stuck session so you can use the valet desk fresh.',
+      confirmText: 'Clear Session',
+      tone: 'error',
+      destructive: true,
+    });
+    if (!ok) return;
+    setSelfResolving(true);
+    try {
+      await forceResolveTask(taskId, {
+        action: 'void_cancel',
+        reason: 'doctor_self_void_stale',
+      });
+      dialog.alert('Stuck session cleared successfully.', {title: 'Session Cleared'});
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not clear session', {title: 'Action Failed'});
+    } finally {
+      setSelfResolving(false);
     }
   };
 
@@ -610,26 +657,109 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
                 Plate: <span style={{fontFamily: 'monospace', fontWeight: 800, color: colors.textPrimary}}>{displayTask.carNumber}</span>
               </div>
             </div>
-          ) : (
-            <div style={{padding: 20}}>
-              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
-                <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 1.2, color: colors.textSecondary, textTransform: 'uppercase'}}>
-                  {displayTask.type === 'park' ? 'PARKING IN PROGRESS' : 'RETRIEVAL IN PROGRESS'}
-                </span>
-                {!!statusInfo && (
-                  <span style={{fontSize: 11, fontWeight: 800, color: statusInfo.color}}>
-                    {statusInfo.label}
+          ) : (() => {
+            const staleInfo = getTaskStaleInfo(displayTask);
+            return (
+              <div style={{padding: 20}}>
+                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+                  <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 1.2, color: colors.textSecondary, textTransform: 'uppercase'}}>
+                    {displayTask.type === 'park' ? 'PARKING IN PROGRESS' : 'RETRIEVAL IN PROGRESS'}
                   </span>
+                  {staleInfo.isStale ? (
+                    <span style={{
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      padding: '2px 7px',
+                      borderRadius: 6,
+                      backgroundColor: staleInfo.isCritical ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                      color: staleInfo.isCritical ? '#EF4444' : '#F59E0B',
+                    }}>
+                      Stuck ({staleInfo.elapsedLabel})
+                    </span>
+                  ) : statusInfo ? (
+                    <span style={{fontSize: 11, fontWeight: 800, color: statusInfo.color}}>
+                      {statusInfo.label}
+                    </span>
+                  ) : null}
+                </div>
+                <div style={{fontSize: 18, fontWeight: 900, marginTop: 8, color: colors.textPrimary}}>
+                  {displayTask.driverName ? `${displayTask.driverName} handling your car` : 'Waiting for valet runner assignment'}
+                </div>
+                <div style={{fontSize: 12.5, fontWeight: 700, marginTop: 4, color: colors.textSecondary}}>
+                  Plate: <span style={{fontFamily: 'monospace', fontWeight: 800, color: colors.textPrimary}}>{displayTask.carNumber}</span>
+                </div>
+
+                {/* Self-Service Fail-Safe Recovery for Doctors */}
+                {staleInfo.isStale && (
+                  <div style={{
+                    marginTop: 14,
+                    padding: 14,
+                    borderRadius: 12,
+                    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.08)' : '#FEF2F2',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                  }}>
+                    <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                      <Icon name="bellAlert" size={14} color="#EF4444" />
+                      <span style={{fontSize: 12, fontWeight: 800, color: '#EF4444'}}>
+                        Taking longer than expected ({staleInfo.elapsedLabel})
+                      </span>
+                    </div>
+                    <div style={{fontSize: 11.5, color: colors.textSecondary, lineHeight: '16px'}}>
+                      If your car was parked manually or you took it yourself, you can resolve or clear this stuck session now.
+                    </div>
+                    <div style={{display: 'flex', gap: 8, marginTop: 2}}>
+                      <button
+                        type="button"
+                        className="pressable"
+                        disabled={selfResolving}
+                        onClick={() => handleDoctorConfirmParked(displayTask.id)}
+                        style={{
+                          flex: 1,
+                          height: 36,
+                          borderRadius: 8,
+                          backgroundColor: '#059669',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 5,
+                        }}
+                      >
+                        <Icon name="check" size={13} color="#FFFFFF" />
+                        <span>Already Parked</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="pressable"
+                        disabled={selfResolving}
+                        onClick={() => handleDoctorVoidStale(displayTask.id)}
+                        style={{
+                          padding: '0 12px',
+                          height: 36,
+                          borderRadius: 8,
+                          backgroundColor: 'transparent',
+                          border: '1px solid rgba(239, 68, 68, 0.4)',
+                          color: '#EF4444',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Cancel Session
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
-              <div style={{fontSize: 18, fontWeight: 900, marginTop: 8, color: colors.textPrimary}}>
-                {displayTask.driverName ? `${displayTask.driverName} handling your car` : 'Waiting for valet runner assignment'}
-              </div>
-              <div style={{fontSize: 12.5, fontWeight: 700, marginTop: 4, color: colors.textSecondary}}>
-                Plate: <span style={{fontFamily: 'monospace', fontWeight: 800, color: colors.textPrimary}}>{displayTask.carNumber}</span>
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* 7. Parking History Navigation Link */}

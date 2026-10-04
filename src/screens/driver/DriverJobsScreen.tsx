@@ -7,6 +7,7 @@ import {computeTrip} from '../../utils/geo';
 import {Icon, IconName} from '../../components/Icon';
 import {PressableScale} from '../../components/PressableScale';
 import {useDialog} from '../../components/AppDialog';
+import {getTaskStaleInfo} from '../../utils/staleTask';
 
 function SkeletonBlock({height, width = '100%', radius = 10, style}: {height: number; width?: number | string; radius?: number; style?: React.CSSProperties}) {
   const {colors} = useTheme();
@@ -27,7 +28,7 @@ function SkeletonCard({lines = 3, style}: {lines?: number; style?: React.CSSProp
 
 export function DriverJobsScreen() {
   const {user} = useAuth();
-  const {tasks, visitors, markTaskReturned, fetchTaskHistory, hydrated} = useAppState();
+  const {tasks, visitors, markTaskReturned, fetchTaskHistory, hydrated, forceResolveTask} = useAppState();
   const {colors: c, isDark} = useTheme();
   const dialog = useDialog();
 
@@ -36,6 +37,30 @@ export function DriverJobsScreen() {
   const myDriverId = useMyDriverId();
   const myTasks = tasks.filter(t => isMyJob(t.driverId, myDriverId) && t.status !== 'completed' && t.status !== 'delivered' && t.status !== 'cancelled');
   const activeTask = myTasks[0] ?? null;
+
+  const handleDriverReleaseStuckTask = async () => {
+    if (!activeTask || actionBusy) return;
+    const ok = await dialog.confirm({
+      title: 'Release Stuck Task?',
+      message: `Has this run for ${activeTask.carNumber} already been completed or cancelled?\n\nThis will safely release you back to Available runner status.`,
+      confirmText: 'Release & Become Available',
+      tone: 'warning',
+      destructive: true,
+    });
+    if (!ok) return;
+    setActionBusy(true);
+    try {
+      await forceResolveTask(activeTask.id, {
+        action: activeTask.type === 'park' ? 'complete_parked' : 'complete_delivered',
+        reason: 'driver_self_released_stuck_task',
+      });
+      dialog.alert('You are now marked Available.', {title: 'Runner Released'});
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not release task', {title: 'Action Failed'});
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   const [history, setHistory] = useState<typeof tasks>([]);
   useEffect(() => {
@@ -404,6 +429,57 @@ export function DriverJobsScreen() {
                 </span>
               </div>
             )}
+
+            {/* Stale Task Fail-Safe for Drivers */}
+            {(() => {
+              const staleInfo = getTaskStaleInfo(activeTask);
+              if (!staleInfo.isStale) return null;
+              return (
+                <div style={{
+                  borderRadius: 12,
+                  padding: 12,
+                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#FEF2F2',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  marginTop: 6,
+                }}>
+                  <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                    <Icon name="bellAlert" size={14} color={c.error} />
+                    <span style={{fontSize: 12, fontWeight: 800, color: c.error}}>
+                      Task taking longer than expected ({staleInfo.elapsedLabel})
+                    </span>
+                  </div>
+                  <div style={{fontSize: 11.5, color: c.textSecondary, lineHeight: '16px'}}>
+                    If this run was already finished, or cancelled by the counter desk, you can release yourself to become available again.
+                  </div>
+                  <button
+                    type="button"
+                    className="pressable"
+                    disabled={actionBusy}
+                    onClick={handleDriverReleaseStuckTask}
+                    style={{
+                      height: 36,
+                      borderRadius: 8,
+                      backgroundColor: c.error,
+                      color: '#FFFFFF',
+                      border: 'none',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <Icon name="check" size={13} color="#FFFFFF" />
+                    <span>Release Me &amp; Mark Available</span>
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </div>
       ) : (

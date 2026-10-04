@@ -13,6 +13,8 @@ import {
   departurePriority,
   agoLabel,
 } from '../../utils/retrievalClocks';
+import {TaskResolutionModal} from '../../components/TaskResolutionModal';
+import {getTaskStaleInfo} from '../../utils/staleTask';
 
 interface LotValetScreenProps {
   onSwitchStation?: () => void;
@@ -26,7 +28,7 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
   const {user} = useAuth();
   const dialog = useDialog();
   const {colors, isDark} = useTheme();
-  const {slots} = useAppState();
+  const {slots, cleanupStaleTasks} = useAppState();
 
   const {
     tasks,
@@ -47,6 +49,10 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
   const [selectedBlock, setSelectedBlock] = useState<string>('all');
   const [slotSearch, setSlotSearch] = useState<string>('');
   const [showBayOverview, setShowBayOverview] = useState<boolean>(false);
+
+  // Stale Resolution & Fail-Safe State
+  const [resolvingTask, setResolvingTask] = useState<ParkingTask | null>(null);
+  const [sweepingStale, setSweepingStale] = useState<boolean>(false);
 
   // Inbound Bay Allocation State
   const [selectedSlotForTask, setSelectedSlotForTask] = useState<Record<number, string>>({});
@@ -247,6 +253,27 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
       }
     } catch (err: any) {
       dialog.alert(err.message || 'Could not free parking slot', {title: 'Action Failed'});
+    }
+  };
+
+  const handleSweepStale = async () => {
+    const confirmed = await dialog.confirm({
+      title: 'Sweep Stale Tasks (> 2 Hours)',
+      message: 'Are you sure you want to automatically clean up all stuck tasks that have been in process for more than 2 hours?\n\nThis will safely release all drivers, free unused slots, and mark those tasks as void/cancelled.',
+      confirmText: 'Run Cleanup Sweep',
+      cancelText: 'Cancel',
+      tone: 'warning',
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setSweepingStale(true);
+    try {
+      const res = await cleanupStaleTasks(2);
+      dialog.alert(`Stale Task Sweep complete! Cleaned up ${res.cleanedCount} stuck tasks out of ${res.totalFound} found.`, {title: 'Cleanup Complete'});
+    } catch (err: any) {
+      dialog.alert(err.message || 'Failed to cleanup stale tasks', {title: 'Sweep Failed'});
+    } finally {
+      setSweepingStale(false);
     }
   };
 
@@ -647,7 +674,7 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
 
         {/* SECTION 1: INBOUND CARS TO PARK (BAY ALLOCATION MATRIX) */}
         <div>
-          <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12}}>
+          <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12}}>
             <div>
               <h2 style={{fontSize: 15, fontWeight: 800, color: colors.textPrimary, margin: 0}}>
                 Inbound Vehicles to Park ({inboundTasks.length})
@@ -656,6 +683,32 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
                 Runner drivers descending from gate &bull; Assign bay to complete park
               </span>
             </div>
+
+            {/* Stale Task Sweep Trigger */}
+            {inboundTasks.some(t => getTaskStaleInfo(t, now).isStale) && (
+              <button
+                type="button"
+                className="pressable"
+                onClick={handleSweepStale}
+                disabled={sweepingStale}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#EF4444',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon name="bolt" size={13} color="#EF4444" />
+                <span>{sweepingStale ? 'Sweeping Stale Tasks…' : 'Sweep Stuck Jobs (>2h)'}</span>
+              </button>
+            )}
           </div>
 
           {inboundTasks.length === 0 ? (
@@ -680,6 +733,7 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
               {inboundTasks.map(t => {
                 const currentSlot = selectedSlotForTask[t.id] ?? (t.slotId || '');
                 const nearestFree = freeSlots[0]?.id;
+                const staleInfo = getTaskStaleInfo(t, now);
 
                 return (
                   <div
@@ -690,7 +744,9 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 12,
-                      border: currentSlot ? '1.5px solid #2563EB' : undefined,
+                      border: staleInfo.isStale
+                        ? (staleInfo.isCritical ? '1.5px solid #EF4444' : '1.5px solid #F59E0B')
+                        : (currentSlot ? '1.5px solid #2563EB' : undefined),
                     }}
                   >
                     {/* Header */}
@@ -712,20 +768,44 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
                         </div>
                       </div>
 
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 800,
-                          letterSpacing: 0.5,
-                          textTransform: 'uppercase',
-                          padding: '3px 8px',
-                          borderRadius: 6,
-                          backgroundColor: 'rgba(37,99,235,0.1)',
-                          color: '#2563EB',
-                        }}
-                      >
-                        In Transit
-                      </span>
+                      <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                        {staleInfo.isStale && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 800,
+                              letterSpacing: 0.5,
+                              textTransform: 'uppercase',
+                              padding: '3px 7px',
+                              borderRadius: 6,
+                              backgroundColor: staleInfo.isCritical ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
+                              color: staleInfo.isCritical ? '#EF4444' : '#F59E0B',
+                              border: `1px solid ${staleInfo.isCritical ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Icon name="bellAlert" size={11} color={staleInfo.isCritical ? '#EF4444' : '#F59E0B'} />
+                            Stuck ({staleInfo.elapsedLabel})
+                          </span>
+                        )}
+
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 800,
+                            letterSpacing: 0.5,
+                            textTransform: 'uppercase',
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            backgroundColor: 'rgba(37,99,235,0.1)',
+                            color: '#2563EB',
+                          }}
+                        >
+                          In Transit
+                        </span>
+                      </div>
                     </div>
 
                     {/* Integrated Bay Selection Matrix */}
@@ -782,7 +862,7 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
                         </div>
                       )}
 
-                      {/* Manual input row + Confirm Button */}
+                      {/* Manual input row + Confirm Button + Resolve Button */}
                       <div style={{display: 'flex', gap: 8, marginTop: 4}}>
                         <input
                           style={{
@@ -833,6 +913,33 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
                               <span>Confirm Parked</span>
                             </>
                           )}
+                        </button>
+
+                        {/* Operational Force-Resolve Override Button */}
+                        <button
+                          type="button"
+                          className="pressable"
+                          onClick={() => setResolvingTask(t)}
+                          title="Operational override / resolve stuck parking task"
+                          style={{
+                            height: 38,
+                            padding: '0 10px',
+                            borderRadius: 6,
+                            backgroundColor: staleInfo.isStale
+                              ? (staleInfo.isCritical ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)')
+                              : (isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9'),
+                            border: `1px solid ${staleInfo.isStale ? (staleInfo.isCritical ? 'rgba(239,68,68,0.35)' : 'rgba(245,158,11,0.35)') : (isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1')}`,
+                            color: staleInfo.isStale ? (staleInfo.isCritical ? '#EF4444' : '#F59E0B') : colors.textSecondary,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Icon name="settings" size={13} color="currentColor" />
+                          <span>{staleInfo.isStale ? 'Resolve' : 'Fix'}</span>
                         </button>
                       </div>
                     </div>
@@ -1026,6 +1133,29 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
                         }}
                       >
                         {transferringTaskId === t.id ? '…' : 'No Runner'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="pressable"
+                        onClick={() => setResolvingTask(t)}
+                        title="Force resolve / override retrieval"
+                        style={{
+                          padding: '0 8px',
+                          height: 38,
+                          borderRadius: 6,
+                          backgroundColor: 'transparent',
+                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.15)' : '#CBD5E1'}`,
+                          color: colors.textSecondary,
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Icon name="settings" size={13} color="currentColor" />
                       </button>
                     </div>
                   </div>
@@ -1240,6 +1370,14 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
           )}
         </div>
       </div>
+
+      {/* Task Resolution & Fail-Safe Modal */}
+      {resolvingTask && (
+        <TaskResolutionModal
+          task={resolvingTask}
+          onClose={() => setResolvingTask(null)}
+        />
+      )}
     </div>
   );
 }
