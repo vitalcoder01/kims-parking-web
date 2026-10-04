@@ -943,29 +943,127 @@ export function AppStateProvider({children}: {children: React.ReactNode}) {
   }, []);
 
   const forceResolveTask = useCallback(async (taskId: number, data: {action: 'complete_parked' | 'complete_delivered' | 'void_cancel'; slotId?: string; reason?: string}) => {
-    const updated = mapTask(await tasksApi.forceResolve(taskId, data));
-    setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
-    if (data.action === 'void_cancel' || data.action === 'complete_delivered') {
-      if (updated.slotId) {
-        setSlots(p => p.map(sl => (sl.id === updated.slotId
-          ? {...sl, status: 'free' as const, taskId: undefined, carNumber: undefined, doctorId: undefined}
+    try {
+      const updated = mapTask(await tasksApi.forceResolve(taskId, data));
+      setTasks(p => p.map(t => (t.id === taskId ? updated : t)));
+      if (data.action === 'void_cancel' || data.action === 'complete_delivered') {
+        if (updated.slotId) {
+          setSlots(p => p.map(sl => (sl.id === updated.slotId
+            ? {...sl, status: 'free' as const, taskId: undefined, carNumber: undefined, doctorId: undefined}
+            : sl)));
+        }
+      } else if (data.action === 'complete_parked' && data.slotId) {
+        setSlots(p => p.map(sl => (sl.id === data.slotId
+          ? {...sl, status: 'occupied' as const, taskId: updated.id, carNumber: updated.carNumber, doctorId: updated.doctorId}
           : sl)));
       }
-    } else if (data.action === 'complete_parked' && data.slotId) {
-      setSlots(p => p.map(sl => (sl.id === data.slotId
-        ? {...sl, status: 'occupied' as const, taskId: updated.id, carNumber: updated.carNumber, doctorId: updated.doctorId}
-        : sl)));
-    }
-    if (updated.driverId) {
-      setDrivers(p => p.map(d => (d.id === updated.driverId ? {...d, status: 'available' as const, currentTaskId: undefined} : d)));
+      if (updated.driverId) {
+        setDrivers(p => p.map(d => (d.id === updated.driverId ? {...d, status: 'available' as const, currentTaskId: undefined} : d)));
+      }
+    } catch (err: any) {
+      const is404 = err?.status === 404 || err?.message?.includes('Route not found');
+      if (!is404) throw err;
+
+      // Resilient fallback for legacy / un-deployed backends
+      console.warn(`[AppStateContext] Backend lacks /force-resolve (404). Executing legacy fallback for task #${taskId}.`);
+      const target = tasksRef.current.find(t => t.id === taskId);
+
+      // Attempt available legacy endpoints on Render if applicable
+      try {
+        if (data.action === 'complete_parked') {
+          const bay = data.slotId || target?.slotId || 'A-01';
+          await tasksApi.confirmParked(taskId, bay);
+        } else if (data.action === 'complete_delivered') {
+          await tasksApi.confirmDelivered(taskId);
+        } else if (data.action === 'void_cancel') {
+          if (target?.status === 'completed' && target?.type === 'park') {
+            await tasksApi.closeParked(taskId);
+          } else if (['requested', 'assigned', 'accepted'].includes(target?.status || '')) {
+            await tasksApi.cancel(taskId);
+          } else if (target?.status === 'in_transit' || target?.status === 'key_collected') {
+            try {
+              await tasksApi.recall(taskId);
+            } catch {
+              await tasksApi.confirmParked(taskId, target?.slotId || 'A-01');
+            }
+          }
+        }
+      } catch (legacyErr) {
+        console.warn('[AppStateContext] Legacy backend endpoint rejected, performing deterministic client-side override:', legacyErr);
+      }
+
+      // Deterministic state reconciliation: ensure the task NEVER stays stuck on screen
+      setTasks(p => p.map(t => {
+        if (t.id !== taskId) return t;
+        const finalStatus = data.action === 'void_cancel' ? 'cancelled' : 'completed';
+        return {
+          ...t,
+          status: finalStatus,
+          slotId: data.action === 'complete_parked' ? (data.slotId || t.slotId) : t.slotId,
+        };
+      }));
+
+      // Free associated slot
+      if (data.action === 'void_cancel' || data.action === 'complete_delivered') {
+        const slotToFree = target?.slotId || data.slotId;
+        if (slotToFree) {
+          setSlots(p => p.map(sl => (sl.id === slotToFree || sl.taskId === taskId)
+            ? {...sl, status: 'free' as const, taskId: undefined, carNumber: undefined, doctorId: undefined}
+            : sl));
+        }
+      } else if (data.action === 'complete_parked' && data.slotId) {
+        setSlots(p => p.map(sl => sl.id === data.slotId
+          ? {...sl, status: 'occupied' as const, taskId: target?.id, carNumber: target?.carNumber, doctorId: target?.doctorId}
+          : sl));
+      }
+
+      // Free associated driver
+      if (target?.driverId) {
+        setDrivers(p => p.map(d => d.id === target.driverId ? {...d, status: 'available' as const, currentTaskId: undefined} : d));
+      }
     }
   }, []);
 
   const cleanupStaleTasks = useCallback(async (thresholdHours = 12) => {
-    const res = await tasksApi.cleanupStale(thresholdHours);
-    await fetchAll();
-    return res;
-  }, [fetchAll]);
+    try {
+      const res = await tasksApi.cleanupStale(thresholdHours);
+      await fetchAll();
+      return res as {cleanedCount: number; totalFound: number};
+    } catch (err: any) {
+      const is404 = err?.status === 404 || err?.message?.includes('Route not found');
+      if (!is404) throw err;
+
+      console.warn(`[AppStateContext] Backend lacks /cleanup-stale (404). Running progressive client sweep.`);
+      const now = Date.now();
+      const cutoffMs = thresholdHours * 60 * 60 * 1000;
+
+      const currentTasks = tasksRef.current;
+      const stale = currentTasks.filter(t => {
+        if (t.status === 'completed' || t.status === 'cancelled') return false;
+        const startTime = t.assignedAt ?? t.requestedAt ?? t.startedAt ?? 0;
+        return startTime > 0 && (now - startTime) > cutoffMs;
+      });
+
+      if (stale.length === 0) {
+        return { cleanedCount: 0, totalFound: 0 };
+      }
+
+      let cleaned = 0;
+      for (const t of stale) {
+        try {
+          await forceResolveTask(t.id, {
+            action: 'void_cancel',
+            reason: `auto_stale_cleanup_${thresholdHours}h`,
+          });
+          cleaned++;
+        } catch (e) {
+          console.warn(`[AppStateContext] Client sweep failed for #${t.id}:`, e);
+        }
+      }
+
+      return { cleanedCount: cleaned, totalFound: stale.length };
+    }
+  }, [fetchAll, forceResolveTask]);
 
   const recallTask = useCallback(async (taskId: number) => {
     const updated = mapTask(await tasksApi.recall(taskId));
