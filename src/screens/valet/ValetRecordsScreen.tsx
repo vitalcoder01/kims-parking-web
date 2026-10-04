@@ -1084,8 +1084,8 @@ export function ValetRecordsScreen() {
           {(
             [
               ['visitors', '🎟️ Visitors', visitorsFiltered.length],
-              ['staff', '👨‍⚕️ Staff & Doctors', staffFiltered.length],
-              ['map', '🗺️ Map Layout', null],
+              ['staff', '👨‍⚕️ Staff', staffFiltered.length],
+              ['map', '🗺️ Map', null],
             ] as const
           ).map(([key, label, count]) => {
             const isActive = tab === key;
@@ -1097,18 +1097,19 @@ export function ValetRecordsScreen() {
                 onClick={() => setTab(key)}
                 style={{
                   flex: 1,
-                  padding: '8px 12px',
+                  padding: '8px 8px',
                   borderRadius: 8,
                   border: 'none',
                   backgroundColor: isActive ? (isDark ? '#2563EB' : '#FFFFFF') : 'transparent',
                   color: isActive ? (isDark ? '#FFFFFF' : '#0F172A') : colors.textSecondary,
-                  fontSize: 12.5,
+                  fontSize: 11.5,
                   fontWeight: 700,
+                  whiteSpace: 'nowrap',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 6,
+                  gap: 5,
                   boxShadow: isActive && !isDark ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                 }}
               >

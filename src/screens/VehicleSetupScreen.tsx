@@ -391,7 +391,7 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
   };
 
   return (
-    <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 40}}>
+    <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 80}}>
       {/* 1. Workstation Top Navigation Bar */}
       <div style={{
         padding: '14px 18px',

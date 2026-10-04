@@ -110,7 +110,7 @@ export function DriverJobsScreen() {
   };
 
   return (
-    <div className="screen-scroll" style={{backgroundColor: c.background, padding: 16, paddingBottom: 40}}>
+    <div className="screen-scroll" style={{backgroundColor: c.background, padding: 16, paddingBottom: 80}}>
       {/* 1. Restrained Header */}
       <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
         <div>

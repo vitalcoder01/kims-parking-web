@@ -938,7 +938,7 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
         </div>
 
         {/* Rapid Action Bar (The Gate Counter's Primary CTAs) */}
-        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12}}>
+        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: 12}}>
           {/* Quick Staff Key Handover */}
           <button
             type="button"

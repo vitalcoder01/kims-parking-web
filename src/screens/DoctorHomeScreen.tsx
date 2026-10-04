@@ -43,7 +43,7 @@ function BottomSheetModal({visible, onClose, children}: {visible: boolean; onClo
   if (!rendered) return null;
 
   return (
-    <div style={{position: 'absolute', inset: 0, zIndex: 100}}>
+    <div style={{position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center'}}>
       <div
         onClick={onClose}
         style={{
@@ -56,7 +56,7 @@ function BottomSheetModal({visible, onClose, children}: {visible: boolean; onClo
           transition: 'opacity 220ms ease',
         }}
       />
-      <div style={{position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex', justifyContent: 'center'}}>
+      <div style={{position: 'relative', width: '100%', maxWidth: 480, zIndex: 1}}>
         <div style={{
           width: '100%',
           transform: `translateY(${entered ? 0 : 100}%)`,
@@ -218,7 +218,7 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
   };
 
   return (
-    <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 40, position: 'relative'}}>
+    <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 72, position: 'relative'}}>
       {/* 1. Restrained Executive Hospital Header */}
       <div style={{
         padding: '16px 18px',

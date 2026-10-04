@@ -141,7 +141,7 @@ export function SettingsScreen() {
         </div>
       </div>
 
-      <div className="screen-scroll" style={{padding: 16, paddingBottom: 40}}>
+      <div className="screen-scroll" style={{padding: 16, paddingBottom: 80}}>
         {/* 1. User Profile Hero Card */}
         <div style={{
           ...glassCardStyle,

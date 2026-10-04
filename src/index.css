@@ -358,26 +358,44 @@ input:focus {
 /* ── Valet Workstation System (Restrained Glassmorphism) ── */
 .valet-workstation-viewport {
   width: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.valet-workstation-viewport::-webkit-scrollbar {
+  display: none;
 }
 
 .valet-container {
   width: 100%;
   max-width: 1180px;
   margin: 0 auto;
-  padding: 24px 20px 48px;
+  padding: 20px 16px 96px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
 @media (max-width: 768px) {
   .valet-container {
-    padding: 14px 12px 36px;
+    padding: 14px 12px 96px;
     gap: 14px;
+  }
+}
+
+.valet-fleet-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+@media (min-width: 640px) {
+  .valet-fleet-grid {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 

@@ -549,8 +549,8 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
           </div>
         </div>
 
-        {/* RUNNER FLEET STRIP (4 KPIs) */}
-        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10}}>
+        {/* RUNNER FLEET STRIP (4 KPIs) - Responsive 2x2 on mobile, 4-col on desktop */}
+        <div className="valet-fleet-grid">
           {/* Ready */}
           <div
             className="valet-glass-card pressable"

@@ -54,7 +54,7 @@ export function HistoryScreen({onBack}: {onBack: () => void}) {
   };
 
   return (
-    <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 40}}>
+    <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 80}}>
       {/* Top Workstation Navigation Bar */}
       <div style={{
         padding: '14px 18px',

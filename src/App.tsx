@@ -317,7 +317,7 @@ function RoleRouter() {
       )}
 
       {/* Screen body — keyed so each tab change gets the light fade-in */}
-      <div key={tab} className="screen-enter" style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0}}>
+      <div key={tab} className="screen-enter" style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden'}}>
         {/* Keyed by tab so switching tabs clears a previous crash -- without
             the key the boundary stays in its error state and the next tab
             renders the error screen too. Inside the tab bar, not around it,

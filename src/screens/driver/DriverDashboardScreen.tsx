@@ -111,7 +111,7 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
   };
 
   return (
-    <div className="screen-scroll" style={{backgroundColor: c.background, padding: 16, paddingBottom: 40}}>
+    <div className="screen-scroll" style={{backgroundColor: c.background, padding: 16, paddingBottom: 80}}>
       {/* 1. Header Greeting & Identity */}
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16}}>
         <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
