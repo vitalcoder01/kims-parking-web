@@ -138,7 +138,7 @@ export function HistoryScreen({onBack}: {onBack: () => void}) {
               No Past Sessions Found
             </div>
             <div style={{fontSize: 12.5, color: colors.textSecondary, maxWidth: 260, lineHeight: '18px'}}>
-              Completed curbside parking and retrieval missions will be logged here automatically.
+              Completed curbside parking and retrieval trips will be logged here automatically.
             </div>
           </div>
         ) : (

@@ -99,15 +99,15 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
 
   const stats = [
     {label: 'Completed Today', value: completedToday.length, icon: 'flag' as const},
-    {label: 'Open Missions', value: openCount, icon: 'inbox' as const},
+    {label: 'Open Tasks', value: openCount, icon: 'inbox' as const},
     {label: 'Total Completed', value: history.length, icon: 'history' as const},
   ];
 
   const glassCardStyle: React.CSSProperties = {
     backgroundColor: c.surface,
     border: `1px solid ${c.border}`,
-    borderRadius: 18,
-    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.25)' : '0 2px 10px rgba(0, 0, 0, 0.03)',
+    borderRadius: 10,
+    boxShadow: isDark ? '0 1px 3px rgba(0, 0, 0, 0.25)' : '0 1px 3px rgba(0, 0, 0, 0.04)',
   };
 
   return (
@@ -155,7 +155,7 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
         </div>
       </div>
 
-      {/* 2. Tactical Shift Toggle Banner */}
+      {/* 2. Shift Status Banner */}
       <PressableScale
         onClick={handleToggleShift}
         disabled={togglingShift || myStatus === 'busy'}
@@ -165,7 +165,7 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
           alignItems: 'center',
           gap: 12,
           textAlign: 'left',
-          borderRadius: 18,
+          borderRadius: 10,
           padding: '13px 16px',
           marginBottom: 16,
           border: `1px solid ${myStatus === 'busy' ? (isDark ? 'rgba(245, 158, 11, 0.3)' : '#FDE68A') : onShift ? (isDark ? 'rgba(16, 185, 129, 0.3)' : '#A7F3D0') : c.border}`,
@@ -189,7 +189,7 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
         <div style={{flex: 1, minWidth: 0}}>
           <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
             <span style={{fontSize: 14, fontWeight: 900, color: c.textPrimary}}>
-              {myStatus === 'busy' ? 'On Mission' : onShift ? 'On Shift · Ready' : 'Off Shift · Standing By'}
+              {myStatus === 'busy' ? 'Active Run' : onShift ? 'On Shift · Ready' : 'Off Shift · Standing By'}
             </span>
             <span style={{
               width: 7,
@@ -199,7 +199,7 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
             }} />
           </div>
           <div style={{fontSize: 11.5, fontWeight: 600, marginTop: 2, color: c.textSecondary}}>
-            {myStatus === 'busy' ? 'Finish active task to go off-duty' : onShift ? 'Visible to station desks for runs' : "Tap to check in for new missions"}
+            {myStatus === 'busy' ? 'Finish active task to go off-duty' : onShift ? 'Visible to station desks for runs' : "Tap to check in for runs"}
           </div>
         </div>
 
@@ -265,20 +265,20 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
         ))}
       </div>
 
-      {/* 4. Hero Mission Card */}
+      {/* 4. Active Vehicle Assignment */}
       <PressableScale
         onClick={() => onOpenJobs?.()}
         style={{
           width: '100%',
           textAlign: 'left',
-          borderRadius: 20,
+          borderRadius: 10,
           padding: 18,
           marginBottom: 16,
           backgroundColor: c.surface,
           border: `1px solid ${activeTask ? (activeTask.type === 'park' ? '#10B981' : '#F59E0B') : c.border}`,
           position: 'relative',
           overflow: 'hidden',
-          boxShadow: isDark ? '0 8px 24px rgba(0, 0, 0, 0.3)' : '0 4px 14px rgba(0, 0, 0, 0.05)',
+          boxShadow: isDark ? '0 1px 3px rgba(0, 0, 0, 0.25)' : '0 1px 3px rgba(0, 0, 0, 0.04)',
           cursor: 'pointer',
         }}>
         <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10}}>
@@ -292,7 +292,7 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
             backgroundColor: activeTask ? (activeTask.type === 'park' ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5') : (isDark ? 'rgba(245, 158, 11, 0.15)' : '#FFFBEB')) : c.cardAlt,
             color: activeTask ? (activeTask.type === 'park' ? c.success : '#D97706') : c.textSecondary,
           }}>
-            {activeTask ? (activeTask.type === 'park' ? 'PARK MISSION IN PROGRESS' : 'RETRIEVAL MISSION IN PROGRESS') : 'RUNNER STANDBY'}
+            {activeTask ? (activeTask.type === 'park' ? 'PARKING IN PROGRESS' : 'RETRIEVAL IN PROGRESS') : 'AVAILABLE · STANDBY'}
           </span>
           {activeTask && (
             <span style={{width: 8, height: 8, borderRadius: 4, backgroundColor: activeTask.type === 'park' ? '#10B981' : '#F59E0B'}} />
@@ -348,7 +348,7 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
           borderTop: `1px solid ${c.border}`,
         }}>
           <span style={{fontSize: 12.5, fontWeight: 800, color: c.primary}}>
-            {activeTask ? 'Open active task details' : 'View full mission queue'}
+            {activeTask ? 'Open active task details' : 'View full task queue'}
           </span>
           <Icon name="arrowRight" size={14} color={c.primary} />
         </div>
@@ -411,9 +411,9 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
         </PressableScale>
       )}
 
-      {/* 7. Recent Shift Missions Feed */}
+      {/* 7. Recent Activity Feed */}
       <div style={{fontSize: 14, fontWeight: 900, marginBottom: 10, color: c.textPrimary}}>
-        Recent Completed Missions
+        Completed Assignments Today
       </div>
       {completedToday.length === 0 ? (
         <div style={{...glassCardStyle, padding: 28, textAlign: 'center'}}>

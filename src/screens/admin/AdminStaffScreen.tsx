@@ -36,7 +36,7 @@ const ROLE_OPTIONS: {key: Role; label: string; icon: IconName; desc: string}[] =
   {key: 'doctor', label: 'Doctor', icon: 'user', desc: 'Hospital physician with priority valet pass'},
   {key: 'staff', label: 'Staff', icon: 'userCard', desc: 'Clinical & administrative hospital personnel'},
   {key: 'valet', label: 'Valet', icon: 'key', desc: 'Station desk operator (Gate or Lot)'},
-  {key: 'driver', label: 'Driver', icon: 'car', desc: 'Runner executing parking & retrieval missions'},
+  {key: 'driver', label: 'Driver', icon: 'car', desc: 'Runner executing parking & retrieval trips'},
   {key: 'admin', label: 'Admin', icon: 'shield', desc: 'Full dispatch & personnel system oversight'},
 ];
 
@@ -300,8 +300,7 @@ export function AdminStaffScreen({initialFilter = 'all', initialQuery = ''}: {in
           borderRadius: 16,
           backgroundColor: dark.card,
           border: `1px solid ${dark.border}`,
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.25)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -337,11 +336,10 @@ export function AdminStaffScreen({initialFilter = 'all', initialQuery = ''}: {in
         {/* Form Body Card */}
         <div style={{
           padding: '20px 18px',
-          borderRadius: 18,
+          borderRadius: 12,
           backgroundColor: dark.card,
           border: `1px solid ${dark.border}`,
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.25)',
         }}>
           {/* Role Selection */}
           <div style={fieldLabel}>OPERATIONAL ROLE {isEdit ? '(TRANSFER)' : ''}</div>
@@ -498,7 +496,7 @@ export function AdminStaffScreen({initialFilter = 'all', initialQuery = ''}: {in
                   }}>
                     <Icon name="bolt" size={16} color={dark.warning} />
                     <span style={{fontSize: 12.5, fontWeight: 700, color: dark.warning}}>
-                      Driver is executing an active mission. Shift cannot be changed until the trip completes.
+                      Driver is executing an active trip. Shift cannot be changed until the trip completes.
                     </span>
                   </div>
 
@@ -518,7 +516,7 @@ export function AdminStaffScreen({initialFilter = 'all', initialQuery = ''}: {in
                     }}>
                     <Icon name="alert" size={16} color={dark.danger} />
                     <span style={{flex: 1, fontSize: 12.5, fontWeight: 800, color: dark.danger}}>
-                      {forcingFree ? 'Cancelling mission...' : 'Mission Stuck? Force-free runner'}
+                      {forcingFree ? 'Cancelling task...' : 'Trip Stuck? Force-free runner'}
                     </span>
                   </PressableScale>
                 </>
@@ -730,11 +728,10 @@ export function AdminStaffScreen({initialFilter = 'all', initialQuery = ''}: {in
       {/* Workstation Header Bar */}
       <div style={{
         padding: '14px 16px',
-        borderRadius: 16,
+        borderRadius: 12,
         backgroundColor: dark.card,
         border: `1px solid ${dark.border}`,
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.25)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -806,11 +803,10 @@ export function AdminStaffScreen({initialFilter = 'all', initialQuery = ''}: {in
             key={st.l}
             style={{
               padding: '12px 10px',
-              borderRadius: 14,
+              borderRadius: 10,
               backgroundColor: dark.card,
               border: `1px solid ${dark.border}`,
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.25)',
               textAlign: 'center',
             }}>
             <div style={{
@@ -855,8 +851,7 @@ export function AdminStaffScreen({initialFilter = 'all', initialQuery = ''}: {in
         height: 44,
         marginBottom: 10,
         backgroundColor: dark.card,
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.25)',
       }}>
         <Icon name="search" size={16} color={dark.textMuted} />
         <input
@@ -950,11 +945,10 @@ export function AdminStaffScreen({initialFilter = 'all', initialQuery = ''}: {in
         </div>
       ) : (
         <div style={{
-          borderRadius: 16,
+          borderRadius: 12,
           border: `1px solid ${dark.border}`,
           backgroundColor: dark.card,
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.25)',
           overflow: 'hidden',
         }}>
           {filtered.map((u, i) => (

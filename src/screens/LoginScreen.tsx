@@ -124,18 +124,16 @@ export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
           {/* Hospital Emblem */}
           <div
             style={{
-              width: 58,
-              height: 58,
-              borderRadius: 18,
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.05) 100%)',
-              border: '1px solid rgba(255,255,255,0.22)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.1) inset',
+              width: 56,
+              height: 56,
+              borderRadius: 12,
+              backgroundColor: '#1E293B',
+              border: '1px solid #334155',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               marginBottom: 20,
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
             }}
           >
             <Icon name="parking" size={28} color="#FFFFFF" />
@@ -217,7 +215,7 @@ export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                borderRadius: 9999,
+                borderRadius: 8,
                 padding: '10px 16px',
                 marginBottom: 16,
                 backgroundColor: 'rgba(244, 63, 94, 0.16)',
@@ -470,11 +468,9 @@ export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
             <div style={{display: 'flex', flexDirection: 'column', gap: 12}}>
               <div
                 style={{
-                  borderRadius: 16,
-                  border: '1px solid rgba(255, 255, 255, 0.16)',
-                  backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                  backdropFilter: 'blur(16px)',
-                  WebkitBackdropFilter: 'blur(16px)',
+                  borderRadius: 10,
+                  border: '1px solid #1E293B',
+                  backgroundColor: '#131B2E',
                   overflow: 'hidden',
                 }}
               >
@@ -486,7 +482,7 @@ export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
                       alignItems: 'center',
                       borderBottom:
                         i < savedAccounts.length - 1
-                          ? '1px solid rgba(255, 255, 255, 0.08)'
+                          ? '1px solid #1E293B'
                           : 'none',
                     }}
                   >

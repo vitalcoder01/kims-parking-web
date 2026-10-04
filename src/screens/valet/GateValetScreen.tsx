@@ -1000,7 +1000,7 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
               <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
                 <Icon name="bellAlert" size={16} color="#2563EB" />
                 <span style={{fontSize: 13, fontWeight: 800, color: '#2563EB', textTransform: 'uppercase', letterSpacing: 0.6}}>
-                  Expected Arrivals Radar ({arrivalNotices.length})
+                  Expected Arrivals ({arrivalNotices.length})
                 </span>
               </div>
               <span style={{fontSize: 11, color: colors.textMuted}}>

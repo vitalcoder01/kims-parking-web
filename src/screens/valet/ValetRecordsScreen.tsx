@@ -464,13 +464,13 @@ export function ValetRecordsScreen() {
 
     // Semantic status pill formatting
     const statusText = parkedIdle
-      ? `🅿️ Parked · ${v.slotId ?? 'Bay'}`
+      ? `Parked · ${v.slotId ?? 'Bay'}`
       : delivered
       ? 'Awaiting pickup confirmation'
       : retrieving
-      ? '🏃 Driver en route'
+      ? 'Driver en route'
       : needsDriver
-      ? '🚨 Ready for retrieval'
+      ? 'Ready for retrieval'
       : v.pickedUpAt
       ? 'Parking in progress'
       : v.acceptedAt
@@ -478,7 +478,7 @@ export function ValetRecordsScreen() {
       : v.driverId
       ? 'Awaiting accept'
       : v.status === 'retrieved'
-      ? '✅ Retrieved'
+      ? 'Retrieved'
       : 'Awaiting runner';
 
     const statusTone = parkedIdle || v.status === 'retrieved'
@@ -794,14 +794,14 @@ export function ValetRecordsScreen() {
 
     const statusText = t.status === 'completed'
       ? t.type === 'park'
-        ? canRetrieve ? `🅿️ Parked · ${t.slotId ?? 'Bay'}` : '✅ Park Completed'
-        : '✅ Retrieved'
+        ? canRetrieve ? `Parked · ${t.slotId ?? 'Bay'}` : 'Park Completed'
+        : 'Retrieved'
       : cancelled
       ? 'Cancelled'
       : delivered
       ? 'Awaiting pickup confirmation'
       : t.status === 'in_transit'
-      ? '🏃 In transit'
+      ? 'In transit'
       : t.status === 'key_collected'
       ? 'Driver has key'
       : 'Driver assigned';
@@ -1083,9 +1083,9 @@ export function ValetRecordsScreen() {
         >
           {(
             [
-              ['visitors', '🎟️ Visitors', visitorsFiltered.length],
-              ['staff', '👨‍⚕️ Staff', staffFiltered.length],
-              ['map', '🗺️ Map', null],
+              ['visitors', 'Visitors', visitorsFiltered.length],
+              ['staff', 'Staff & Doctors', staffFiltered.length],
+              ['map', 'Parking Map', null],
             ] as const
           ).map(([key, label, count]) => {
             const isActive = tab === key;

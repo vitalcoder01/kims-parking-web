@@ -868,7 +868,7 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
               {(['all', 'now', 'soon', 'later'] as UrgencyTab[]).map(tab => {
                 const count = urgencyGroups[tab].length;
                 const isActive = urgencyTab === tab;
-                const label = tab === 'all' ? 'All' : tab === 'now' ? '🚨 Due Now' : tab === 'soon' ? '⚠️ Soon' : '🕒 Later';
+                const label = tab === 'all' ? 'All' : tab === 'now' ? 'Due Now' : tab === 'soon' ? 'Soon (<15m)' : 'Scheduled';
 
                 return (
                   <button
@@ -950,7 +950,7 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
                           fontVariantNumeric: 'tabular-nums',
                         }}
                       >
-                        🅿️ BAY {t.slotId || 'TBD'}
+                        BAY {t.slotId || 'TBD'}
                       </div>
 
                       <span
@@ -964,7 +964,7 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
                           border: `1px solid ${isOverdue ? 'rgba(225, 29, 72, 0.25)' : isSoon ? 'rgba(245, 158, 11, 0.25)' : 'rgba(37,99,235,0.2)'}`,
                         }}
                       >
-                        {isOverdue ? '🚨 DUE NOW' : isSoon ? `⚠️ ~${leftMinutes} MIN` : '🕒 SCHEDULED'}
+                        {isOverdue ? 'DUE NOW' : isSoon ? `DUE IN ${leftMinutes} MIN` : 'SCHEDULED'}
                       </span>
                     </div>
 

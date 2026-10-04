@@ -95,7 +95,7 @@ export function DriverJobsScreen() {
       icon: 'navigate',
     },
     completed: {
-      label: 'Mission Completed',
+      label: 'Trip Completed',
       color: c.success,
       bg: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5',
       icon: 'check',
@@ -105,8 +105,8 @@ export function DriverJobsScreen() {
   const glassCardStyle: React.CSSProperties = {
     backgroundColor: c.surface,
     border: `1px solid ${c.border}`,
-    borderRadius: 18,
-    boxShadow: isDark ? '0 4px 20px rgba(0, 0, 0, 0.25)' : '0 2px 10px rgba(0, 0, 0, 0.03)',
+    borderRadius: 10,
+    boxShadow: isDark ? '0 1px 3px rgba(0, 0, 0, 0.25)' : '0 1px 3px rgba(0, 0, 0, 0.04)',
   };
 
   return (
@@ -116,7 +116,7 @@ export function DriverJobsScreen() {
         <div>
           <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
             <span style={{fontSize: 16, fontWeight: 900, color: c.textPrimary, letterSpacing: -0.2}}>
-              Active Missions
+              Active Tasks
             </span>
             <span style={{
               fontSize: 10,
@@ -179,7 +179,7 @@ export function DriverJobsScreen() {
                 color="#fff"
               />
               <span style={{fontSize: 12, fontWeight: 900, letterSpacing: 0.8, color: '#fff', textTransform: 'uppercase'}}>
-                {activeTask.type === 'park' ? 'PARKING MISSION' : 'RETRIEVAL MISSION'}
+                {activeTask.type === 'park' ? 'PARKING TASK' : 'RETRIEVAL TASK'}
               </span>
             </div>
             <span style={{
@@ -432,7 +432,7 @@ export function DriverJobsScreen() {
             Queue Is Clear
           </div>
           <div style={{fontSize: 12, color: c.textSecondary, maxWidth: 280, lineHeight: '18px'}}>
-            Standing by for valet assignment. New vehicle missions will trigger notifications instantly.
+            Standing by for valet assignment. New vehicle dispatches will notify you instantly.
           </div>
         </div>
       )}

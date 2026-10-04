@@ -80,7 +80,7 @@ function buildMultiMapHTML(isDark: boolean) {
 
   function formatPopupContent(d) {
     var statusColor = d.onJob ? '#F59E0B' : '#10B981';
-    var statusText = d.onJob ? 'ON MISSION' : 'READY / STANDBY';
+    var statusText = d.onJob ? 'ON JOB' : 'READY / STANDBY';
     return '<div style="display:flex;flex-direction:column;gap:3px;">' +
       '<div style="display:flex;align-items:center;gap:6px;">' +
         '<span style="width:7px;height:7px;border-radius:50%;background:' + statusColor + ';"></span>' +
@@ -232,7 +232,7 @@ export function ValetMapScreen() {
         <div style={{minWidth: 0}}>
           <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
             <span style={{fontSize: 16, fontWeight: 900, color: colors.textPrimary, letterSpacing: -0.2}}>
-              Valet Fleet Radar
+              Runner Location Map
             </span>
             <span style={{
               fontSize: 10,
@@ -247,7 +247,7 @@ export function ValetMapScreen() {
             </span>
           </div>
           <div style={{fontSize: 11.5, fontWeight: 600, color: colors.textSecondary, marginTop: 2}}>
-            Live GPS telemetry & runner dispatch
+            Live runner positions &amp; dispatch status
           </div>
         </div>
 
@@ -323,14 +323,13 @@ export function ValetMapScreen() {
             display: 'flex',
             alignItems: 'center',
             gap: 5,
-            borderRadius: 20,
+            borderRadius: 6,
             padding: '4px 10px',
-            backgroundColor: 'rgba(239, 68, 68, 0.9)',
-            backdropFilter: 'blur(8px)',
-            boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
+            backgroundColor: '#DC2626',
+            boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
           }}>
             <span style={{width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff'}} />
-            <span style={{color: '#fff', fontSize: 10, fontWeight: 900, letterSpacing: 1}}>LIVE RADAR</span>
+            <span style={{color: '#fff', fontSize: 10, fontWeight: 900, letterSpacing: 1}}>LIVE MAP</span>
           </div>
 
           {/* Bottom Left Map Legend */}
@@ -342,14 +341,14 @@ export function ValetMapScreen() {
             alignItems: 'center',
             gap: 12,
             padding: '5px 12px',
-            borderRadius: 10,
-            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.92)',
+            borderRadius: 8,
+            backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
             border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
-            backdropFilter: 'blur(8px)',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           }}>
             <div style={{display: 'flex', alignItems: 'center', gap: 5}}>
               <span style={{width: 7, height: 7, borderRadius: 4, backgroundColor: '#F59E0B'}} />
-              <span style={{fontSize: 10.5, fontWeight: 700, color: colors.textSecondary}}>On Mission ({activeMissions.length})</span>
+              <span style={{fontSize: 10.5, fontWeight: 700, color: colors.textSecondary}}>On Job ({activeMissions.length})</span>
             </div>
             <div style={{width: 1, height: 12, backgroundColor: colors.border}} />
             <div style={{display: 'flex', alignItems: 'center', gap: 5}}>
@@ -401,11 +400,11 @@ export function ValetMapScreen() {
               <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
                 <span style={{width: 7, height: 7, borderRadius: 4, backgroundColor: '#F59E0B'}} />
                 <span style={{fontSize: 13, fontWeight: 800, color: colors.textPrimary, letterSpacing: -0.1}}>
-                  Active Missions ({activeMissions.length})
+                  Active Dispatches ({activeMissions.length})
                 </span>
               </div>
               <span style={{fontSize: 11, fontWeight: 600, color: colors.textMuted}}>
-                Tap to center radar
+                Tap to focus on map
               </span>
             </div>
 

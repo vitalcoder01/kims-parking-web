@@ -372,7 +372,7 @@ export function AnalyticsScreen() {
                 <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
                   <div>
                     <div style={{fontSize: 11.5, fontWeight: 700, color: colors.textSecondary}}>
-                      Total Completed Missions
+                      Total Completed Trips
                     </div>
                     <div style={{fontSize: 24, fontWeight: 900, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums', marginTop: 2}}>
                       {data?.totalJobsCompleted ?? 0} <span style={{fontSize: 13, fontWeight: 700, color: colors.textMuted}}>operations</span>

@@ -322,7 +322,7 @@ export function SettingsScreen() {
         <div style={{...glassCardStyle, padding: '10px 14px'}}>
           <AppSwitch
             label="Task Assignments"
-            description="When a new park or retrieval mission is dispatched"
+            description="When a new park or retrieval task is dispatched"
             value={notifTasks}
             onValueChange={setNotifTasks}
           />

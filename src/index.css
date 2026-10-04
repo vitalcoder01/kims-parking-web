@@ -165,7 +165,7 @@ input:focus {
   z-index: 1;
 }
 
-/* ── Hinge-Inspired Cinematic Authentication System ── */
+/* ── Clean Hospital Operations Authentication ── */
 .hinge-auth-viewport {
   width: 100%;
   min-height: 100vh;
@@ -177,22 +177,11 @@ input:focus {
   position: relative;
   overflow-y: auto;
   overflow-x: hidden;
-  background: radial-gradient(circle at 50% 12%, rgba(37, 99, 235, 0.22) 0%, rgba(15, 23, 42, 0.88) 55%, #080C14 100%), #080C14;
+  background-color: #0A0F1D;
 }
 
-/* Subtle architectural hospital backdrop mesh */
 .hinge-auth-viewport::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background:
-    radial-gradient(ellipse at 80% 20%, rgba(59, 130, 246, 0.12) 0%, transparent 50%),
-    radial-gradient(ellipse at 20% 80%, rgba(30, 58, 138, 0.15) 0%, transparent 60%);
-  pointer-events: none;
-  z-index: 0;
+  display: none;
 }
 
 .hinge-auth-content {
@@ -203,89 +192,78 @@ input:focus {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 52px 24px 36px;
+  padding: 48px 20px 32px;
   position: relative;
   z-index: 1;
 }
 
 @media (max-height: 700px) {
   .hinge-auth-content {
-    padding: 32px 20px 24px;
+    padding: 28px 16px 20px;
     min-height: 100%;
   }
 }
 
 .hinge-pill-btn {
   width: 100%;
-  height: 50px;
-  border-radius: 9999px;
+  height: 48px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   border: none;
   text-decoration: none;
-  transition: background-color 0.16s ease, transform 0.12s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
   user-select: none;
 }
 .hinge-pill-btn:disabled {
-  opacity: 0.65;
+  opacity: 0.6;
   cursor: default;
 }
 
 .hinge-pill-white {
-  background-color: #FFFFFF;
+  background-color: #F8FAFC;
   color: #0F172A;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 @media (hover: hover) {
   .hinge-pill-white:hover:not(:disabled) {
-    background-color: #F8FAFC;
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.32);
+    background-color: #FFFFFF;
   }
 }
 .hinge-pill-white:active:not(:disabled) {
-  transform: translateY(0) scale(0.99);
-  background-color: #F1F5F9;
+  background-color: #E2E8F0;
 }
 
 .hinge-pill-blue {
   background-color: #2563EB;
   color: #FFFFFF;
-  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.35);
 }
 @media (hover: hover) {
   .hinge-pill-blue:hover:not(:disabled) {
     background-color: #1D4ED8;
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
   }
 }
 .hinge-pill-blue:active:not(:disabled) {
-  transform: translateY(0) scale(0.99);
+  background-color: #1E40AF;
 }
 
 .hinge-pill-glass {
-  background-color: rgba(255, 255, 255, 0.09);
-  color: #FFFFFF;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background-color: #1E293B;
+  color: #F8FAFC;
+  border: 1px solid #334155;
 }
 @media (hover: hover) {
   .hinge-pill-glass:hover:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.16);
-    border-color: rgba(255, 255, 255, 0.28);
-    transform: translateY(-1px);
+    background-color: #334155;
   }
 }
 .hinge-pill-glass:active:not(:disabled) {
-  transform: translateY(0) scale(0.99);
-  background-color: rgba(255, 255, 255, 0.07);
+  background-color: #0F172A;
 }
 
 .hinge-input-wrap {
@@ -293,22 +271,20 @@ input:focus {
   align-items: center;
   gap: 10px;
   height: 48px;
-  border-radius: 12px;
-  background-color: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  padding: 0 16px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  border-radius: 8px;
+  background-color: #131B2E;
+  border: 1px solid #1E293B;
+  padding: 0 14px;
   transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 .hinge-input-wrap.focused {
-  border-color: #93C5FD;
-  background-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.2);
+  border-color: #3B82F6;
+  background-color: #162035;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
 }
 .hinge-input-wrap.error {
-  border-color: #F43F5E;
-  background-color: rgba(244, 63, 94, 0.08);
+  border-color: #EF4444;
+  background-color: rgba(239, 68, 68, 0.08);
 }
 
 
@@ -400,19 +376,17 @@ input:focus {
 }
 
 .valet-glass-card {
-  border-radius: 12px;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  background-color: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(226, 232, 240, 0.85);
-  box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.04);
+  border-radius: 10px;
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .dark .valet-glass-card {
-  background-color: rgba(15, 23, 42, 0.82);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.25);
+  background-color: #111827;
+  border-color: #1F2937;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
 .valet-queue-grid {
