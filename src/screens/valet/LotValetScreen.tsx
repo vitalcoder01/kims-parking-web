@@ -15,6 +15,9 @@ import {
 } from '../../utils/retrievalClocks';
 import {TaskResolutionModal} from '../../components/TaskResolutionModal';
 import {getTaskStaleInfo} from '../../utils/staleTask';
+import {VehiclePlateBadge} from '../../components/VehiclePlateBadge';
+import {useUndoToast} from '../../components/UndoToast';
+import {playQuickActionChime, playDispatchChime} from '../../utils/audioChimes';
 
 interface LotValetScreenProps {
   onSwitchStation?: () => void;
@@ -28,7 +31,8 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
   const {user} = useAuth();
   const dialog = useDialog();
   const {colors, isDark} = useTheme();
-  const {slots, cleanupStaleTasks} = useAppState();
+  const {slots, cleanupStaleTasks, forceResolveTask, updateTask} = useAppState();
+  const {showUndoToast} = useUndoToast();
 
   const {
     tasks,
@@ -134,6 +138,60 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
     return slots.filter(s => s.status === 'occupied');
   }, [slots]);
 
+  const [plateFilter, setPlateFilter] = useState<string>('');
+  const cleanFilter = plateFilter.trim().toUpperCase();
+
+  const filteredInboundTasks = useMemo(() => {
+    if (!cleanFilter) return inboundTasks;
+    return inboundTasks.filter(t => t.carNumber.toUpperCase().includes(cleanFilter) || (t.doctorName && t.doctorName.toUpperCase().includes(cleanFilter)));
+  }, [inboundTasks, cleanFilter]);
+
+  const filteredRetrievals = useMemo(() => {
+    if (!cleanFilter) return visibleRetrievals;
+    return visibleRetrievals.filter(t => t.carNumber.toUpperCase().includes(cleanFilter) || (t.doctorName && t.doctorName.toUpperCase().includes(cleanFilter)));
+  }, [visibleRetrievals, cleanFilter]);
+
+  // 1-Tap Quick Actions for Stale Tasks with Undo Toast
+  const handleQuickPark = async (t: ParkingTask) => {
+    playQuickActionChime();
+    const targetSlot = selectedSlotForTask[t.id] || t.slotId || freeSlots[0]?.id || 'A-01';
+    const oldStatus = t.status;
+    try {
+      await forceResolveTask(t.id, {
+        action: 'complete_parked',
+        slotId: targetSlot,
+        reason: 'lot_valet_quick_pill_parked',
+      });
+      showUndoToast({
+        message: `${t.carNumber} parked in ${targetSlot}`,
+        onUndo: async () => {
+          await updateTask(t.id, { status: oldStatus });
+        },
+      });
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not park vehicle');
+    }
+  };
+
+  const handleQuickVoid = async (t: ParkingTask) => {
+    playQuickActionChime();
+    const oldStatus = t.status;
+    try {
+      await forceResolveTask(t.id, {
+        action: 'void_cancel',
+        reason: 'lot_valet_quick_pill_void',
+      });
+      showUndoToast({
+        message: `Run for ${t.carNumber} cancelled`,
+        onUndo: async () => {
+          await updateTask(t.id, { status: oldStatus });
+        },
+      });
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not void run');
+    }
+  };
+
   // Available blocks in lot (e.g. A, B, C, D)
   const availableBlocks = useMemo(() => {
     const set = new Set<string>();
@@ -175,6 +233,7 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
     setConfirmingParkedId(task.id);
     try {
       await confirmParkedByValet(task.id, slotId);
+      playQuickActionChime();
       // Clean up selection
       setSelectedSlotForTask(prev => {
         const next = {...prev};
@@ -193,6 +252,7 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
     setAssigningDriverId(driverId);
     try {
       await assignTaskDriver(dispatchingTask.id, driverId);
+      playDispatchChime();
       setDispatchingTask(null);
     } catch (err: any) {
       dialog.alert(err.message || 'Could not assign runner driver', {title: 'Assignment Failed'});
@@ -672,12 +732,59 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
           </div>
         </div>
 
+        {/* Fast Plate Quick Matcher Input */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            height: 46,
+            borderRadius: 10,
+            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#FFFFFF',
+            border: `1.5px solid ${plateFilter ? '#2563EB' : isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1'}`,
+            padding: '0 14px',
+            boxShadow: plateFilter ? '0 0 0 3px rgba(37,99,235,0.15)' : 'none',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Icon name="search" size={17} color={plateFilter ? '#2563EB' : colors.textMuted} />
+          <input
+            style={{
+              flex: 1,
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              fontSize: 14,
+              fontWeight: 600,
+              color: colors.textPrimary,
+            }}
+            placeholder="Search plate (e.g. 6755) or guest name to filter lot queues…"
+            value={plateFilter}
+            onChange={e => setPlateFilter(e.target.value)}
+          />
+          {plateFilter && (
+            <button
+              type="button"
+              onClick={() => setPlateFilter('')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: colors.textMuted,
+                cursor: 'pointer',
+                padding: 4,
+              }}
+            >
+              <Icon name="close" size={14} color="currentColor" />
+            </button>
+          )}
+        </div>
+
         {/* SECTION 1: INBOUND CARS TO PARK (BAY ALLOCATION MATRIX) */}
         <div>
           <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12}}>
             <div>
               <h2 style={{fontSize: 15, fontWeight: 800, color: colors.textPrimary, margin: 0}}>
-                Inbound Vehicles to Park ({inboundTasks.length})
+                Inbound Vehicles to Park ({filteredInboundTasks.length})
               </h2>
               <span style={{fontSize: 12, color: colors.textMuted}}>
                 Runner drivers descending from gate &bull; Assign bay to complete park
@@ -730,7 +837,7 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
             </div>
           ) : (
             <div className="valet-queue-grid">
-              {inboundTasks.map(t => {
+              {filteredInboundTasks.map(t => {
                 const currentSlot = selectedSlotForTask[t.id] ?? (t.slotId || '');
                 const nearestFree = freeSlots[0]?.id;
                 const staleInfo = getTaskStaleInfo(t, now);
@@ -752,18 +859,8 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
                     {/* Header */}
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
                       <div>
-                        <span
-                          style={{
-                            fontSize: 16,
-                            fontWeight: 800,
-                            fontVariantNumeric: 'tabular-nums',
-                            letterSpacing: '0.04em',
-                            color: colors.textPrimary,
-                          }}
-                        >
-                          {t.carNumber}
-                        </span>
-                        <div style={{fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginTop: 2}}>
+                        <VehiclePlateBadge plate={t.carNumber} highlightQuery={plateFilter} />
+                        <div style={{fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginTop: 4}}>
                           {t.doctorName || 'Guest'} &bull; Runner: {t.driverName || 'Assigned'}
                         </div>
                       </div>
@@ -859,6 +956,53 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
                               {sl.id}
                             </button>
                           ))}
+                        </div>
+                      )}
+
+                      {/* Inline Quick-Pills for Stale Inbound */}
+                      {staleInfo.isStale && (
+                        <div style={{display: 'flex', gap: 6, marginBottom: 2}}>
+                          <button
+                            type="button"
+                            className="pressable"
+                            onClick={() => handleQuickPark(t)}
+                            style={{
+                              flex: 1,
+                              height: 32,
+                              borderRadius: 6,
+                              backgroundColor: '#059669',
+                              color: '#FFFFFF',
+                              border: 'none',
+                              fontSize: 11.5,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Icon name="check" size={12} color="#FFFFFF" />
+                            <span>⚡ Park in {currentSlot || nearestFree || 'Bay'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="pressable"
+                            onClick={() => handleQuickVoid(t)}
+                            style={{
+                              padding: '0 10px',
+                              height: 32,
+                              borderRadius: 6,
+                              backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                              color: '#EF4444',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              fontSize: 11.5,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            ⚡ Void
+                          </button>
                         </div>
                       )}
 
@@ -1006,7 +1150,7 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
             </div>
           </div>
 
-          {visibleRetrievals.length === 0 ? (
+          {filteredRetrievals.length === 0 ? (
             <div
               className="valet-glass-card"
               style={{
@@ -1025,7 +1169,7 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
             </div>
           ) : (
             <div className="valet-queue-grid">
-              {visibleRetrievals.map(t => {
+              {filteredRetrievals.map(t => {
                 const leftMinutes = minutesUntilDeparture(t.requestedAt, t.plannedDepartureMinutes, now);
                 const isOverdue = leftMinutes != null && leftMinutes <= 0;
                 const isSoon = leftMinutes != null && leftMinutes > 0 && leftMinutes <= 15;
@@ -1077,10 +1221,8 @@ export function LotValetScreen({onSwitchStation, isSupervisor}: LotValetScreenPr
 
                     {/* Middle: Plate & Doctor */}
                     <div>
-                      <div style={{fontSize: 16, fontWeight: 800, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums'}}>
-                        {t.carNumber}
-                      </div>
-                      <div style={{fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginTop: 2}}>
+                      <VehiclePlateBadge plate={t.carNumber} highlightQuery={plateFilter} />
+                      <div style={{fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginTop: 4}}>
                         {t.doctorName || 'Guest'}
                       </div>
                       <div style={{fontSize: 11.5, color: colors.textMuted, marginTop: 4}}>

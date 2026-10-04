@@ -13,6 +13,9 @@ import {EnRouteTimer} from '../../components/EnRouteTimer';
 import {deriveJobAction} from '../../core/valet/state/JobAction';
 import {TaskResolutionModal} from '../../components/TaskResolutionModal';
 import {getTaskStaleInfo} from '../../utils/staleTask';
+import {VehiclePlateBadge} from '../../components/VehiclePlateBadge';
+import {useUndoToast} from '../../components/UndoToast';
+import {playDispatchChime, playArrivalChime, playQuickActionChime} from '../../utils/audioChimes';
 
 type GateSubView = 'dashboard' | 'scan' | 'visitor' | 'assign';
 
@@ -25,7 +28,9 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
   const {user} = useAuth();
   const dialog = useDialog();
   const {colors, isDark} = useTheme();
-  const {hydrated} = useAppState();
+  const {hydrated, forceResolveTask, updateTask} = useAppState();
+  const {showUndoToast} = useUndoToast();
+  const [plateFilter, setPlateFilter] = useState('');
 
   const {
     tasks,
@@ -42,6 +47,26 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
     confirmArrivedByValet,
     gateHandoff,
   } = useValetActions();
+
+  // 1-Tap Quick Resolve for Stale Tasks with Undo Toast
+  const handleQuickResolve = async (t: ParkingTask, action: 'complete_delivered' | 'void_cancel') => {
+    playQuickActionChime();
+    const oldStatus = t.status;
+    try {
+      await forceResolveTask(t.id, {
+        action,
+        reason: 'valet_quick_pill_resolved',
+      });
+      showUndoToast({
+        message: action === 'void_cancel' ? `Run for ${t.carNumber} voided` : `${t.carNumber} marked handed over`,
+        onUndo: async () => {
+          await updateTask(t.id, { status: oldStatus });
+        },
+      });
+    } catch (err: any) {
+      dialog.alert(err.message || 'Could not resolve task');
+    }
+  };
 
   // Navigation sub-views inside Gate Workstation
   const [subView, setSubView] = useState<GateSubView>('dashboard');
@@ -91,16 +116,25 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
   const canCheckIn = mobileValid && vCar.trim().length > 0;
 
   // Curbside Queue: Vehicles returning from the lot or sitting at the front curb!
-  const curbsideVehicles = tasks.filter(t =>
+  const allCurbsideVehicles = tasks.filter(t =>
     t.type === 'retrieve' &&
     (t.status === 'assigned' || t.status === 'in_transit' || t.status === 'delivered')
   );
 
   // In-flight dispatches from gate: cars handed off to runners on their way down to the lot
-  const inboundDispatches = tasks.filter(t =>
+  const allInboundDispatches = tasks.filter(t =>
     t.type === 'park' &&
     (t.status === 'assigned' || t.status === 'key_collected')
   );
+
+  const cleanFilter = plateFilter.trim().toUpperCase();
+  const curbsideVehicles = cleanFilter
+    ? allCurbsideVehicles.filter(t => t.carNumber.toUpperCase().includes(cleanFilter) || (t.doctorName && t.doctorName.toUpperCase().includes(cleanFilter)))
+    : allCurbsideVehicles;
+
+  const inboundDispatches = cleanFilter
+    ? allInboundDispatches.filter(t => t.carNumber.toUpperCase().includes(cleanFilter) || (t.doctorName && t.doctorName.toUpperCase().includes(cleanFilter)))
+    : allInboundDispatches;
 
   // ── Auto-lookup doctor 3-digit badge code ──
   useEffect(() => {
@@ -187,10 +221,12 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
           carNumber: pendingGateJob.carNumber,
           driverId,
         });
+        playDispatchChime();
         setPendingGateJob(null);
         setSubView('dashboard');
       } else if (pendingVisitorId) {
         await assignVisitorPickupDriver(pendingVisitorId, driverId);
+        playDispatchChime();
         setPendingVisitorId(null);
         setSubView('dashboard');
       }
@@ -206,6 +242,7 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
     setConfirmingArrivedId(taskId);
     try {
       await confirmArrivedByValet(taskId);
+      playArrivalChime();
     } catch (err: any) {
       dialog.alert(err.message || 'Could not confirm arrival', {title: 'Error'});
     } finally {
@@ -218,6 +255,7 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
     setConfirmingHandoverId(taskId);
     try {
       await confirmTaskDelivered(taskId);
+      playQuickActionChime();
     } catch (err: any) {
       dialog.alert(err.message || 'Could not confirm handover', {title: 'Error'});
     } finally {
@@ -942,6 +980,53 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
           )}
         </div>
 
+        {/* Fast Plate Quick Matcher Input */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            height: 46,
+            borderRadius: 10,
+            backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#FFFFFF',
+            border: `1.5px solid ${plateFilter ? '#2563EB' : isDark ? 'rgba(255,255,255,0.1)' : '#CBD5E1'}`,
+            padding: '0 14px',
+            boxShadow: plateFilter ? '0 0 0 3px rgba(37,99,235,0.15)' : 'none',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Icon name="search" size={17} color={plateFilter ? '#2563EB' : colors.textMuted} />
+          <input
+            style={{
+              flex: 1,
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              fontSize: 14,
+              fontWeight: 600,
+              color: colors.textPrimary,
+            }}
+            placeholder="Search plate (e.g. 6755) or guest name to quick-filter…"
+            value={plateFilter}
+            onChange={e => setPlateFilter(e.target.value)}
+          />
+          {plateFilter && (
+            <button
+              type="button"
+              onClick={() => setPlateFilter('')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: colors.textMuted,
+                cursor: 'pointer',
+                padding: 4,
+              }}
+            >
+              <Icon name="close" size={14} color="currentColor" />
+            </button>
+          )}
+        </div>
+
         {/* Rapid Action Bar (The Gate Counter's Primary CTAs) */}
         <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: 12}}>
           {/* Quick Staff Key Handover */}
@@ -1156,18 +1241,8 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
                     {/* Header */}
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
                       <div>
-                        <span
-                          style={{
-                            fontSize: 16,
-                            fontWeight: 800,
-                            fontVariantNumeric: 'tabular-nums',
-                            letterSpacing: '0.04em',
-                            color: colors.textPrimary,
-                          }}
-                        >
-                          {t.carNumber}
-                        </span>
-                        <div style={{fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginTop: 2}}>
+                        <VehiclePlateBadge plate={t.carNumber} highlightQuery={plateFilter} />
+                        <div style={{fontSize: 12.5, fontWeight: 600, color: colors.textSecondary, marginTop: 4}}>
                           {guestLabel}
                         </div>
                       </div>
@@ -1228,6 +1303,53 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
                       <span>From Bay: <strong style={{color: colors.textPrimary}}>{t.slotId || 'Lot'}</strong></span>
                       <span>Runner: <strong style={{color: colors.textPrimary}}>{driverName}</strong></span>
                     </div>
+
+                    {/* Inline Quick-Pills for Stale Task */}
+                    {staleInfo.isStale && (
+                      <div style={{display: 'flex', gap: 6}}>
+                        <button
+                          type="button"
+                          className="pressable"
+                          onClick={() => handleQuickResolve(t, 'complete_delivered')}
+                          style={{
+                            flex: 1,
+                            height: 32,
+                            borderRadius: 6,
+                            backgroundColor: '#059669',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <Icon name="check" size={12} color="#FFFFFF" />
+                          <span>⚡ Quick Handover</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="pressable"
+                          onClick={() => handleQuickResolve(t, 'void_cancel')}
+                          style={{
+                            padding: '0 10px',
+                            height: 32,
+                            borderRadius: 6,
+                            backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                            color: '#EF4444',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          ⚡ Void
+                        </button>
+                      </div>
+                    )}
 
                     {/* Decisive Curbside Actions */}
                     <div style={{display: 'flex', gap: 8}}>
@@ -1358,15 +1480,34 @@ export function GateValetScreen({onSwitchStation, isSupervisor}: GateValetScreen
                     }}
                   >
                     <div>
-                      <span style={{fontSize: 14, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: colors.textPrimary}}>
-                        {t.carNumber}
-                      </span>
-                      <div style={{fontSize: 11.5, color: colors.textSecondary, marginTop: 1}}>
+                      <VehiclePlateBadge plate={t.carNumber} size="sm" highlightQuery={plateFilter} />
+                      <div style={{fontSize: 11.5, color: colors.textSecondary, marginTop: 3}}>
                         Runner: {t.driverName ?? 'Assigned'}
                       </div>
                     </div>
 
-                    <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                    <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+                      {staleInfo.isStale && (
+                        <div style={{display: 'flex', gap: 4}}>
+                          <button
+                            type="button"
+                            className="pressable"
+                            onClick={() => handleQuickResolve(t, 'void_cancel')}
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: 4,
+                              backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                              color: '#EF4444',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              fontSize: 10.5,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            ⚡ Void
+                          </button>
+                        </div>
+                      )}
                       {staleInfo.isStale ? (
                         <span
                           style={{

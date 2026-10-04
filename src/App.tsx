@@ -15,6 +15,7 @@ import {installCrashReporting, setCurrentScreen} from './services/crashReporting
 // making the very first paint wait on a second round-trip would be a
 // pessimisation, not an optimisation.
 import {LoginScreen} from './screens/LoginScreen';
+import {UndoToastProvider} from './components/UndoToast';
 
 /*
  * Every other screen is loaded on demand.
@@ -408,7 +409,9 @@ export default function App() {
       <DialogProvider>
         <AuthProvider>
           <AppStateProvider>
-            <AppInner />
+            <UndoToastProvider>
+              <AppInner />
+            </UndoToastProvider>
           </AppStateProvider>
         </AuthProvider>
       </DialogProvider>
