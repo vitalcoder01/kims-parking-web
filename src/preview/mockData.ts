@@ -94,7 +94,7 @@ export function makeAppState(over: Partial<AppState> = {}): AppState {
     markParked: noop, markRetrieved: noop, gateHandoff: noop, confirmParkedByValet: noop,
     confirmArrivedByValet: noop, requestOtherStationDriver: noop, confirmTaskDelivered: noop,
     cancelTask: noop, closeParkedSession: noop, recallTask: noop, markTaskReturned: noop,
-    fetchTaskHistory: noop, refreshMyArrival: noop, cancelMyArrival: noop, setDriverStatus: noop,
+    fetchTaskHistory: async () => [], refreshMyArrival: noop, cancelMyArrival: noop, setDriverStatus: noop,
     addVisitor: noop, assignVisitorDriver: noop, cancelVisitorAssignment: noop, cancelVisitor: noop,
     recallVisitor: noop, closeParkedVisitor: noop, assignRetrievalDriver: noop,
     requestVisitorRetrieval: noop, assignStaffRetrievalDriver: noop, requestStaffRetrieval: noop,
