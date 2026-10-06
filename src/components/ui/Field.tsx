@@ -14,6 +14,8 @@ interface FieldProps {
   /** Rendered at the right edge inside the field (e.g. a password-reveal toggle). */
   trailing?: React.ReactNode;
   error?: string;
+  /** Red border without a message row — for forms that surface one combined error. */
+  invalid?: boolean;
   helper?: string;
   onEnter?: () => void;
   autoFocus?: boolean;
@@ -34,14 +36,15 @@ interface FieldProps {
  */
 export const Field = React.forwardRef<HTMLInputElement, FieldProps>(function Field({
   label, value, onChange, placeholder, type = 'text', leftIcon, trailing,
-  error, helper, onEnter, autoFocus, name, disabled, maxLength, inputMode,
+  error, invalid, helper, onEnter, autoFocus, name, disabled, maxLength, inputMode,
   autoCapitalize, autoComplete, style,
 }, ref) {
   const {colors, isDark} = useTheme();
   const [focused, setFocused] = useState(false);
 
   const fill = isDark ? colors.card : colors.cardAlt;
-  const borderColor = error ? colors.error : focused ? colors.primary : 'transparent';
+  const showError = error || invalid;
+  const borderColor = showError ? colors.error : focused ? colors.primary : 'transparent';
 
   return (
     <div style={{display: 'flex', flexDirection: 'column', gap: 8, ...style}}>
