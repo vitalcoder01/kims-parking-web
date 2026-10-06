@@ -33,7 +33,7 @@ export interface CurrentUser {
   valetStation?: 'gate' | 'lot' | null;
 }
 
-interface AuthContextValue {
+export interface AuthContextValue {
   user: CurrentUser | null;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<CurrentUser>;
@@ -177,3 +177,7 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
 }
 
 export function useAuth() { return useContext(Ctx); }
+
+// Raw context — exported so the dev preview harness (src/preview) can mount a
+// screen with an injected mock user. Not used by the app itself.
+export {Ctx as AuthContext};
