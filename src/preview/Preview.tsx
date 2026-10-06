@@ -11,6 +11,7 @@ import {
 // Screens under review
 import {DoctorHomeScreen} from '../screens/DoctorHomeScreen';
 import {DriverDashboardScreen} from '../screens/driver/DriverDashboardScreen';
+import {SettingsScreen} from '../screens/SettingsScreen';
 
 const noop: any = () => {};
 
@@ -59,6 +60,9 @@ function entryFor(screen: string, scenario: string): Entry {
         }),
         render: () => <DriverDashboardScreen onOpenJobs={noop} />,
       };
+    }
+    case 'settings': {
+      return {role: 'doctor', state: makeAppState({}), render: () => <SettingsScreen />};
     }
     default:
       return {
