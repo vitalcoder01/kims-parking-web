@@ -5,11 +5,13 @@ import {useTheme} from '../context/ThemeContext';
 import {BRAND_GRADIENT, gradientCss} from '../theme/colors';
 import {shadow} from '../theme';
 import {Icon} from '../components/Icon';
-import {Surface, Text, Button, Field, Avatar, IconButton} from '../components/ui';
+import {Surface, Text, Button, Field, Avatar, IconButton, Aurora, BlurText} from '../components/ui';
 import {ReleaseNotesModal} from '../components/ReleaseNotesModal';
 import {InstallBanner} from '../components/InstallBanner';
 import {UpdateBanner} from '../components/UpdateBanner';
 import {APP_VERSION_NAME} from '../config/version';
+import {scaleIn, staggerFadeUp} from '../lib/gsap';
+import {useSmoothScroll} from '../hooks/useSmoothScroll';
 
 // Quick-login: remembers accounts you've actually signed into on THIS
 // browser so switching roles while testing doesn't mean retyping a
@@ -108,34 +110,49 @@ export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
   };
 
   const visibleAccounts = showAllAccounts ? savedAccounts : savedAccounts.slice(0, VISIBLE_ACCOUNTS);
+  const scrollRef = useSmoothScroll<HTMLDivElement>();
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    scaleIn(card, 0.15);
+    const fields = card.querySelectorAll<HTMLElement>('.field-root, button');
+    if (fields.length) staggerFadeUp(fields, {delay: 0.35, stagger: 0.06});
+  }, []);
 
   return (
     <div className="phone-frame" style={{backgroundColor: colors.background}}>
       <UpdateBanner />
       <InstallBanner />
-      <div className="screen-scroll" style={{paddingBottom: 32}}>
+      <div ref={scrollRef} className="screen-scroll" style={{paddingBottom: 32}}>
 
-        {/* Hero — the mark is a solid light tile rather than a translucent
-            ring: a confident app-icon-like shape reads as a real brand. The
-            gradient band bleeds under the card, which floats over it. */}
+        {/* Hero — Aurora lives here as a soft animated backdrop. The mark
+            is a solid light tile: a confident app-icon-like brand shape.
+            The gradient band bleeds under the card, which floats over it. */}
         <div style={{
           background: gradientCss(BRAND_GRADIENT),
           padding: '76px 24px 64px', display: 'flex', flexDirection: 'column', alignItems: 'center',
+          position: 'relative', overflow: 'hidden',
         }}>
+          <Aurora colorStops={['#3b4fd4', '#6d28d9', '#1d4ed8']} blend={0.3} speed={0.7} />
           <div style={{
             width: 78, height: 78, borderRadius: 23, backgroundColor: '#FFFFFF',
             display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 22,
-            boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.35)', position: 'relative', zIndex: 1,
           }}>
             <Icon name="parking" size={39} color="#15161A" />
           </div>
-          <Text variant="display" color="#fff" style={{fontSize: 30}}>KIMS Hospital</Text>
-          <Text variant="body" color="rgba(255,255,255,0.64)" style={{marginTop: 7, fontWeight: 500}}>
+          <Text variant="display" color="#fff" style={{fontSize: 30, position: 'relative', zIndex: 1}}>
+            <BlurText text="KIMS Hospital" delay={0.05} stagger={0.07} style={{fontSize: 30, color: '#fff', fontWeight: 900}} />
+          </Text>
+          <Text variant="body" color="rgba(255,255,255,0.64)" style={{marginTop: 7, fontWeight: 500, position: 'relative', zIndex: 1}}>
             Smart Parking Management
           </Text>
         </div>
 
         {/* Login card — floats over the hero on real elevation (e4). */}
+        <div ref={cardRef}>
         <Surface
           elevation="e4"
           radius={28}
@@ -282,6 +299,7 @@ export function LoginScreen({onSignUp}: {onSignUp: () => void}) {
             </Text>
           </PressableScale>
         </Surface>
+        </div>
 
         <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', paddingBottom: 8, gap: 6}}>
           <div style={{display: 'flex', alignItems: 'center', gap: 6}}>

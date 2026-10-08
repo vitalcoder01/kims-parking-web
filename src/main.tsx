@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 // The icon font's @font-face now lives in components/icons.css, pulled in by
 // Icon.tsx itself — @mdi/font's full stylesheet is no longer imported.
 import './index.css';
+import 'lenis/dist/lenis.css';
 import App from './App';
 import {registerServiceWorker} from './services/swRegistration';
 import {unlockOnFirstGesture} from './services/alarm';

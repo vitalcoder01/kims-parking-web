@@ -23,3 +23,7 @@ export {Divider} from './Divider';
 
 // Re-exported from the existing component set so the kit is one import.
 export {Badge} from '../Badge';
+
+// Animation & FX — from React Bits (reactbits.dev), wired with GSAP.
+export {BlurText} from './BlurText';
+export {Aurora} from './Aurora';

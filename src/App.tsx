@@ -1,4 +1,5 @@
 import React, {useState, useEffect, Suspense} from 'react';
+import {ReactLenis} from 'lenis/react';
 import {ThemeProvider, useTheme} from './context/ThemeContext';
 import {AuthProvider, useAuth} from './context/AuthContext';
 import {AppStateProvider} from './context/AppStateContext';
@@ -455,6 +456,7 @@ installCrashReporting();
 
 export default function App() {
   return (
+    <ReactLenis root options={{lerp: 0.1, smoothWheel: true, syncTouch: false}}>
     <ErrorBoundary label="The app failed to start">
     <ThemeProvider>
       <DialogProvider>
@@ -466,5 +468,6 @@ export default function App() {
       </DialogProvider>
     </ThemeProvider>
     </ErrorBoundary>
+    </ReactLenis>
   );
 }
