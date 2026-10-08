@@ -1135,3 +1135,9 @@ export function useAppState() { return useContext(Ctx); }
 
 /** Live driver positions. Separate on purpose — see LocationsCtx. */
 export function useDriverLocations() { return useContext(LocationsCtx); }
+
+// Raw contexts + the state type — exported so the dev preview harness
+// (src/preview) can mount a screen with injected mock data. Not used by the
+// app itself, which always goes through AppStateProvider + the hooks above.
+export type {AppState};
+export {Ctx as AppStateContext, LocationsCtx as DriverLocationsContext};

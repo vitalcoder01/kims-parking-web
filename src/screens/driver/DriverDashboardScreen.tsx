@@ -6,6 +6,8 @@ import {useTheme} from '../../context/ThemeContext';
 import {useDialog} from '../../components/AppDialog';
 import {Icon} from '../../components/Icon';
 import {PressableScale} from '../../components/PressableScale';
+import {shadow} from '../../theme';
+import {Surface, Text, StatTile, EmptyState, Avatar, SectionHeader, Skeleton} from '../../components/ui';
 
 // Direct port of the mobile app's driver DriverDashboardScreen — status
 // greeting, rolling week strip, hero "current job" card, stat tiles and
@@ -56,15 +58,10 @@ function isToday(ms?: number) {
   return d.toDateString() === now.toDateString();
 }
 
-function SkeletonBlock({height, width = '100%', radius = 10, style}: {height: number; width?: number | string; radius?: number; style?: React.CSSProperties}) {
-  const {colors} = useTheme();
-  return <div className="pulse" style={{height, width, borderRadius: radius, backgroundColor: colors.cardAlt, ...style}} />;
-}
-
 export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = {}) {
   const {user, updateProfile} = useAuth();
   const {tasks, visitors, setDriverStatus, fetchTaskHistory, hydrated} = useAppState();
-  const {colors: c} = useTheme();
+  const {colors: c, isDark} = useTheme();
   const dialog = useDialog();
   const g = greeting();
   const days = weekStrip();
@@ -143,64 +140,63 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
   ];
 
   return (
-    <div className="screen-scroll" style={{backgroundColor: c.background, padding: 20, paddingTop: 12, paddingBottom: 40}}>
+    <div className="screen-scroll" style={{backgroundColor: c.background, padding: 20, paddingTop: 14, paddingBottom: 40}}>
 
       {/* Header */}
       <div style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18}}>
-        <div style={{width: 34, height: 34, borderRadius: 17, border: `1px solid ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: c.surface, flexShrink: 0}}>
+        <span style={{width: 34, height: 34, borderRadius: 17, border: `1px solid ${c.border}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', backgroundColor: c.surface, flexShrink: 0}}>
           <Icon name={g.icon} size={15} color={c.textPrimary} />
-        </div>
-        <div style={{flex: 1, fontSize: 22, fontWeight: 800, color: c.textPrimary}}>{g.text}</div>
-        <div style={{width: 34, height: 34, borderRadius: 17, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: c.primary, flexShrink: 0}}>
-          <span style={{fontSize: 14, fontWeight: 800, color: c.textOnPrimary}}>{(user?.name ?? 'D').charAt(0).toUpperCase()}</span>
-        </div>
+        </span>
+        <Text variant="title" style={{flex: 1}}>{g.text}</Text>
+        <Avatar name={user?.name ?? 'D'} size={34} />
       </div>
 
-      {/* Shift toggle — the driver's own on/off control, not something a
-          valet/admin has to set for them. Busy (on a live job) shows as a
-          locked, distinct state rather than a toggle that would just fail
-          on tap — the backend already refuses this move mid-job. */}
+      {/* Shift toggle — the driver's own on/off control. Busy (on a live job)
+          shows as a locked, distinct state rather than a toggle that would
+          just fail on tap. */}
       <PressableScale
         onClick={handleToggleShift}
         disabled={togglingShift || myStatus === 'busy'}
+        className="ui-surface"
         style={{
+          ['--ui-shadow' as any]: shadow(isDark, 'e1'),
           width: '100%', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
           borderRadius: 18, padding: 14, marginBottom: 18,
           border: `1px solid ${onShift ? c.success + '40' : c.border}`,
           backgroundColor: onShift ? c.successLight : c.surface,
           opacity: myStatus === 'busy' ? 0.75 : 1,
         }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: 20, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        <span style={{
+          width: 40, height: 40, borderRadius: 20, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           backgroundColor: myStatus === 'busy' ? c.warningLight : onShift ? c.success : c.cardAlt,
         }}>
           <Icon name={myStatus === 'busy' ? 'bolt' : 'key'} size={17} color={myStatus === 'busy' ? c.warning : onShift ? '#fff' : c.textMuted} />
-        </div>
+        </span>
         <div style={{flex: 1, minWidth: 0}}>
-          <div style={{fontSize: 14, fontWeight: 800, color: c.textPrimary}}>
+          <Text variant="subhead" as="div">
             {myStatus === 'busy' ? 'On a job' : onShift ? 'On shift' : 'Off shift'}
-          </div>
-          <div style={{fontSize: 11.5, marginTop: 2, color: c.textSecondary}}>
+          </Text>
+          <Text variant="caption" tone="secondary" as="div" style={{marginTop: 2}}>
             {myStatus === 'busy' ? 'Finish your current job to go off-duty' : onShift ? 'Visible to valets for new jobs' : "Tap to start — you won't be assigned jobs"}
-          </div>
+          </Text>
         </div>
         {/* Pill switch — purely a visual reflection of onShift, the whole
             card is the tap target. */}
-        <div style={{
-          width: 46, height: 27, borderRadius: 14, flexShrink: 0, padding: 3, boxSizing: 'border-box',
-          backgroundColor: onShift ? c.success : c.border, transition: 'background-color 0.15s ease',
+        <span style={{
+          width: 46, height: 27, borderRadius: 14, flexShrink: 0, padding: 3, boxSizing: 'border-box', display: 'inline-block',
+          backgroundColor: onShift ? c.success : c.borderStrong, transition: 'background-color 0.15s ease',
         }}>
           {togglingShift ? (
-            <div style={{width: 21, height: 21, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+            <span style={{width: 21, height: 21, display: 'inline-flex', alignItems: 'center', justifyContent: 'center'}}>
               <span className="spinner" style={{width: 14, height: 14, borderColor: 'rgba(255,255,255,0.4)', borderTopColor: '#fff'}} />
-            </div>
+            </span>
           ) : (
-            <div style={{
-              width: 21, height: 21, borderRadius: 11, backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+            <span style={{
+              width: 21, height: 21, borderRadius: 11, backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)', display: 'inline-block',
               transform: onShift ? 'translateX(19px)' : 'translateX(0)', transition: 'transform 0.15s ease',
             }} />
           )}
-        </div>
+        </span>
       </PressableScale>
 
       {/* Week strip */}
@@ -212,12 +208,13 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
               width: 38, height: 52, borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
               border: `1px solid ${d.isToday ? c.border : 'transparent'}`,
               backgroundColor: d.isToday ? c.surface : 'transparent',
+              boxShadow: d.isToday ? shadow(isDark, 'e1') : undefined,
               // Days already gone recede, so the eye lands on today and the
               // days still ahead of it.
               opacity: d.isPast && !d.isToday ? 0.45 : 1,
             }}>
-            <span style={{fontSize: 11, fontWeight: 600, color: c.textMuted}}>{d.letter}</span>
-            <span style={{fontSize: 15, fontWeight: d.isToday ? 900 : 700, color: d.isToday ? c.textPrimary : c.textSecondary}}>{d.num}</span>
+            <Text variant="caption" tone="muted" style={{fontWeight: 600}}>{d.letter}</Text>
+            <Text variant="subhead" color={d.isToday ? c.textPrimary : c.textSecondary} style={{fontWeight: d.isToday ? 900 : 700}}>{d.num}</Text>
           </div>
         ))}
       </div>
@@ -225,38 +222,40 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
       {/* Hero card */}
       <PressableScale
         onClick={() => onOpenJobs?.()}
-        style={{width: '100%', textAlign: 'left', borderRadius: 24, padding: 22, marginBottom: 16, minHeight: 150, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', backgroundColor: c.primary}}
+        className="ui-surface ui-surface--interactive"
+        style={{
+          ['--ui-shadow' as any]: shadow(isDark, 'e2'),
+          ['--ui-shadow-hover' as any]: shadow(isDark, 'e3'),
+          ['--ui-ring' as any]: isDark ? 'rgba(243,243,241,0.45)' : 'rgba(21,22,26,0.5)',
+          width: '100%', textAlign: 'left', borderRadius: 24, padding: 22, marginBottom: 16, minHeight: 150,
+          display: 'flex', flexDirection: 'column', justifyContent: 'space-between', backgroundColor: c.primary,
+          border: '1px solid transparent',
+        }}
       >
-        <div style={{fontSize: 12, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: c.textOnPrimary + '99'}}>
+        <Text variant="overline" uppercase color={c.textOnPrimary + '99'}>
           {activeTask ? (activeTask.type === 'park' ? 'Parking task' : 'Retrieval task') : 'Standing by'}
-        </div>
-        <div style={{fontSize: 20, fontWeight: 800, marginTop: 8, lineHeight: '26px', color: c.textOnPrimary}}>
+        </Text>
+        <Text variant="title" color={c.textOnPrimary} style={{fontSize: 20, marginTop: 8}}>
           {activeTask
             ? `${activeTask.carNumber} · ${activeTask.doctorName}`
             : 'No active job right now'}
-        </div>
-        <div style={{display: 'flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start', borderRadius: 999, padding: '10px 16px', marginTop: 16, backgroundColor: c.textOnPrimary}}>
-          <span style={{fontSize: 13, fontWeight: 800, color: c.primary}}>{activeTask ? 'Open job' : 'View jobs'}</span>
+        </Text>
+        <span style={{display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start', borderRadius: 999, padding: '10px 16px', marginTop: 16, backgroundColor: c.textOnPrimary}}>
+          <Text variant="label" color={c.primary}>{activeTask ? 'Open job' : 'View jobs'}</Text>
           <Icon name="arrowRight" size={15} color={c.primary} />
-        </div>
+        </span>
       </PressableScale>
 
       {/* Stats row */}
       <div style={{display: 'flex', gap: 10, marginBottom: 16}}>
-        {/* A zeroed tile during load reads as a real number — "you've done
-            nothing today" — rather than as "not known yet". */}
         {!hydrated ? [0, 1, 2].map(i => (
-          <div key={i} style={{flex: 1, borderRadius: 18, border: `1px solid ${c.border}`, padding: 14, display: 'flex', flexDirection: 'column', gap: 6, backgroundColor: c.surface}}>
-            <SkeletonBlock height={18} width={18} radius={5} />
-            <SkeletonBlock height={20} width="55%" radius={6} />
-            <SkeletonBlock height={10} width="70%" radius={5} />
-          </div>
+          <Surface key={i} elevation="e1" radius={18} padding={14} style={{flex: 1, display: 'flex', flexDirection: 'column', gap: 8}}>
+            <Skeleton width={18} height={18} radius={5} />
+            <Skeleton width="55%" height={20} radius={6} />
+            <Skeleton width="70%" height={10} radius={5} />
+          </Surface>
         )) : stats.map(s => (
-          <div key={s.label} style={{flex: 1, borderRadius: 18, border: `1px solid ${c.border}`, padding: 14, display: 'flex', flexDirection: 'column', gap: 6, backgroundColor: c.surface}}>
-            <Icon name={s.icon} size={18} color={c.textPrimary} />
-            <span style={{fontSize: 22, fontWeight: 900, color: c.textPrimary}}>{s.value}</span>
-            <span style={{fontSize: 11, fontWeight: 600, color: c.textSecondary}}>{s.label}</span>
-          </div>
+          <StatTile key={s.label} label={s.label} value={s.value} icon={s.icon} style={{flex: 1}} />
         ))}
       </div>
 
@@ -267,32 +266,33 @@ export function DriverDashboardScreen({onOpenJobs}: {onOpenJobs?: () => void} = 
           style={{width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10, borderRadius: 16, padding: 14, marginBottom: 16, border: `1px solid ${c.warning}40`, backgroundColor: c.warningLight}}
         >
           <Icon name="bellAlert" size={18} color={c.warning} />
-          <span style={{flex: 1, fontSize: 13, fontWeight: 700, color: c.textPrimary}}>
+          <Text variant="label" style={{flex: 1}}>
             {pendingVisitors.length} visitor pickup{pendingVisitors.length > 1 ? 's' : ''} waiting
-          </span>
+          </Text>
           <Icon name="chevronRight" size={16} color={c.textSecondary} />
         </PressableScale>
       )}
 
       {/* Recent activity */}
-      <div style={{fontSize: 15, fontWeight: 800, marginBottom: 10, color: c.textPrimary}}>Recent activity</div>
+      <SectionHeader title="Recent activity" style={{marginTop: 4}} />
       {completedToday.length === 0 ? (
-        <div style={{borderRadius: 18, border: `1px solid ${c.border}`, padding: 28, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, backgroundColor: c.surface}}>
-          <Icon name="flag" size={22} color={c.textMuted} />
-          <span style={{fontSize: 13, fontWeight: 600, color: c.textSecondary}}>Nothing completed yet today</span>
-        </div>
+        <Surface elevation="e1" radius={18} padding={0}>
+          <EmptyState compact icon="flag" title="Nothing completed yet today" subtitle="Finished jobs will show up here as you close them out." />
+        </Surface>
       ) : (
         completedToday.slice(0, 5).map(t => (
-          <div key={t.id} style={{display: 'flex', alignItems: 'center', gap: 12, borderRadius: 16, border: `1px solid ${c.border}`, padding: 12, marginBottom: 8, backgroundColor: c.surface}}>
-            <div style={{width: 32, height: 32, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: c.successLight, flexShrink: 0}}>
-              <Icon name={t.type === 'park' ? 'arrowDown' : 'arrowUp'} size={15} color={c.success} />
+          <Surface key={t.id} elevation="e1" radius={16} padding={12} style={{marginBottom: 8}}>
+            <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+              <span style={{width: 32, height: 32, borderRadius: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', backgroundColor: c.successLight, flexShrink: 0}}>
+                <Icon name={t.type === 'park' ? 'arrowDown' : 'arrowUp'} size={15} color={c.success} />
+              </span>
+              <div style={{flex: 1, minWidth: 0}}>
+                <Text variant="subhead" as="div" numberOfLines={1}>{t.type === 'park' ? 'Parked' : 'Retrieved'} · {t.doctorName}</Text>
+                <Text variant="caption" tone="secondary" as="div" style={{marginTop: 2}}>{t.carNumber}{t.slotId ? ` · ${t.slotId}` : ''}</Text>
+              </div>
+              <Icon name="check" size={16} color={c.success} />
             </div>
-            <div style={{flex: 1, minWidth: 0}}>
-              <div style={{fontSize: 13, fontWeight: 700, color: c.textPrimary}}>{t.type === 'park' ? 'Parked' : 'Retrieved'} · {t.doctorName}</div>
-              <div style={{fontSize: 11, fontWeight: 600, marginTop: 2, color: c.textSecondary}}>{t.carNumber}{t.slotId ? ` · ${t.slotId}` : ''}</div>
-            </div>
-            <Icon name="check" size={16} color={c.success} />
-          </div>
+          </Surface>
         ))
       )}
     </div>

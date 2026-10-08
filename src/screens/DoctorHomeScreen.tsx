@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect} from 'react';
 import {PressableScale} from '../components/PressableScale';
 import {useAuth} from '../context/AuthContext';
 import {useAppState} from '../context/AppStateContext';
@@ -6,7 +6,9 @@ import {useTheme} from '../context/ThemeContext';
 import {LiveTrackingScreen} from './LiveTrackingScreen';
 import {useRetrievalRequest} from '../hooks/useRetrievalRequest';
 import {BRAND_GRADIENT, BRAND_GRADIENT_DARK, gradientCss} from '../theme/colors';
-import {Icon} from '../components/Icon';
+import {shadow} from '../theme';
+import {Icon, IconName} from '../components/Icon';
+import {Surface, Text, Button} from '../components/ui';
 import {useDialog} from '../components/AppDialog';
 import {
   PLANNED_DEPARTURE_OPTIONS, ARRIVAL_ETA_OPTIONS, clockToMinutes, fmtClock12, to12, to24,
@@ -30,7 +32,7 @@ function nextFiveMinuteMark(): Date {
 
 // Slide-up popup over Home — Home itself never unmounts underneath it.
 function BottomSheetModal({visible, onClose, children}: {visible: boolean; onClose: () => void; children: React.ReactNode}) {
-  const {colors} = useTheme();
+  const {colors, isDark} = useTheme();
   const [rendered, setRendered] = useState(visible);
   const [entered, setEntered] = useState(false);
 
@@ -53,7 +55,7 @@ function BottomSheetModal({visible, onClose, children}: {visible: boolean; onClo
       <div
         onClick={onClose}
         style={{
-          position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
+          position: 'absolute', inset: 0, backgroundColor: colors.overlay,
           opacity: entered ? 1 : 0, transition: 'opacity 220ms ease',
         }}
       />
@@ -64,9 +66,9 @@ function BottomSheetModal({visible, onClose, children}: {visible: boolean; onClo
           transition: 'transform 280ms cubic-bezier(0.2,0.8,0.2,1)',
         }}>
           <div style={{
-            borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, borderStyle: 'solid',
+            borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, borderStyle: 'solid',
             borderColor: colors.border, borderBottom: 'none', overflow: 'hidden',
-            backgroundColor: colors.surface,
+            backgroundColor: colors.surface, boxShadow: shadow(isDark, 'e4'),
           }}>
             {children}
           </div>
@@ -79,6 +81,38 @@ function BottomSheetModal({visible, onClose, children}: {visible: boolean; onClo
 function SkeletonBlock({height, width = '100%', radius = 10, style}: {height: number; width?: number | string; radius?: number; style?: React.CSSProperties}) {
   const {colors} = useTheme();
   return <div className="pulse" style={{height, width, borderRadius: radius, backgroundColor: colors.cardAlt, ...style}} />;
+}
+
+// Arrival / Departure both present the same shape: an ink card with an icon
+// chip, a title + one line of context, and a forward chevron. One component
+// so the two launchers can never drift apart.
+function LauncherCard({icon, title, subtitle, onClick}: {icon: IconName; title: string; subtitle: string; onClick: () => void}) {
+  const {colors, isDark} = useTheme();
+  return (
+    <PressableScale
+      onClick={onClick}
+      className="ui-surface ui-surface--interactive"
+      style={{
+        ['--ui-shadow' as any]: shadow(isDark, 'e2'),
+        ['--ui-shadow-hover' as any]: shadow(isDark, 'e3'),
+        ['--ui-ring' as any]: isDark ? 'rgba(243,243,241,0.45)' : 'rgba(21,22,26,0.5)',
+        display: 'flex', alignItems: 'center', gap: 14, borderRadius: 22, padding: 18,
+        backgroundColor: colors.primary, border: '1px solid transparent', width: '100%',
+      }}>
+      <span style={{
+        width: 46, height: 46, borderRadius: 14, flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.16)',
+      }}>
+        <Icon name={icon} size={24} color={colors.textOnPrimary} />
+      </span>
+      <span style={{flex: 1, textAlign: 'left'}}>
+        <Text variant="subhead" color={colors.textOnPrimary} as="div">{title}</Text>
+        <Text variant="caption" color={colors.textOnPrimary + 'A6'} as="div" style={{marginTop: 2}}>{subtitle}</Text>
+      </span>
+      <Icon name="arrowRight" size={18} color={colors.textOnPrimary + '99'} />
+    </PressableScale>
+  );
 }
 
 export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () => void; onOpenHistory: () => void}) {
@@ -204,55 +238,59 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
     return <LiveTrackingScreen task={displayTask} onBack={() => setShowTracking(false)} />;
   }
 
+  // The vehicle-status card header label (eyebrow + right-aligned status).
+  const StatusRow = ({eyebrow, status, statusColor}: {eyebrow: string; status: string; statusColor: string}) => (
+    <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10}}>
+      <Text variant="overline" tone="muted" uppercase>{eyebrow}</Text>
+      <Text variant="caption" color={statusColor} style={{fontWeight: 800}}>{status}</Text>
+    </div>
+  );
+
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background, paddingBottom: 40, position: 'relative'}}>
 
       {/* Gradient header */}
       <div style={{
         background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT),
-        padding: '20px 20px 32px',
+        padding: '22px 20px 34px',
       }}>
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
-          <div style={{flex: 1}}>
-            <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 500}}>Good day,</div>
-            <div style={{color: '#fff', fontSize: 22, fontWeight: 900, marginTop: 2}}>{user?.name}</div>
-            <div style={{color: 'rgba(255,255,255,0.65)', fontSize: 12, marginTop: 2}}>{user?.department}</div>
+          <div style={{flex: 1, minWidth: 0}}>
+            <Text variant="caption" color="rgba(255,255,255,0.72)" as="div" style={{fontWeight: 500}}>Good day,</Text>
+            <Text variant="title" color="#fff" as="div" numberOfLines={1} style={{marginTop: 2}}>{user?.name}</Text>
+            <Text variant="caption" color="rgba(255,255,255,0.62)" as="div" style={{marginTop: 2}}>{user?.department}</Text>
           </div>
           <PressableScale
             onClick={onOpenCard}
             style={{
-              backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 16, padding: '10px 16px',
+              backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 16, padding: '10px 16px',
               display: 'flex', flexDirection: 'column', alignItems: 'center',
-              border: '1px solid rgba(255,255,255,0.25)',
+              border: '1px solid rgba(255,255,255,0.22)',
             }}>
             <span style={{color: '#fff', fontSize: 28, fontWeight: 900, letterSpacing: 6}}>{user?.cardCode ?? '---'}</span>
             <span style={{display: 'flex', alignItems: 'center', gap: 2, marginTop: 2}}>
-              <span style={{color: 'rgba(255,255,255,0.7)', fontSize: 8, fontWeight: 700, letterSpacing: 1.5}}>VALET CODE</span>
+              <span style={{color: 'rgba(255,255,255,0.7)', fontSize: 8, fontWeight: 800, letterSpacing: 1.5}}>VALET CODE</span>
               <Icon name="chevronRight" size={11} color="rgba(255,255,255,0.7)" />
             </span>
           </PressableScale>
         </div>
       </div>
 
-      <div style={{padding: '20px 16px 16px', display: 'flex', flexDirection: 'column', gap: 12}}>
+      <div style={{padding: '18px 16px 16px', display: 'flex', flexDirection: 'column', gap: 12}}>
 
         {/* Countdown — hidden once 'delivered', the CAR READY banner below
             already covers that. */}
         {activeRetrieve && activeRetrieve.status !== 'delivered' && (() => {
           // No driver GPS any more (no driver app at all — see the
           // two-station handoff follow-up), so there's no ETA to compute.
-          // 'assigned' already means a driver has been picked — that's the
-          // whole signal now, not a separate "in_transit" stage nothing
-          // ever advances to without GPS (see task.service.js's widened
-          // assertTransition). 'in_transit' stays checked too for any task
-          // that predates this change.
           const onTheWay = (activeRetrieve.status === 'assigned' || activeRetrieve.status === 'in_transit')
             && activeRetrieve.driverId != null;
           return (
             <div className={onTheWay ? 'pulse' : undefined}>
               <div style={{
                 background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT),
-                borderRadius: 20, padding: 28, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                borderRadius: 22, padding: 28, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                boxShadow: shadow(isDark, 'e2'),
               }}>
                 {onTheWay ? (
                   <>
@@ -263,10 +301,10 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
                     }}>
                       <Icon name="car" size={24} color="#fff" />
                     </div>
-                    <div style={{color: '#fff', fontSize: 18, fontWeight: 900, marginBottom: 6, textAlign: 'center'}}>Vehicle on the way</div>
-                    <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 13, textAlign: 'center'}}>
+                    <Text variant="heading" color="#fff" align="center" style={{marginBottom: 6}}>Vehicle on the way</Text>
+                    <Text variant="bodySm" color="rgba(255,255,255,0.75)" align="center">
                       {activeRetrieve.driverName ?? 'Your driver'} is bringing it to the valet counter
-                    </div>
+                    </Text>
                     <PressableScale
                       onClick={() => setShowTracking(true)}
                       style={{
@@ -275,7 +313,7 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
                         padding: '12px 20px', border: '1px solid rgba(255,255,255,0.3)',
                       }}>
                       <Icon name="map" size={15} color="#fff" />
-                      <span style={{color: '#fff', fontSize: 13, fontWeight: 800}}>Track status</span>
+                      <Text variant="label" color="#fff">Track status</Text>
                     </PressableScale>
                   </>
                 ) : (
@@ -287,9 +325,9 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
                     }}>
                       <Icon name="checkBold" size={26} color="#fff" />
                     </div>
-                    <div style={{color: '#fff', fontSize: 18, fontWeight: 900, marginBottom: 8, textAlign: 'center'}}>Departure request sent</div>
-                    <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 13, textAlign: 'center', lineHeight: '19px'}}>The valet team has been notified.</div>
-                    <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 13, textAlign: 'center', lineHeight: '19px'}}>We'll notify you when your vehicle is on the way.</div>
+                    <Text variant="heading" color="#fff" align="center" style={{marginBottom: 8}}>Departure request sent</Text>
+                    <Text variant="bodySm" color="rgba(255,255,255,0.75)" align="center">The valet team has been notified.</Text>
+                    <Text variant="bodySm" color="rgba(255,255,255,0.75)" align="center">We'll notify you when your vehicle is on the way.</Text>
                     <PressableScale
                       onClick={handleCancelRetrieval}
                       disabled={cancelling}
@@ -299,9 +337,7 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
                         backgroundColor: 'rgba(0,0,0,0.14)', opacity: cancelling ? 0.6 : 1,
                       }}>
                       <Icon name="close" size={13} color="#fff" />
-                      <span style={{color: '#fff', fontSize: 13, fontWeight: 800}}>
-                        {cancelling ? 'Cancelling…' : 'Cancel request'}
-                      </span>
+                      <Text variant="label" color="#fff">{cancelling ? 'Cancelling…' : 'Cancel request'}</Text>
                     </PressableScale>
                   </>
                 )}
@@ -312,14 +348,14 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
 
         {/* Park job in motion — no ETA to count down to, just a live-track link. */}
         {parkInMotion && (
-          <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), borderRadius: 20, padding: 18, display: 'flex', flexDirection: 'column', gap: 14}}>
+          <div style={{background: gradientCss(isDark ? BRAND_GRADIENT_DARK : BRAND_GRADIENT), borderRadius: 22, padding: 18, display: 'flex', flexDirection: 'column', gap: 14, boxShadow: shadow(isDark, 'e2')}}>
             <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
               <Icon name="carKey" size={15} color="rgba(255,255,255,0.85)" />
-              <span style={{flex: 1, color: '#fff', fontSize: 14, fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>
+              <Text variant="subhead" color="#fff" numberOfLines={1} style={{flex: 1}}>
                 {displayTask?.status === 'key_collected'
                   ? `${displayTask?.driverName ?? 'Driver'} has your key`
                   : `${displayTask?.driverName ?? 'Driver'} is parking your car`}
-              </span>
+              </Text>
             </div>
             <PressableScale
               onClick={() => setShowTracking(true)}
@@ -329,78 +365,34 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
                 padding: '12px 20px', border: '1px solid rgba(255,255,255,0.3)',
               }}>
               <Icon name="map" size={15} color="#fff" />
-              <span style={{color: '#fff', fontSize: 13, fontWeight: 800}}>Track live</span>
+              <Text variant="label" color="#fff">Track live</Text>
             </PressableScale>
           </div>
         )}
 
-        {/* Arrival / Departure launcher card — mutually exclusive states, so
-            at most one ever renders. Same visual DNA as the valet's action
-            grid (rounded 22px, soft shadow, icon in a rounded square), but a
-            horizontal solo-card layout rather than a centered vertical
-            stack — a square grid tile sitting alone in a wide row would
-            leave visible empty space next to it. */}
+        {/* Arrival / Departure launcher — mutually exclusive states, so at
+            most one ever renders (shared LauncherCard). */}
         {!hydrated && (
           <SkeletonBlock height={82} radius={22} />
         )}
         {hydrated && showEmptyState && (
-          <PressableScale
-            onClick={() => setShowArrivalModal(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 14, borderRadius: 22, padding: 18,
-              backgroundColor: colors.primary, boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
-            }}>
-            <div style={{
-              width: 46, height: 46, borderRadius: 14, flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              backgroundColor: 'rgba(255,255,255,0.18)',
-            }}>
-              <Icon name="bellAlert" size={24} color="#fff" />
-            </div>
-            <div style={{flex: 1, textAlign: 'left'}}>
-              <div style={{color: '#fff', fontSize: 15, fontWeight: 800}}>Arrival</div>
-              <div style={{color: 'rgba(255,255,255,0.65)', fontSize: 11.5, marginTop: 2}}>Let the valet know you're coming</div>
-            </div>
-            <Icon name="arrowRight" size={18} color="rgba(255,255,255,0.6)" />
-          </PressableScale>
+          <LauncherCard icon="bellAlert" title="Arrival" subtitle="Let the valet know you're coming" onClick={() => setShowArrivalModal(true)} />
         )}
         {hydrated && carIsParked && !activeRetrieve && (
-          <PressableScale
-            onClick={() => setShowDepartureModal(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 14, borderRadius: 22, padding: 18,
-              backgroundColor: colors.primary, boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
-            }}>
-            <div style={{
-              width: 46, height: 46, borderRadius: 14, flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              backgroundColor: 'rgba(255,255,255,0.18)',
-            }}>
-              <Icon name="car" size={24} color="#fff" />
-            </div>
-            <div style={{flex: 1, textAlign: 'left'}}>
-              <div style={{color: '#fff', fontSize: 15, fontWeight: 800}}>Departure</div>
-              <div style={{color: 'rgba(255,255,255,0.65)', fontSize: 11.5, marginTop: 2}}>Request your car back</div>
-            </div>
-            <Icon name="arrowRight" size={18} color="rgba(255,255,255,0.6)" />
-          </PressableScale>
+          <LauncherCard icon="car" title="Departure" subtitle="Request your car back" onClick={() => setShowDepartureModal(true)} />
         )}
 
-        {/* Driven by myArrivalNotice (the server's own record) rather than
-            the local arrivalSent flag alone — that flag is lost on every
-            reload, which meant a heads-up you'd already sent quietly
-            disappeared from your side while still sitting in the valet's
-            queue. With the real record here, plans changing has an answer:
-            take it back. */}
+        {/* Arrival-notified strip — driven by the server record so a reload
+            can't lose it, with "take it back" when plans change. */}
         {(myArrivalNotice || arrivalSent) && showEmptyState && (
-          <div style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: 14, border: `1px solid ${colors.success}30`, padding: 12, backgroundColor: colors.success + '10'}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: 8, borderRadius: 14, border: `1px solid ${colors.success}30`, padding: 12, backgroundColor: colors.successLight}}>
             <Icon name="bellAlert" size={16} color={colors.success} />
-            <span style={{flex: 1, fontSize: 12, fontWeight: 700, color: colors.success}}>
+            <Text variant="caption" color={colors.success} style={{flex: 1, fontWeight: 700}}>
               {(() => {
                 const eta = myArrivalNotice?.eta ?? arrivalSent ?? 0;
                 return `Valet notified — arriving in ~${eta >= 60 ? `${eta / 60} hr` : `${eta} min`}`;
               })()}
-            </span>
+            </Text>
             {!!myArrivalNotice && (
               <PressableScale
                 onClick={handleCancelArrival}
@@ -408,14 +400,14 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
                 style={{background: 'transparent', border: 'none', padding: 0, flexShrink: 0}}>
                 {cancellingArrival
                   ? <span className="spinner" style={{width: 13, height: 13, borderColor: colors.success + '40', borderTopColor: colors.success}} />
-                  : <span style={{fontSize: 12.5, fontWeight: 800, color: colors.success, textDecoration: 'underline'}}>Cancel</span>}
+                  : <Text variant="caption" color={colors.success} style={{fontWeight: 800, textDecoration: 'underline'}}>Cancel</Text>}
               </PressableScale>
             )}
           </div>
         )}
 
         {/* Vehicle status card — the slot number IS the answer when parked. */}
-        <div style={{borderRadius: 20, border: `1px solid ${colors.border}`, overflow: 'hidden', backgroundColor: colors.surface}}>
+        <Surface elevation="e2" radius={20} padding={0}>
           {!hydrated ? (
             <div style={{padding: 20}}>
               <SkeletonBlock height={12} width="35%" />
@@ -424,65 +416,58 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
             </div>
           ) : showEmptyState || !displayTask ? (
             <div style={{padding: 20}}>
-              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10}}>
-                <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: colors.textMuted}}>VEHICLE STATUS</span>
-                <span style={{fontSize: 12, fontWeight: 800, color: colors.textMuted}}>No active session</span>
+              <StatusRow eyebrow="Vehicle status" status="No active session" statusColor={colors.textMuted} />
+              <div style={{display: 'flex', alignItems: 'center', gap: 12, marginTop: 10}}>
+                <span style={{width: 44, height: 44, borderRadius: 13, backgroundColor: colors.cardAlt, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+                  <Icon name="carSide" size={22} color={colors.textMuted} />
+                </span>
+                <div>
+                  <Text variant="heading" tone="secondary" as="div">No car parked</Text>
+                  <Text variant="bodySm" tone="muted" as="div" style={{marginTop: 4}}>Hand your keys to the valet at the entrance.</Text>
+                </div>
               </div>
-              <div style={{fontSize: 18, fontWeight: 800, marginTop: 6, color: colors.textMuted}}>No car parked</div>
-              <div style={{fontSize: 13, fontWeight: 600, marginTop: 8, color: colors.textMuted}}>Hand your keys to the valet at the entrance.</div>
             </div>
           ) : carIsParked ? (
             <div style={{padding: 20}}>
-              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10}}>
-                <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: colors.textMuted}}>PARKED AT</span>
-                <span style={{fontSize: 12, fontWeight: 800, color: colors.success}}>Safely parked</span>
-              </div>
-              <div style={{fontSize: 40, fontWeight: 900, letterSpacing: -0.5, marginTop: 6, fontVariantNumeric: 'tabular-nums', color: colors.textPrimary}}>{displayTask.slotId ?? '—'}</div>
-              <div style={{fontSize: 13, fontWeight: 600, marginTop: 8, color: colors.textSecondary}}>
+              <StatusRow eyebrow="Parked at" status="Safely parked" statusColor={colors.success} />
+              <Text variant="display" as="div" style={{fontSize: 40, marginTop: 8, fontVariantNumeric: 'tabular-nums'}}>{displayTask.slotId ?? '—'}</Text>
+              <Text variant="bodySm" tone="secondary" as="div" style={{marginTop: 10}}>
                 {displayTask.carNumber}
                 {displayTask.driverName ? `  ·  Parked by ${displayTask.driverName}` : ''}
-              </div>
+              </Text>
             </div>
           ) : carJustRetrieved ? (
             <div style={{padding: 20}}>
-              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10}}>
-                <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: colors.textMuted}}>RETRIEVING</span>
-                <span style={{fontSize: 12, fontWeight: 800, color: colors.success}}>Ready for pickup</span>
-              </div>
-              <div style={{fontSize: 18, fontWeight: 800, marginTop: 6, color: colors.textPrimary}}>Collect at the valet counter</div>
-              <div style={{fontSize: 13, fontWeight: 600, marginTop: 8, color: colors.textSecondary}}>{displayTask.carNumber}</div>
+              <StatusRow eyebrow="Retrieving" status="Ready for pickup" statusColor={colors.success} />
+              <Text variant="heading" as="div" style={{marginTop: 8}}>Collect at the valet counter</Text>
+              <Text variant="bodySm" tone="secondary" as="div" style={{marginTop: 8}}>{displayTask.carNumber}</Text>
             </div>
           ) : (
             <div style={{padding: 20}}>
-              <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10}}>
-                <span style={{fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: colors.textMuted}}>
-                  {displayTask.type === 'park' ? 'PARKING' : 'RETRIEVING'}
-                </span>
-                {!!statusInfo && <span style={{fontSize: 12, fontWeight: 800, color: statusInfo.color}}>{statusInfo.label}</span>}
-              </div>
-              <div style={{fontSize: 18, fontWeight: 800, marginTop: 6, color: colors.textPrimary}}>
+              <StatusRow
+                eyebrow={displayTask.type === 'park' ? 'Parking' : 'Retrieving'}
+                status={statusInfo?.label ?? ''}
+                statusColor={statusInfo?.color ?? colors.textMuted}
+              />
+              <Text variant="heading" as="div" style={{marginTop: 8}}>
                 {displayTask.driverName ? `${displayTask.driverName} has your car` : 'Waiting for a driver'}
-              </div>
-              <div style={{fontSize: 13, fontWeight: 600, marginTop: 8, color: colors.textSecondary}}>
+              </Text>
+              <Text variant="bodySm" tone="secondary" as="div" style={{marginTop: 8}}>
                 {displayTask.carNumber}
                 {displayTask.driverName ? `  ·  ${displayTask.driverName}` : ''}
-              </div>
+              </Text>
             </div>
           )}
-        </div>
+        </Surface>
 
         {/* Past sessions */}
-        <PressableScale
-          onClick={onOpenHistory}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            borderRadius: 16, border: `1px solid ${colors.border}`, padding: 14,
-            backgroundColor: colors.surface, width: '100%',
-          }}>
-          <Icon name="history" size={18} color={colors.textPrimary} />
-          <span style={{flex: 1, fontSize: 13, fontWeight: 700, textAlign: 'left', color: colors.textPrimary}}>View Parking History</span>
-          <Icon name="arrowRight" size={16} color={colors.textMuted} />
-        </PressableScale>
+        <Surface interactive onClick={onOpenHistory} elevation="e1" radius={16} padding={14}>
+          <div style={{display: 'flex', alignItems: 'center', gap: 10}}>
+            <Icon name="history" size={18} color={colors.textPrimary} />
+            <Text variant="label" style={{flex: 1, textAlign: 'left'}}>View parking history</Text>
+            <Icon name="arrowRight" size={16} color={colors.textMuted} />
+          </div>
+        </Surface>
       </div>
 
       {/* Arrival popup */}
@@ -493,16 +478,16 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
             style={{position: 'absolute', top: 14, right: 14, width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
             <Icon name="close" size={16} color="#fff" />
           </PressableScale>
-          <div style={{color: '#fff', fontSize: 17, fontWeight: 900}}>{arrivalSent ? 'Valet Notified' : 'On Your Way?'}</div>
-          <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 3}}>
+          <Text variant="heading" color="#fff" as="div">{arrivalSent ? 'Valet Notified' : 'On Your Way?'}</Text>
+          <Text variant="caption" color="rgba(255,255,255,0.75)" as="div" style={{marginTop: 3}}>
             {arrivalSent
               ? `We told the valet you'll arrive in ~${arrivalSent >= 60 ? `${arrivalSent / 60} hr` : `${arrivalSent} min`}`
               : 'Let the valet know before you get here so a driver is ready'}
-          </div>
+          </Text>
         </div>
         {!arrivalSent && (
           <div style={{padding: 16}}>
-            <div style={{fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 12, color: colors.textMuted}}>WHEN WILL YOU ARRIVE?</div>
+            <Text variant="overline" tone="muted" uppercase as="div" style={{marginBottom: 12}}>When will you arrive?</Text>
             <div style={{display: 'flex', gap: 10}}>
               {ETA_OPTIONS_ARRIVAL.map(opt => {
                 const on = arrivalEta === opt;
@@ -526,19 +511,17 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
                 );
               })}
             </div>
-            <PressableScale
+            <Button
               onClick={handleArrival}
-              disabled={!arrivalEta || sendingArrival}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                borderRadius: 14, padding: '15px 0', marginTop: 14, width: '100%',
-                backgroundColor: arrivalEta ? colors.primary : colors.border, opacity: sendingArrival ? 0.6 : 1,
-              }}>
-              <span style={{fontSize: 14, fontWeight: 900, color: arrivalEta ? colors.textOnPrimary : colors.textMuted}}>
-                {sendingArrival ? 'Notifying…' : arrivalEta ? 'Notify the valet' : 'Select a time above'}
-              </span>
-              {arrivalEta && !sendingArrival && <Icon name="arrowRight" size={15} color={colors.textOnPrimary} />}
-            </PressableScale>
+              disabled={!arrivalEta}
+              loading={sendingArrival}
+              fullWidth
+              size="lg"
+              shape="rounded"
+              rightIcon={arrivalEta ? 'arrowRight' : undefined}
+              style={{marginTop: 14}}>
+              {arrivalEta ? 'Notify the valet' : 'Select a time above'}
+            </Button>
           </div>
         )}
       </BottomSheetModal>
@@ -551,11 +534,11 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
             style={{position: 'absolute', top: 14, right: 14, width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
             <Icon name="close" size={16} color="#fff" />
           </PressableScale>
-          <div style={{color: '#fff', fontSize: 17, fontWeight: 900}}>Ready to Leave?</div>
-          <div style={{color: 'rgba(255,255,255,0.75)', fontSize: 12, marginTop: 3}}>We'll notify the valet team so they can plan your retrieval</div>
+          <Text variant="heading" color="#fff" as="div">Ready to Leave?</Text>
+          <Text variant="caption" color="rgba(255,255,255,0.75)" as="div" style={{marginTop: 3}}>We'll notify the valet team so they can plan your retrieval</Text>
         </div>
         <div style={{padding: 16}}>
-          <div style={{fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 12, color: colors.textMuted}}>WHEN ARE YOU LEAVING?</div>
+          <Text variant="overline" tone="muted" uppercase as="div" style={{marginBottom: 12}}>When are you leaving?</Text>
           <div style={{display: 'flex', gap: 10}}>
             {DEPARTURE_OPTIONS.map(opt => {
               const on = !customOn && selectedEta === opt;
@@ -630,28 +613,28 @@ export function DoctorHomeScreen({onOpenCard, onOpenHistory}: {onOpenCard: () =>
                     })}
                   </div>
                 </div>
-                <div style={{marginTop: 10, textAlign: 'center', fontSize: 12, fontWeight: 700, color: colors.textSecondary}}>
-                  Leaving at {fmtClock12(customH, customM)}
-                  {departureMinutes != null && departureMinutes >= 720 ? ' tomorrow' : ''}
-                  {departureMinutes != null && `  ·  in ${Math.floor(departureMinutes / 60)}h ${departureMinutes % 60}m`}
+                <div style={{marginTop: 10, textAlign: 'center'}}>
+                  <Text variant="caption" tone="secondary" style={{fontWeight: 700}}>
+                    Leaving at {fmtClock12(customH, customM)}
+                    {departureMinutes != null && departureMinutes >= 720 ? ' tomorrow' : ''}
+                    {departureMinutes != null && `  ·  in ${Math.floor(departureMinutes / 60)}h ${departureMinutes % 60}m`}
+                  </Text>
                 </div>
               </div>
             );
           })()}
 
-          <PressableScale
+          <Button
             onClick={handleDeparture}
-            disabled={departureMinutes == null || requesting}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              borderRadius: 14, padding: '15px 0', marginTop: 14, width: '100%',
-              backgroundColor: departureMinutes != null ? colors.primary : colors.border, opacity: requesting ? 0.6 : 1,
-            }}>
-            <span style={{fontSize: 14, fontWeight: 900, color: departureMinutes != null ? colors.textOnPrimary : colors.textMuted}}>
-              {requesting ? 'Sending…' : departureMinutes != null ? 'Send departure request' : 'Select a time above'}
-            </span>
-            {departureMinutes != null && !requesting && <Icon name="arrowRight" size={15} color={colors.textOnPrimary} />}
-          </PressableScale>
+            disabled={departureMinutes == null}
+            loading={requesting}
+            fullWidth
+            size="lg"
+            shape="rounded"
+            rightIcon={departureMinutes != null ? 'arrowRight' : undefined}
+            style={{marginTop: 14}}>
+            {departureMinutes != null ? 'Send departure request' : 'Select a time above'}
+          </Button>
         </div>
       </BottomSheetModal>
     </div>
