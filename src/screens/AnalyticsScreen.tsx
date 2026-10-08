@@ -5,6 +5,7 @@ import {Icon} from '../components/Icon';
 import {PressableScale} from '../components/PressableScale';
 import {useDialog} from '../components/AppDialog';
 import {analyticsApi, AnalyticsOverview, AnalyticsPeriod} from '../services/api';
+import {Surface, Text, EmptyState} from '../components/ui';
 
 const PERIODS: {key: AnalyticsPeriod; label: string}[] = [
   {key: 'daily', label: 'Today'},
@@ -133,11 +134,6 @@ export function AnalyticsScreen() {
     }
   };
 
-  const cardStyle: React.CSSProperties = {backgroundColor: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 16};
-  const emptyBoxStyle: React.CSSProperties = {
-    borderRadius: 16, border: `1px dashed ${colors.border}`, display: 'flex', flexDirection: 'column',
-    alignItems: 'center', justifyContent: 'center', padding: '32px 20px', textAlign: 'center',
-  };
 
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background}}>
@@ -221,15 +217,15 @@ export function AnalyticsScreen() {
               [minutesLabel(data?.avgParkMinutes ?? null), 'Avg. park time'],
               [minutesLabel(data?.avgRetrieveMinutes ?? null), 'Avg. retrieve time'],
             ] as const).map(([val, lbl], i) => (
-              <div key={i} style={{...cardStyle, flex: 1, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-start'}}>
+              <Surface key={i} elevation="e1" style={{flex: 1, padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-start'}}>
                 <span style={{fontSize: 22, fontWeight: 900, color: colors.textPrimary, fontVariantNumeric: 'tabular-nums'}}>{val}</span>
                 <span style={{fontSize: 11.5, fontWeight: 700, marginTop: 4, color: colors.textMuted}}>{lbl}</span>
-              </div>
+              </Surface>
             ))}
           </div>
 
           {/* Activity by hour — real 24h histogram, click any bar to inspect it */}
-          <div style={{...cardStyle, padding: 14, marginBottom: 14}}>
+          <Surface elevation="e1" style={{padding: 14, marginBottom: 14}}>
             <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12}}>
               <span style={{fontSize: 13.5, fontWeight: 800, color: colors.textPrimary}}>Activity by Hour</span>
               {activeHour != null && (
@@ -261,7 +257,7 @@ export function AnalyticsScreen() {
                 <span key={t} style={{fontSize: 9.5, fontWeight: 700, color: colors.textMuted}}>{t}</span>
               ))}
             </div>
-          </div>
+          </Surface>
 
           {/* Park vs Retrieve — the SAME jobs Activity by Hour counts above,
               split by type instead of combined, at whatever bucket
@@ -272,7 +268,7 @@ export function AnalyticsScreen() {
               Hour already uses — that's the "self-exploratory" part: no
               reading required, tap and the numbers are right there. */}
           {data?.trend && (
-            <div style={{...cardStyle, padding: 14, marginBottom: 14}}>
+            <Surface elevation="e1" style={{padding: 14, marginBottom: 14}}>
               <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2}}>
                 <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
                   <Icon name="carKey" size={15} color={colors.primary} />
@@ -333,14 +329,14 @@ export function AnalyticsScreen() {
                   </>
                 );
               })()}
-            </div>
+            </Surface>
           )}
 
           {/* Block utilization — which block actually got used this period,
               computed from completed park jobs (real slot ids), never
               invented. */}
           {!!data?.blockUtilization.length && (
-            <div style={{...cardStyle, padding: 14, marginBottom: 14}}>
+            <Surface elevation="e1" style={{padding: 14, marginBottom: 14}}>
               <div style={{display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12}}>
                 <Icon name="parking" size={15} color={colors.primary} />
                 <span style={{fontSize: 13.5, fontWeight: 800, color: colors.textPrimary}}>Block Utilization</span>
@@ -359,11 +355,11 @@ export function AnalyticsScreen() {
                   ));
                 })()}
               </div>
-            </div>
+            </Surface>
           )}
 
           {/* Visitor vs staff */}
-          <div style={{...cardStyle, padding: 14, marginBottom: 22}}>
+          <Surface elevation="e1" style={{padding: 14, marginBottom: 22}}>
             <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
               <div style={{width: 32, height: 32, borderRadius: 9, backgroundColor: colors.primary + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
                 <Icon name="people" size={16} color={colors.primary} />
@@ -382,23 +378,17 @@ export function AnalyticsScreen() {
                 </div>
               </div>
             </div>
-          </div>
+          </Surface>
 
           {/* Leaderboard — click a row to expand */}
           <div style={{marginBottom: 12}}>
-            <span style={{fontSize: 15, fontWeight: 900, color: colors.textPrimary}}>Top Performers</span>
+            <Text variant="heading" as="span">Top Performers</Text>
           </div>
 
           {activeDrivers.length === 0 && idleDrivers.length === 0 ? (
-            <div style={emptyBoxStyle}>
-              <Icon name="trophy" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
-              <span style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>No drivers yet</span>
-            </div>
+            <EmptyState icon="trophy" title="No drivers yet" compact />
           ) : activeDrivers.length === 0 ? (
-            <div style={emptyBoxStyle}>
-              <Icon name="trophy" size={26} color={colors.textMuted} style={{marginBottom: 8}} />
-              <span style={{fontSize: 13, fontWeight: 600, color: colors.textMuted}}>No completed jobs yet — the leaderboard fills in as drivers finish their first job.</span>
-            </div>
+            <EmptyState icon="trophy" title="No completed jobs yet" subtitle="The leaderboard fills in as drivers finish their first job." compact />
           ) : (
             <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
               {activeDrivers.map((d, i) => {
@@ -413,7 +403,9 @@ export function AnalyticsScreen() {
                     key={d.id}
                     onClick={() => setExpandedDriverId(expanded ? null : d.id)}
                     style={{
-                      ...cardStyle, borderColor: medal ?? colors.border, borderWidth: medal ? 1.5 : 1,
+                      backgroundColor: colors.surface,
+                      border: `${medal ? 1.5 : 1}px solid ${medal ?? colors.border}`,
+                      borderRadius: 16,
                       padding: 14, textAlign: 'left', display: 'block',
                     }}>
                     <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
@@ -470,7 +462,7 @@ export function AnalyticsScreen() {
               {idleDrivers.length > 0 && (
                 <PressableScale
                   onClick={() => setIdleExpanded(v => !v)}
-                  style={{...cardStyle, padding: 12, textAlign: 'left', display: 'block'}}>
+                  style={{backgroundColor: colors.surface, border: `1px solid ${colors.border}`, borderRadius: 16, padding: 12, textAlign: 'left', display: 'block'}}>
                   <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
                     <span style={{fontSize: 12, fontWeight: 700, color: colors.textMuted, flex: 1}}>
                       {idleDrivers.length} driver{idleDrivers.length > 1 ? 's' : ''} with no completed jobs yet

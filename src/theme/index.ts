@@ -1,6 +1,11 @@
 export {lightColors, darkColors, BRAND_GRADIENT, BRAND_GRADIENT_DARK, gradientCss} from './colors';
 export type {AppColors} from './colors';
 
+export {
+  shadow, elevation, duration, easing, transition, text, typePreset,
+} from './tokens';
+export type {ElevationLevel, TypePreset} from './tokens';
+
 export const spacing = {
   xs: 4,
   sm: 8,

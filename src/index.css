@@ -258,3 +258,83 @@ input:focus {
   .kp-creature, .kp-creature-eyes, .kp-creature-hop,
   .kp-creature-pulse, .kp-roaming { animation: none !important; }
 }
+
+/* ── UI kit (components/ui) ─────────────────────────────────────────────────
+ *
+ * Shared behaviours for the primitives kit. Driven by CSS custom properties
+ * set inline on each element, so a component stays theme-aware (it fills in
+ * --ui-shadow / --ui-shadow-hover from the active theme) while the hover and
+ * transition work lives here as compositor-friendly CSS — no per-frame React.
+ */
+
+/* Elevated, optionally interactive surface. Rest shadow comes from
+   --ui-shadow; interactive surfaces lift a touch and deepen on hover. */
+.ui-surface {
+  box-shadow: var(--ui-shadow, none);
+  transition: box-shadow 220ms cubic-bezier(0.2, 0, 0, 1),
+              transform 220ms cubic-bezier(0.2, 0, 0, 1),
+              border-color 220ms cubic-bezier(0.2, 0, 0, 1);
+}
+.ui-surface--interactive { cursor: pointer; }
+@media (hover: hover) {
+  .ui-surface--interactive:hover {
+    box-shadow: var(--ui-shadow-hover, var(--ui-shadow, none));
+    transform: translateY(-2px);
+  }
+}
+.ui-surface--interactive:active { transform: translateY(0); }
+.ui-surface--interactive:focus-visible {
+  outline: none;
+  box-shadow: var(--ui-shadow-hover, var(--ui-shadow, none)),
+              0 0 0 2px var(--ui-ring, rgba(21,22,26,0.5));
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-surface, .ui-surface--interactive:hover { transform: none; }
+}
+
+/* Keyboard focus ring for kit controls (buttons, fields, chips). */
+.ui-focusable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ui-ring, rgba(21,22,26,0.5));
+}
+
+/* Bottom-sheet / modal entrance — a soft slide-up + fade. */
+@keyframes ui-sheet-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ui-sheet-enter { animation: ui-sheet-in 280ms cubic-bezier(0.2, 0, 0, 1); }
+@keyframes ui-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+.ui-backdrop-enter { animation: ui-backdrop-in 200ms ease-out; }
+
+/* Skeleton shimmer — a travelling highlight, richer than a flat opacity
+   pulse, for loading placeholders. Falls back to the existing skel-pulse
+   where a plain block is enough. */
+@keyframes ui-shimmer { to { background-position-x: -200%; } }
+.ui-shimmer {
+  background: linear-gradient(
+    100deg,
+    var(--ui-skel-base, rgba(21,22,26,0.06)) 30%,
+    var(--ui-skel-glint, rgba(21,22,26,0.12)) 50%,
+    var(--ui-skel-base, rgba(21,22,26,0.06)) 70%
+  );
+  background-size: 200% 100%;
+  animation: ui-shimmer 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-sheet-enter, .ui-backdrop-enter, .ui-shimmer { animation: none; }
+}
+
+/* A gentle one-shot rise for list items / cards appearing. Opt-in per
+   element; stagger via inline animation-delay. */
+@keyframes ui-rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ui-rise { animation: ui-rise-in 360ms cubic-bezier(0.2, 0, 0, 1) both; }
+@media (prefers-reduced-motion: reduce) { .ui-rise { animation: none; } }
+
+/* Count-up / emphasis tick for a number that just changed. */
+@keyframes ui-pop { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: scale(1); } }
+.ui-pop { animation: ui-pop 420ms cubic-bezier(0.34, 1.4, 0.64, 1); }
+@media (prefers-reduced-motion: reduce) { .ui-pop { animation: none; } }
