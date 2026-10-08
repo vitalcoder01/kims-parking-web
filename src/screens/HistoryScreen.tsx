@@ -1,13 +1,11 @@
 import React, {useEffect, useState, useCallback} from 'react';
-import {PressableScale} from '../components/PressableScale';
 import {useAuth} from '../context/AuthContext';
 import {useAppState, ParkingTask} from '../context/AppStateContext';
 import {useTheme} from '../context/ThemeContext';
 import {Icon} from '../components/Icon';
+import {Surface, Text, Button, EmptyState, Skeleton} from '../components/ui';
+import {spacing, radius} from '../theme';
 
-// Web port of the mobile app's DoctorHistoryScreen — the full past-sessions
-// log, bypassing the backend's isCurrent filter that the live Home/Parking
-// screens rely on.
 function formatDate(ms?: number) {
   if (!ms) return '—';
   return new Date(ms).toLocaleString(undefined, {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
@@ -21,7 +19,6 @@ const STATUS_LABEL: Record<string, string> = {
   key_collected: 'Driver has key',
   assigned: 'Assigned',
   requested: 'Requested',
-  // A valet has taken the departure but hasn't dispatched a driver yet.
   accepted: 'Valet assigned',
 };
 
@@ -42,60 +39,55 @@ export function HistoryScreen({onBack}: {onBack: () => void}) {
 
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background}}>
-      <div style={{padding: '12px 16px 40px'}}>
-        <div style={{display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16}}>
-          <PressableScale
-            onClick={onBack}
-            style={{
-              width: 36, height: 36, borderRadius: 18, border: `1px solid ${colors.border}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              backgroundColor: colors.surface, flexShrink: 0,
-            }}>
-            <Icon name="back" size={18} color={colors.textPrimary} />
-          </PressableScale>
-          <span style={{fontSize: 20, fontWeight: 900, color: colors.textPrimary}}>Parking History</span>
+      <div style={{padding: `${spacing.md}px ${spacing.base}px ${spacing['3xl']}px`}}>
+
+        <div style={{display: 'flex', alignItems: 'center', gap: spacing.md, marginBottom: spacing.lg}}>
+          <Button variant="ghost" size="sm" shape="rounded" leftIcon="back" onClick={onBack} style={{paddingLeft: 10, paddingRight: 14}} />
+          <Text variant="title" as="div">Parking History</Text>
         </div>
 
         {loading && rows.length === 0 ? (
-          <div style={{display: 'flex', justifyContent: 'center', padding: '60px 0'}}>
-            <span className="spinner" style={{borderColor: colors.border, borderTopColor: colors.primary, width: 28, height: 28}} />
+          <div style={{display: 'flex', flexDirection: 'column', gap: spacing.sm}}>
+            {[1, 2, 3].map(i => (
+              <Surface key={i} elevation="e1" style={{display: 'flex', alignItems: 'center', gap: spacing.md}}>
+                <Skeleton width={36} height={36} style={{borderRadius: radius.md, flexShrink: 0}} />
+                <div style={{flex: 1}}>
+                  <Skeleton width="60%" height={14} style={{borderRadius: 4, marginBottom: 6}} />
+                  <Skeleton width="40%" height={11} style={{borderRadius: 4}} />
+                </div>
+                <Skeleton width={70} height={11} style={{borderRadius: 4}} />
+              </Surface>
+            ))}
           </div>
         ) : rows.length === 0 ? (
-          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, paddingTop: 80}}>
-            <Icon name="history" size={36} color={colors.textMuted} />
-            <span style={{fontSize: 13, color: colors.textMuted}}>No past sessions yet.</span>
-          </div>
+          <EmptyState icon="history" title="No history yet" subtitle="Your past parking sessions appear here." />
         ) : (
-          <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
+          <div style={{display: 'flex', flexDirection: 'column', gap: spacing.sm}}>
             {rows.map(item => {
               const done = item.status === 'completed';
               const cancelled = item.status === 'cancelled';
               const tone = done ? colors.success : cancelled ? colors.textMuted : colors.warning;
               return (
-                <div
-                  key={item.id}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    borderRadius: 16, border: `1px solid ${colors.border}`, padding: 14,
-                    backgroundColor: colors.surface,
-                  }}>
+                <Surface key={item.id} elevation="e1" style={{display: 'flex', alignItems: 'center', gap: spacing.md}}>
                   <span style={{
-                    width: 36, height: 36, borderRadius: 12, flexShrink: 0,
+                    width: 36, height: 36, borderRadius: radius.md, flexShrink: 0,
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                     backgroundColor: tone + '18',
                   }}>
                     <Icon name={item.type === 'park' ? 'arrowDown' : 'arrowUp'} size={16} color={tone} />
                   </span>
                   <span style={{flex: 1, minWidth: 0}}>
-                    <span style={{display: 'block', fontSize: 14, fontWeight: 800, color: colors.textPrimary}}>
+                    <Text variant="subhead" as="div" numberOfLines={1}>
                       {item.type === 'park' ? 'Parked' : 'Retrieved'} · {item.carNumber}
-                    </span>
-                    <span style={{display: 'block', fontSize: 11, marginTop: 2, color: colors.textMuted}}>
+                    </Text>
+                    <Text variant="caption" tone="muted" as="div" style={{marginTop: 2}}>
                       {formatDate(item.assignedAt ?? item.requestedAt)}{item.slotId ? ` · Slot ${item.slotId}` : ''}
-                    </span>
+                    </Text>
                   </span>
-                  <span style={{fontSize: 11, fontWeight: 700, color: tone, flexShrink: 0}}>{STATUS_LABEL[item.status] ?? item.status}</span>
-                </div>
+                  <Text variant="caption" color={tone} style={{fontWeight: 700, flexShrink: 0}}>
+                    {STATUS_LABEL[item.status] ?? item.status}
+                  </Text>
+                </Surface>
               );
             })}
           </div>

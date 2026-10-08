@@ -5,6 +5,7 @@ import {usersApi} from '../services/api';
 import {Icon} from '../components/Icon';
 import {PressableScale} from '../components/PressableScale';
 import {useDialog} from '../components/AppDialog';
+import {Surface, Text, Button, Field} from '../components/ui';
 
 // Same three.js mini-car scene the mobile app renders in a WebView — the
 // scene HTML is identical; here it lives in an iframe (srcDoc) and receives
@@ -326,24 +327,6 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
   const isCustomColor = ![...COLORS, ...MORE_COLORS].some(c => c.hex === selectedColor);
   const colorName = [...COLORS, ...MORE_COLORS].find(c => c.hex === selectedColor)?.name ?? 'Custom';
 
-  const fieldLabel: React.CSSProperties = {
-    fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 8, marginTop: 4,
-    color: colors.textMuted, display: 'block',
-  };
-  const inputRow: React.CSSProperties = {
-    display: 'flex', alignItems: 'center', border: `1.5px solid ${colors.border}`,
-    borderRadius: 14, padding: '0 10px', height: 58, marginBottom: 16,
-    backgroundColor: colors.surface, boxShadow: '0 3px 8px rgba(0,0,0,0.06)',
-  };
-  const iconWrap: React.CSSProperties = {
-    width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center',
-    justifyContent: 'center', marginRight: 10, backgroundColor: colors.cardAlt, flexShrink: 0,
-  };
-  const inputStyle: React.CSSProperties = {
-    flex: 1, fontSize: 15, fontWeight: 600, border: 'none', background: 'transparent',
-    color: colors.textPrimary, minWidth: 0,
-  };
-
   const swatchGrid: React.CSSProperties = {
     display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', columnGap: 14, rowGap: 18, marginBottom: 24,
   };
@@ -367,34 +350,18 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
   return (
     <div className="screen-scroll" style={{backgroundColor: colors.background}}>
       <div style={{padding: '20px 20px 40px'}}>
+
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20}}>
-          <PressableScale
-            onClick={onBack}
-            style={{
-              width: 44, height: 44, borderRadius: 22, backgroundColor: colors.cardAlt,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-            <Icon name="back" size={20} color={colors.textPrimary} />
-          </PressableScale>
-          <PressableScale
-            onClick={handleHelp}
-            style={{
-              width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-            <Icon name="help" size={18} color={colors.textOnPrimary} />
-          </PressableScale>
+          <Button variant="ghost" size="sm" shape="rounded" leftIcon="back" onClick={onBack} />
+          <Button variant="primary" size="sm" shape="rounded" leftIcon="help" onClick={handleHelp} />
         </div>
 
-        <div style={{fontSize: 28, fontWeight: 900, color: colors.textPrimary}}>Vehicle Setup</div>
-        <div style={{fontSize: 13, marginTop: 4, marginBottom: 18, color: colors.textSecondary}}>
+        <Text variant="title" as="div" style={{marginBottom: 4}}>Vehicle Setup</Text>
+        <Text variant="body" tone="secondary" as="div" style={{marginBottom: 18}}>
           {mode === 'edit' ? 'Add your vehicle details and pick a colour' : 'Your saved vehicle details'}
-        </div>
+        </Text>
 
-        <div style={{
-          borderRadius: 20, border: `1px solid ${colors.border}`, overflow: 'hidden',
-          marginBottom: 24, height: 220, backgroundColor: colors.surface,
-        }}>
+        <Surface elevation="e1" style={{borderRadius: 20, overflow: 'hidden', marginBottom: 24, height: 220}}>
           <iframe
             ref={frameRef}
             title="3D vehicle preview"
@@ -402,11 +369,11 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
             onLoad={() => { post({type: 'setColor', color: selectedColor}); post({type: 'setPlate', plate: vehicleNumber}); }}
             style={{width: '100%', height: '100%', border: 'none', display: 'block'}}
           />
-        </div>
+        </Surface>
 
         {mode === 'view' ? (
           <>
-            <div style={{borderRadius: 18, border: `1px solid ${colors.border}`, overflow: 'hidden', marginBottom: 20, backgroundColor: colors.surface}}>
+            <Surface elevation="e1" style={{overflow: 'hidden', marginBottom: 20}}>
               {[
                 {icon: 'car' as const, label: 'Vehicle Number', value: vehicleNumber || '—'},
                 {icon: 'car' as const, label: 'Vehicle Model', value: vehicleModel || '—'},
@@ -418,55 +385,44 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
                   display: 'flex', alignItems: 'center', gap: 12, padding: 14,
                   borderBottom: i === arr.length - 1 ? 'none' : `1px solid ${colors.divider}`,
                 }}>
-                  <span style={iconWrap}>
+                  <span style={{width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.cardAlt, flexShrink: 0}}>
                     <Icon name={row.icon} size={16} color={colors.textSecondary} />
                   </span>
                   <span style={{flex: 1}}>
-                    <span style={{display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: 1, marginBottom: 3, color: colors.textMuted}}>{row.label.toUpperCase()}</span>
-                    <span style={{display: 'block', fontSize: 15, fontWeight: 800, color: colors.textPrimary}}>{row.value}</span>
+                    <Text variant="overline" tone="muted" as="span" style={{display: 'block', marginBottom: 3}}>{row.label}</Text>
+                    <Text variant="subhead" as="span">{row.value}</Text>
                   </span>
                 </div>
               ))}
-            </div>
-
-            <PressableScale
-              onClick={() => setMode('edit')}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                borderRadius: 14, height: 54, width: '100%', backgroundColor: colors.primary,
-              }}>
-              <Icon name="edit" size={17} color={colors.textOnPrimary} />
-              <span style={{fontSize: 15, fontWeight: 800, color: colors.textOnPrimary}}>Edit Vehicle Details</span>
-            </PressableScale>
+            </Surface>
+            <Button variant="primary" size="lg" fullWidth leftIcon="edit" onClick={() => setMode('edit')}>
+              Edit Vehicle Details
+            </Button>
           </>
         ) : (
           <>
-            <label style={fieldLabel}>VEHICLE NUMBER</label>
-            <div style={inputRow}>
-              <span style={iconWrap}><Icon name="car" size={16} color={colors.textPrimary} /></span>
-              <input
-                style={inputStyle}
-                value={vehicleNumber}
-                onChange={e => setVehicleNumber(e.target.value.toUpperCase())}
-                placeholder="e.g. TN09 AB 1234"
-                onKeyDown={e => { if (e.key === 'Enter') modelInputRef.current?.focus(); }}
-              />
-            </div>
+            <Field
+              label="Vehicle Number"
+              value={vehicleNumber}
+              onChange={v => setVehicleNumber(v.toUpperCase())}
+              placeholder="e.g. TN09 AB 1234"
+              leftIcon="car"
+              onEnter={() => modelInputRef.current?.focus()}
+              style={{marginBottom: 16}}
+            />
 
-            <label style={fieldLabel}>VEHICLE MODEL (OPTIONAL)</label>
-            <div style={inputRow}>
-              <span style={iconWrap}><Icon name="car" size={16} color={colors.textPrimary} /></span>
-              <input
-                ref={modelInputRef}
-                style={inputStyle}
-                value={vehicleModel}
-                onChange={e => setVehicleModel(e.target.value)}
-                placeholder="e.g. Maruti Swift"
-                onKeyDown={e => { if (e.key === 'Enter') phoneInputRef.current?.focus(); }}
-              />
-            </div>
+            <Field
+              ref={modelInputRef}
+              label="Vehicle Model (optional)"
+              value={vehicleModel}
+              onChange={setVehicleModel}
+              placeholder="e.g. Maruti Swift"
+              leftIcon="car"
+              onEnter={() => phoneInputRef.current?.focus()}
+              style={{marginBottom: 16}}
+            />
 
-            <label style={fieldLabel}>VEHICLE TYPE</label>
+            <Text variant="label" tone="secondary" as="div" style={{marginBottom: 8}}>VEHICLE TYPE</Text>
             <div style={{display: 'flex', gap: 10, marginBottom: 16}}>
               {(['car', 'bike'] as const).map(t => {
                 const on = vehicleType === t;
@@ -486,20 +442,19 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
               })}
             </div>
 
-            <label style={fieldLabel}>PHONE NUMBER</label>
-            <div style={inputRow}>
-              <span style={iconWrap}><Icon name="phone" size={16} color={colors.textPrimary} /></span>
-              <input
-                ref={phoneInputRef}
-                style={inputStyle}
-                value={phone}
-                onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder="10-digit number"
-                inputMode="numeric"
-              />
-            </div>
+            <Field
+              ref={phoneInputRef}
+              label="Phone Number"
+              type="tel"
+              inputMode="numeric"
+              value={phone}
+              onChange={v => setPhone(v.replace(/\D/g, '').slice(0, 10))}
+              placeholder="10-digit number"
+              leftIcon="phone"
+              style={{marginBottom: 16}}
+            />
 
-            <label style={fieldLabel}>BODY COLOUR</label>
+            <Text variant="label" tone="secondary" as="div" style={{marginBottom: 8}}>BODY COLOUR</Text>
             <div style={swatchGrid}>
               {COLORS.map(c => renderSwatch(c, () => setSelectedColor(c.hex)))}
               <PressableScale onClick={() => setPickerOpen(true)} style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6}}>
@@ -521,22 +476,16 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
               </PressableScale>
             </div>
 
-            <PressableScale
+            <Button
+              variant="primary"
+              size="lg"
+              fullWidth
+              leftIcon="save"
+              loading={saving}
               onClick={handleSave}
-              disabled={saving}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                borderRadius: 14, height: 54, width: '100%',
-                backgroundColor: colors.primary, opacity: saving ? 0.6 : 1,
-              }}>
-              {saving ? <span className="spinner" /> : (
-                <>
-                  <Icon name="save" size={17} color={colors.textOnPrimary} />
-                  <span style={{fontSize: 15, fontWeight: 800, color: colors.textOnPrimary}}>Save Vehicle</span>
-                  <Icon name="arrowRight" size={17} color={colors.textOnPrimary} />
-                </>
-              )}
-            </PressableScale>
+            >
+              Save Vehicle
+            </Button>
           </>
         )}
       </div>
@@ -553,15 +502,8 @@ export function VehicleSetupScreen({onBack}: {onBack: () => void}) {
             onClick={e => e.stopPropagation()}
             style={{width: '100%', maxWidth: 420, borderRadius: 22, padding: 20, backgroundColor: colors.surface}}>
             <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18}}>
-              <span style={{fontSize: 18, fontWeight: 900, color: colors.textPrimary}}>Choose a colour</span>
-              <PressableScale
-                onClick={() => setPickerOpen(false)}
-                style={{
-                  width: 32, height: 32, borderRadius: 16, backgroundColor: colors.cardAlt,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                <Icon name="close" size={16} color={colors.textPrimary} />
-              </PressableScale>
+              <Text variant="heading">Choose a colour</Text>
+              <Button variant="ghost" size="sm" shape="rounded" leftIcon="close" onClick={() => setPickerOpen(false)} />
             </div>
             <div style={{...swatchGrid, marginBottom: 0}}>
               {MORE_COLORS.map(c => renderSwatch(c, () => { setSelectedColor(c.hex); setPickerOpen(false); }))}
